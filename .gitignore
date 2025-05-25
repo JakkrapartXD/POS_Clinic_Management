@@ -1,0 +1,19 @@
+# Env and secrets
+.env
+*.env
+secrets/
+*.key
+*.pem
+
+# Node
+node_modules/
+dist/
+build/
+
+# Docker
+pgdata/
+mongodata/
+
+# OS
+.DS_Store
+Thumbs.db
