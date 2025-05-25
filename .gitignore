@@ -4,6 +4,7 @@
 secrets/
 *.key
 *.pem
+.env.*
 
 # Node
 node_modules/
