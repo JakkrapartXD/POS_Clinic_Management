@@ -2,11 +2,11 @@ import { Elysia, t } from "elysia";
 import { cookie } from "@elysiajs/cookie";
 
 import { Lucia } from "@elysiajs/lucia-auth";
-import prismaAdapter from "@lucia-auth/adapter-prisma";
+import { PrismaAdapter } from "@lucia-auth/adapter-prisma";
 
 import { PrismaClient } from "@prisma/client";
 
-import redis from "@lucia-auth/adapter-session-redis";
+import { redis } from "@lucia-auth/adapter-session-redis";
 import { createClient } from "redis";
 
 const prisma = new PrismaClient();
@@ -19,7 +19,7 @@ await sessionClient.connect();
 
 const lucia = Lucia({
   adapter: {
-    user: prismaAdapter(prisma as any),
+    client: PrismaAdapter(prisma as any),
     session: redis({
       session: sessionClient,
       userSession: userSessionClient,
