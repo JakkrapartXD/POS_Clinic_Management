@@ -5,10 +5,12 @@ import { cors } from "@elysiajs/cors";
 import { yoga } from "@elysiajs/graphql-yoga";
 import { jwt } from "@elysiajs/jwt";
 import { swagger } from "@elysiajs/swagger";
-import auth from "./auth";
+
+// Import routes
+import { authRoutes } from "./routes/authRoutes";
+import { userRoutes } from "./routes/userRoutes";
 
 const app = new Elysia()
-  .use(auth)
   .use(
     swagger({
       documentation: {
@@ -42,8 +44,13 @@ const app = new Elysia()
   .use(cors())
   .use(cookie())
   .use(bearer())
+  
+  // Register routes
+  .use(authRoutes)
+  .use(userRoutes)
+  
   .get("/", () => "Hello Elysia")
-  .listen(3000);
+  .listen(4000);
 
 console.log(
   `🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`

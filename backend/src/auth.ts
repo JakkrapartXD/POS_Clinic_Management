@@ -20,6 +20,33 @@ const authModel = t.Object({
   }),
 });
 
+const roleModel = t.Object({
+  userId: t.String(),
+  role: t.String(),
+});
+
+const userCreateModel = t.Object({
+  username: t.String(),
+  password: t.String({ minLength: 8 }),
+  email: t.Optional(t.String({ format: 'email' })),
+  name: t.Optional(t.String()),
+  role: t.Optional(t.String()),
+});
+
+// Helper function to check if user is admin
+async function isAdmin(userId: string): Promise<boolean> {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true }
+    });
+    
+    return user?.role === "admin";
+  } catch (error) {
+    return false;
+  }
+}
+
 export const auth = (app: Elysia) =>
   app.group("/auth", (app) =>
     app
@@ -127,6 +154,223 @@ export const auth = (app: Elysia) =>
           body: authModel,
         }
       )
+      
+      // Add new user (admin only)
+      .post(
+        "/users",
+        async ({ set, cookie, body }) => {
+          const jwtToken = cookie["next-auth.jwt-token"]?.value;
+          
+          if (!jwtToken) {
+            set.status = 401;
+            return { success: false, message: "Authentication required" };
+          }
+          
+          try {
+            const payload = verify(jwtToken, JWT_SECRET);
+            const adminId = typeof payload === "object" && payload !== null ? payload.sub : null;
+            
+            if (!adminId) {
+              set.status = 401;
+              return { success: false, message: "Invalid authentication" };
+            }
+            
+            // Verify admin permissions
+            if (!(await isAdmin(adminId))) {
+              set.status = 403;
+              return { success: false, message: "Admin privileges required" };
+            }
+            
+            // Check if username already exists
+            const existingUser = await prisma.user.findUnique({
+              where: { username: body.username },
+            });
+            
+            if (existingUser) {
+              set.status = 409;
+              return { success: false, message: "Username already exists" };
+            }
+            
+            // Create new user
+            const hashedPassword = await hash(body.password, 10);
+            
+            const newUser = await prisma.user.create({
+              data: {
+                username: body.username,
+                password: hashedPassword,
+                email: body.email,
+                name: body.name,
+                role: body.role || "user",
+              },
+              select: {
+                id: true,
+                username: true,
+                email: true,
+                name: true,
+                role: true,
+                createdAt: true,
+              }
+            });
+            
+            return { 
+              success: true,
+              message: "User created successfully",
+              user: newUser
+            };
+          } catch (error) {
+            set.status = 500;
+            return { success: false, message: "Failed to create user" };
+          }
+        },
+        {
+          body: userCreateModel,
+        }
+      )
+      
+      // Change user role (admin only)
+      .put(
+        "/users/role",
+        async ({ set, cookie, body }) => {
+          const jwtToken = cookie["next-auth.jwt-token"]?.value;
+          
+          if (!jwtToken) {
+            set.status = 401;
+            return { success: false, message: "Authentication required" };
+          }
+          
+          try {
+            const payload = verify(jwtToken, JWT_SECRET);
+            const adminId = typeof payload === "object" && payload !== null ? payload.sub : null;
+            
+            if (!adminId) {
+              set.status = 401;
+              return { success: false, message: "Invalid authentication" };
+            }
+            
+            // Verify admin permissions
+            if (!(await isAdmin(adminId))) {
+              set.status = 403;
+              return { success: false, message: "Admin privileges required" };
+            }
+            
+            // Update user role
+            const updatedUser = await prisma.user.update({
+              where: { id: body.userId },
+              data: { role: body.role },
+              select: {
+                id: true,
+                username: true,
+                role: true,
+              }
+            });
+            
+            return {
+              success: true,
+              message: "User role updated successfully",
+              user: updatedUser
+            };
+          } catch (error) {
+            console.error("Role update error:", error);
+            
+            // Check if it's a Prisma not found error
+            if (error && typeof error === 'object' && 'code' in error && error.code === 'P2025') {
+              set.status = 404;
+              return { success: false, message: "User not found" };
+            }
+            
+            set.status = 500;
+            return { success: false, message: "Failed to update user role" };
+          }
+        },
+        {
+          body: roleModel,
+        }
+      )
+      
+      // Get list of users (admin only)
+      .get("/users", async ({ set, cookie }) => {
+        const jwtToken = cookie["next-auth.jwt-token"]?.value;
+        
+        if (!jwtToken) {
+          set.status = 401;
+          return { success: false, message: "Authentication required" };
+        }
+        
+        try {
+          const payload = verify(jwtToken, JWT_SECRET);
+          const adminId = typeof payload === "object" && payload !== null ? payload.sub : null;
+          
+          if (!adminId) {
+            set.status = 401;
+            return { success: false, message: "Invalid authentication" };
+          }
+          
+          // Verify admin permissions
+          if (!(await isAdmin(adminId))) {
+            set.status = 403;
+            return { success: false, message: "Admin privileges required" };
+          }
+          
+          // Get list of users
+          const users = await prisma.user.findMany({
+            select: {
+              id: true,
+              username: true,
+              email: true,
+              name: true,
+              role: true,
+              createdAt: true,
+            },
+            orderBy: { createdAt: 'desc' }
+          });
+          
+          return { success: true, users };
+        } catch (error) {
+          set.status = 500;
+          return { success: false, message: "Failed to fetch users" };
+        }
+      })
+      
+      // Get user's own role
+      .get("/me/role", async ({ set, cookie }) => {
+        const jwtToken = cookie["next-auth.jwt-token"]?.value;
+        
+        if (!jwtToken) {
+          set.status = 401;
+          return { success: false, message: "Authentication required" };
+        }
+        
+        try {
+          const payload = verify(jwtToken, JWT_SECRET);
+          const userId = typeof payload === "object" && payload !== null ? payload.sub : null;
+          
+          if (!userId) {
+            set.status = 401;
+            return { success: false, message: "Invalid authentication" };
+          }
+          
+          // Get user role
+          const user = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { id: true, username: true, role: true }
+          });
+          
+          if (!user) {
+            set.status = 404;
+            return { success: false, message: "User not found" };
+          }
+          
+          return { 
+            success: true, 
+            role: user.role,
+            isAdmin: user.role === "admin"
+          };
+        } catch (error) {
+          set.status = 500;
+          return { success: false, message: "Failed to fetch role" };
+        }
+      })
+      
       .get("/session", async ({ cookie, set }) => {
         const sessionToken = cookie["next-auth.session-token"]?.value;
         const jwtToken = cookie["next-auth.jwt-token"]?.value;

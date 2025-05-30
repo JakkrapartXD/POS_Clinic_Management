@@ -23,6 +23,7 @@ services:
     depends_on:
       - postgres
       - mongo
+      - redis
 
   postgres:
     image: postgres:16
@@ -58,7 +59,6 @@ services:
     networks:
       - app-network
 
-
   pgadmin:
     image: dpage/pgadmin4
     restart: always
@@ -79,3 +79,4 @@ volumes:
   pgdata:
   mongodata:
   redisdata:
+  pgadmin-data:

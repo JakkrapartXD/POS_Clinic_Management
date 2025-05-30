@@ -20,6 +20,7 @@ model User {
   email         String?   @unique
   username      String    @unique
   password      String
+  role          String    @default("user")  // Added role field with default value "user"
   emailVerified DateTime?
   image         String?
   sessions      Session[]
