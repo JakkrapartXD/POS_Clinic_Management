@@ -33,7 +33,7 @@ export default function LoginPage() {
       if (!token) throw new Error('ไม่พบโทเคนจากเซิร์ฟเวอร์')
 
       // เก็บ token ลง cookie แทน localStorage
-      document.cookie = `authToken=${token}; path=/; secure; samesite=strict`
+      document.cookie = `next-auth.jwt-token=${token}; path=/; secure; samesite=strict`
 
       // redirect ไปหน้า dashboard
       router.push('/dashboard')
