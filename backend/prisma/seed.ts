@@ -4,6 +4,14 @@ import { hash } from 'bcrypt';
 const prisma = new PrismaClient();
 
 async function main() {
+  // Check if any users exist in the system
+  const userCount = await prisma.user.count();
+  
+  if (userCount > 0) {
+    console.log('👥 Users already exist in the system. Skipping first admin creation.');
+    return;
+  }
+  
   // Get admin credentials from environment variables
   const adminUsername = process.env.SNADMIN_Username;
   const adminPassword = process.env.SNADMIN_Password;
@@ -14,16 +22,6 @@ async function main() {
   }
 
   try {
-    // Check if admin user already exists
-    const existingAdmin = await prisma.user.findUnique({
-      where: { username: adminUsername },
-    });
-
-    if (existingAdmin) {
-      console.log(`👤 Admin user '${adminUsername}' already exists.`);
-      return;
-    }
-
     // Hash the password
     const hashedPassword = await hash(adminPassword, 10);
 
@@ -38,7 +36,7 @@ async function main() {
       },
     });
 
-    console.log(`✅ Admin user created successfully: ${admin.username} (${admin.id})`);
+    console.log(`✅ First admin user created successfully: ${admin.username} (${admin.id})`);
   } catch (error) {
     console.error('❌ Error creating admin user:', error);
   }
