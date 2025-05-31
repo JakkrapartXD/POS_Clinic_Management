@@ -20,7 +20,7 @@ SNADMIN_PASSWORD=your_admin_password
 Run the database container for development:
 
 ```sh
-docker run --name your-db-container -e POSTGRES_PASSWORD=yourpassword -p 5432:5432 -d postgres
+docker-compose up -d postgres redis
 ```
 
 ## 3. Backend Setup
@@ -48,6 +48,7 @@ Start the backend in development mode:
 ```sh
 bun run dev
 ```
+The backend API should now be running at http://localhost:4000
 
 ---
 
