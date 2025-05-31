@@ -11,11 +11,34 @@ export default function LoginPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
+    setError('')
 
-    if (username === username && password === password) {
-      router.push('https://www.youtube.com/watch?v=xvFZjo5PgG0')
-    } else {
-      setError('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง')
+    try {
+      const res = await fetch('http://localhost:4000/auth/sign-in', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ username, password }),
+      })
+
+      if (!res.ok) {
+        throw new Error('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง')
+      }
+
+      const data = await res.json()
+
+      // สมมติว่า API ส่ง token กลับมาใน data.accessToken หรือ data.token
+      const token = data.accessToken || data.token
+      if (!token) throw new Error('ไม่พบโทเคนจากเซิร์ฟเวอร์')
+
+      // เก็บ token ลง cookie แทน localStorage
+      document.cookie = `authToken=${token}; path=/; secure; samesite=strict`
+
+      // redirect ไปหน้า dashboard
+      router.push('/dashboard')
+    } catch (err: any) {
+      setError(err.message || 'เกิดข้อผิดพลาด')
     }
   }
 
@@ -23,7 +46,7 @@ export default function LoginPage() {
     <div className="flex items-center justify-center min-h-screen bg-gray-500">
       <form
         onSubmit={handleLogin}
-        className="bg-emerald-600 p-6 rounded-2xl shadow-md w-full max-w-sm"
+        className="bg-black p-6 rounded-2xl shadow-md w-full max-w-sm"
       >
         <h2 className="text-2xl font-bold mb-4 text-center">เข้าสู่ระบบ</h2>
 
@@ -45,7 +68,7 @@ export default function LoginPage() {
           onChange={(e) => setPassword(e.target.value)}
           className="w-full p-2 border rounded-xl mb-4"
           required
-        ></input>
+        />
 
         <button
           type="submit"
