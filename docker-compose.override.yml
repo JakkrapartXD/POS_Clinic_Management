@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   frontend:
     volumes:
@@ -7,7 +5,7 @@ services:
       - /app/node_modules
     environment:
       - NODE_ENV=development
-    command: npm run dev  # Next.js dev mode with hot reload
+    command: npm run dev
 
   backend:
     volumes:
@@ -15,14 +13,4 @@ services:
       - /app/node_modules
     environment:
       - NODE_ENV=development
-    command: bun run dev  # หากใช้ Bun
-    # หรือ
-    # command: npm run dev  # หากใช้ Node.js
-
-  postgres:
-    ports:
-      - "5432:5432"
-
-  mongo:
-    ports:
-      - "27017:27017"
+    command: bun run dev
