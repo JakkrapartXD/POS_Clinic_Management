@@ -34,7 +34,11 @@ export const userController = (app: Elysia) =>
         }
         
         // Create user
-        const result = await userService.createUser(body);
+        const result = await userService.createUser({
+          ...body,
+          password_hash: body.password,
+          email: body.email || "",
+        });
         
         if (!result.success) {
           set.status = 409; // Conflict for duplicate username
