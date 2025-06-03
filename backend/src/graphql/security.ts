@@ -24,19 +24,32 @@ export interface AuthContext {
 export class SecurityService {
   // Authentication & Authorization
   static async authenticate(context: any): Promise<AuthContext> {
-    const authHeader = context.request?.headers?.authorization;
-    const token = authHeader?.replace('Bearer ', '') || 
-                  context.request?.cookies?.['next-auth.jwt-token'];
+    let token: string | undefined;
+
+    // Try to extract token from multiple sources
+    if (context.request) {
+      // From Authorization header (Bearer token)
+      const authHeader = context.request.headers?.authorization;
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        token = authHeader.replace('Bearer ', '');
+      } 
+      // From cookies
+      else if (context.request.cookies?.['next-auth.jwt-token']) {
+        token = context.request.cookies['next-auth.jwt-token'];
+      }
+    }
 
     if (!token) {
       return { isAuthenticated: false };
     }
 
     try {
+      // Verify JWT token
       const payload = verify(token, JWT_SECRET) as any;
-      const userId = payload.sub;
+      const userId = payload.sub || payload.userId || payload.id;
 
       if (!userId) {
+        console.log('JWT payload missing user ID:', payload);
         return { isAuthenticated: false };
       }
 
@@ -53,6 +66,7 @@ export class SecurityService {
       });
 
       if (!user || user.status !== 'active') {
+        console.log('User not found or inactive:', { userId, user });
         return { isAuthenticated: false };
       }
 
@@ -63,6 +77,7 @@ export class SecurityService {
         role: user.role
       };
     } catch (error) {
+      console.error('JWT verification failed:', error);
       return { isAuthenticated: false };
     }
   }

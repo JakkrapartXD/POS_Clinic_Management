@@ -78,8 +78,27 @@ const app = new Elysia()
       resolvers: resolvers as any,
       context: async ({ request }: any) => {
         try {
+          // Extract authorization from different possible sources
+          const authHeader = request.headers?.get?.('authorization') || 
+                           request.headers?.authorization ||
+                           request.headers?.Authorization;
+          
+          // Create a compatible request object for GraphQL context
+          const contextRequest = {
+            headers: {
+              authorization: authHeader,
+              // Convert Headers object to plain object if needed
+              ...(request.headers?.entries ? 
+                  Object.fromEntries(request.headers.entries()) : 
+                  request.headers || {})
+            },
+            cookies: request.cookies || {},
+            url: request.url,
+            method: request.method
+          };
+
           // Create GraphQL context with authentication and security
-          const context = await createGraphQLContext(request);
+          const context = await createGraphQLContext(contextRequest);
 
           // Add rate limiting check for GraphQL endpoint
           if (context.isAuthenticated) {
@@ -136,6 +155,34 @@ const app = new Elysia()
       "Sales and reporting",
     ],
   }))
+
+  // Test JWT endpoint for debugging
+  .get("/test-jwt", async ({ headers, jwt, set }) => {
+    const authHeader = headers.authorization;
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      set.status = 401;
+      return { error: "Missing or invalid Authorization header" };
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    
+    try {
+      const payload = await jwt.verify(token);
+      return { 
+        message: "JWT verification successful",
+        payload,
+        headers: Object.fromEntries(
+          Object.entries(headers).filter(([key]) => 
+            key.toLowerCase().includes('auth')
+          )
+        )
+      };
+    } catch (error) {
+      set.status = 401;
+      return { error: "Invalid JWT token", details: error };
+    }
+  })
 
   // Register routes
   .use(authRoutes)
