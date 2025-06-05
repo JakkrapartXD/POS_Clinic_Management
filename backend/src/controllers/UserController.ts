@@ -1,5 +1,6 @@
 import { Elysia, t } from "elysia";
 import { cookie } from "@elysiajs/cookie";
+import { hash } from "bcrypt";
 import { UserService } from "../services/UserService";
 import { AuthMiddleware } from "../middleware/AuthMiddleware";
 
@@ -10,7 +11,7 @@ const authMiddleware = new AuthMiddleware();
 const userCreateModel = t.Object({
   username: t.String(),
   password: t.String({ minLength: 8 }),
-  email: t.Optional(t.String({ format: 'email' })),
+  email: t.String({ format: 'email' }),
   name: t.Optional(t.String()),
   role: t.Optional(t.String()),
 });
@@ -33,11 +34,16 @@ export const userController = (app: Elysia) =>
           return { success: false, message: adminCheck.message };
         }
         
-        // Create user
+        // Hash password before creating user
+        const hashedPassword = await hash(body.password, 10);
+        
+        // Create user with proper data structure
         const result = await userService.createUser({
-          ...body,
-          password_hash: body.password,
-          email: body.email || "",
+          username: body.username,
+          password_hash: hashedPassword,
+          email: body.email,
+          name: body.name,
+          role: body.role,
         });
         
         if (!result.success) {

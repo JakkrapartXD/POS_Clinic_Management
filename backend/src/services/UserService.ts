@@ -14,13 +14,9 @@ export class UserService {
       };
     }
 
-    // Hash password
-    const hashedPassword = await hash(userData.password_hash, 10);
-    
-    // Create user with default role if not specified
+    // Create user with provided data (password_hash is already hashed)
     const newUser = await userModel.create({
       ...userData,
-      password_hash: hashedPassword,
       role: userData.role || "user",
     });
 
