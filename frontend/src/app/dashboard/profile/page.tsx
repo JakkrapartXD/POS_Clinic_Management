@@ -1,16 +1,128 @@
 'use client'
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useRouter } from "next/navigation"
+import { log } from "node:console"
+
+interface UserData {
+  role: string
+  email: string
+  username: string
+}
+
+// GraphQL query function
+async function fetchUserData(): Promise<UserData | null> {
+  try {
+    // Extract JWT token from cookie
+    const getCookie = (name: string): string | null => {
+      const value = `; ${document.cookie}`;
+      const parts = value.split(`; ${name}=`);
+      if (parts.length === 2) {
+        return parts.pop()?.split(';').shift() || null;
+      }
+      return null;
+    }
+
+    const token = getCookie('next-auth.jwt-token');
+    
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    // Add Authorization header if token exists
+    // console.log(token);
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const response = await fetch('http://localhost:4000/graphql', {
+      method: 'POST',
+      headers,
+      // credentials: 'include', // Still include cookies for additional security
+      body: JSON.stringify({
+        query: `
+          query Me {
+            me {
+              role
+              email
+              username
+            }
+          }
+        `
+      })
+    })
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch user data')
+    }
+
+    const result = await response.json()
+    
+    if (result.errors) {
+      throw new Error(result.errors[0]?.message || 'GraphQL error')
+    }
+
+    return result.data?.me || null
+  } catch (error) {
+    console.error('Error fetching user data:', error)
+    return null
+  }
+}
 
 export default function ProfilePage() {
   const router = useRouter()
+  const [userData, setUserData] = useState<UserData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  // Fetch user data on component mount
+  useEffect(() => {
+    const loadUserData = async () => {
+      try {
+        setLoading(true)
+        const data = await fetchUserData()
+        if (data) {
+          setUserData(data)
+        } else {
+          setError('Failed to load user data')
+        }
+      } catch (err) {
+        setError('Error loading user data')
+        console.error(err)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadUserData()
+  }, [])
 
   // ฟังก์ชันสำหรับ logout
   const handleLogout = () => {
     // ลบ cookie authToken โดยตั้งค่าวันหมดอายุเป็นอดีต
     document.cookie = "next-auth.jwt-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; samesite=strict"
     router.replace("/login")
+  }
+
+  if (loading) {
+    return (
+      <div className="p-6 max-w-5xl mx-auto bg-white relative">
+        <div className="flex justify-center items-center h-64">
+          <div className="text-gray-500">กำลังโหลดข้อมูล...</div>
+        </div>
+      </div>
+    )
+  }
+
+  if (error || !userData) {
+    return (
+      <div className="p-6 max-w-5xl mx-auto bg-white relative">
+        <div className="flex justify-center items-center h-64">
+          <div className="text-red-500">{error || 'ไม่สามารถโหลดข้อมูลได้'}</div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -24,14 +136,14 @@ export default function ProfilePage() {
       </button>
 
       <header className="mb-8">
-        <h1 className="text-2xl font-semibold text-center text-gray-700">เจ้าของร้าน — SN clinic </h1>
+        <h1 className="text-2xl font-semibold text-center text-gray-700">เจ้าของร้าน — {userData.username}</h1>
       </header>
 
       <div className="grid md:grid-cols-3 gap-6">
         <div className="md:col-span-1 flex flex-col items-center">
           <div className="w-32 h-32 bg-gray-100 rounded-full mb-4"></div>
-          <h2 className="text-xl font-medium">SN clinic</h2>
-          <p className="text-gray-500">test@gmail.com</p>
+          <h2 className="text-xl font-medium">{userData.username}</h2>
+          <p className="text-gray-500">{userData.email}</p>
         </div>
 
         <div className="md:col-span-2">
@@ -43,13 +155,17 @@ export default function ProfilePage() {
             <CardContent className="space-y-4">
               <div className="grid grid-cols-3 gap-4">
                 <div className="text-gray-500">อีเมล:</div>
-                <div className="col-span-2 text-gray-500">jakkrapart.x78@gmail.com</div>
+                <div className="col-span-2 text-gray-500">{userData.email}</div>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="text-gray-500">บทบาท:</div>
+                <div className="col-span-2 text-gray-500">{userData.role}</div>
               </div>
               <div className="grid grid-cols-3 gap-4">
                 <div className="text-gray-500">แพ็กเกจ:</div>
                 <div className="col-span-2 flex items-center gap-2 text-gray-500">
                   Basic
-                  <Button variant="link" className="text-purple-500 p-0 h-auto">
+                  <Button className="text-purple-500 p-0 h-auto bg-transparent hover:bg-transparent border-none shadow-none underline">
                     <span className="flex items-center">
                       <svg
                         xmlns="http://www.w3.org/2000/svg"

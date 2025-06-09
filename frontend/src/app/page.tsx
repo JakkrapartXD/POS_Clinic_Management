@@ -11,7 +11,7 @@ export default function Home() {
       try {
         const res = await fetch('http://localhost:4000/auth/token-verify', {
           method: 'GET',
-          credentials: 'include', // <-- สำคัญ! เพื่อส่ง cookie ไปด้วย
+          credentials: 'include', 
         })
 
         if (res.ok) {
