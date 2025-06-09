@@ -8,11 +8,13 @@ const userModel = new UserModel();
 const sessionModel = new SessionModel();
 
 export class AuthService {
-  async signUp(username: string, password: string) {
+  async signUp(username: string, password: string, email: string) {
     const hashedPassword = await hash(password, 10);
     const user = await userModel.create({
       username,
-      password: hashedPassword,
+      password_hash: hashedPassword,
+      email,
+      role: 'staff', // เพิ่ม default role เนื่องจาก schema กำหนดให้เป็น required
     });
     
     return { success: true, userId: user.id };
@@ -25,33 +27,42 @@ export class AuthService {
       return { success: false, error: "Invalid username or password" };
     }
 
-    const passwordValid = await compare(password, user.password);
+    // ใช้ password_hash แทน password
+    const passwordValid = await compare(password, user.password_hash);
     if (!passwordValid) {
       return { success: false, error: "Invalid username or password" };
     }
 
-    // Create session
+    // อัพเดต status ของผู้ใช้เป็น active เมื่อ login สำเร็จ
+    await userModel.updateStatus(user.id, 'active');
+
+    // สร้าง session
     const sessionToken = this.generateSessionToken();
-    const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+    const expires = new Date(Date.now() + 1 * 24 * 60 * 60 * 1000); // 1 วัน
 
     await sessionModel.create(sessionToken, user.id, expires);
 
-    // Create JWT token
+    // สร้าง JWT token
     const token = sign(
       {
-        name: user.name || user.username,
+        name: user.username, // ใช้ username แทน name กรณีที่ไม่มี name ใน schema
         email: user.email,
-        picture: user.image,
         sub: user.id,
+        role: user.role, // เพิ่ม role ใน token
         sessionToken,
       },
       JWT_SECRET,
-      { expiresIn: "30d" }
+      { expiresIn: "1d" }
     );
 
     return {
       success: true,
-      user: { id: user.id, username: user.username },
+      user: { 
+        id: user.id, 
+        username: user.username, 
+        email: user.email, 
+        role: user.role 
+      },
       sessionToken,
       token,
       expires,
@@ -74,7 +85,17 @@ export class AuthService {
   }
 
   async signOut(sessionToken: string) {
+    // ดึง userId จาก session
+    const userId = await sessionModel.getUserIdByToken(sessionToken);
+    
+    // ลบ session
     await sessionModel.delete(sessionToken);
+    
+    // อัพเดต status ของ user เป็น inactive หากพบ userId
+    if (userId) {
+      await userModel.updateStatus(userId, 'inactive');
+    }
+    
     return { success: true };
   }
 

@@ -8,18 +8,13 @@ async function main() {
   const userCount = await prisma.user.count();
   
   if (userCount > 0) {
-    console.log('👥 Users already exist in the system. Skipping first admin creation.');
+    console.log('👥 Users already exist in the system. Skipping admin creation.');
     return;
   }
   
-  // Get admin credentials from environment variables
-  const adminUsername = process.env.SNADMIN_Username;
-  const adminPassword = process.env.SNADMIN_Password;
-
-  if (!adminUsername || !adminPassword) {
-    console.warn('⚠️ SNADMIN_Username or SNADMIN_Password not set in environment variables. Skipping admin user creation.');
-    return;
-  }
+  // Set admin credentials (preferably use environment variables in production)
+  const adminUsername = process.env.ADMIN_USERNAME || 'admin';
+  const adminPassword = process.env.ADMIN_PASSWORD || 'admin1234';
 
   try {
     // Hash the password
@@ -29,14 +24,15 @@ async function main() {
     const admin = await prisma.user.create({
       data: {
         username: adminUsername,
-        password: hashedPassword,
+        password_hash: hashedPassword,
         role: 'admin',
-        name: 'System Administrator',
-        email: `${adminUsername}@snclinc.system`,
+        email: `${adminUsername}@clinic.system`,
+        status: 'active',
       },
     });
 
-    console.log(`✅ First admin user created successfully: ${admin.username} (${admin.id})`);
+    console.log(`✅ Admin user created successfully: ${admin.username} (${admin.id})`);
+
   } catch (error) {
     console.error('❌ Error creating admin user:', error);
   }
