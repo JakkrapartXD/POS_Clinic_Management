@@ -7,7 +7,7 @@ export const medicalMutations = {
     const { input } = args;
     context.security.requireStaff(context);
     
-    await context.security.checkRateLimit(context.userId, 'mutation');
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
     
     if (!input.orderItems || input.orderItems.length === 0) {
       throw new GraphQLError('Order must have at least one item');
@@ -99,7 +99,7 @@ export const medicalMutations = {
       'CREATE_ORDER',
       'Order',
       order.id,
-      { total: input.total_amount, items: input.orderItems.length }
+      { total: input.total_amount, items: input.orderItems.length }, context.redisClient
     );
     
     return fullOrder;
@@ -110,7 +110,7 @@ export const medicalMutations = {
     context.security.requireStaff(context);
     context.security.validateId(input.orderId);
     
-    await context.security.checkRateLimit(context.userId, 'mutation');
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
     
     // Validate order exists
     const order = await context.prisma.order.findUnique({
@@ -163,7 +163,7 @@ export const medicalMutations = {
       'PROCESS_PAYMENT',
       'Payment',
       payment.id,
-      { orderId: input.orderId, amount: input.amount, type: input.payment_type }
+      { orderId: input.orderId, amount: input.amount, type: input.payment_type }, context.redisClient
     );
     
     return payment;
@@ -174,7 +174,7 @@ export const medicalMutations = {
     const { input } = args;
     context.security.requireStaff(context);
     
-    await context.security.checkRateLimit(context.userId, 'mutation');
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
     
     context.security.validateId(input.patientId);
     context.security.validateId(input.doctorId);
@@ -235,7 +235,7 @@ export const medicalMutations = {
         patientId: input.patientId, 
         doctorId: input.doctorId, 
         time: input.appointment_time 
-      }
+      }, context.redisClient
     );
     
     return appointment;
@@ -246,7 +246,7 @@ export const medicalMutations = {
     context.security.requireStaff(context);
     context.security.validateId(id);
     
-    await context.security.checkRateLimit(context.userId, 'mutation');
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
     
     const updateData: any = {};
     
@@ -301,7 +301,7 @@ export const medicalMutations = {
       'UPDATE_APPOINTMENT',
       'Appointment',
       id,
-      updateData
+      updateData, context.redisClient
     );
     
     return appointment;
@@ -312,7 +312,7 @@ export const medicalMutations = {
     const { input } = args;
     context.security.requireDoctor(context);
     
-    await context.security.checkRateLimit(context.userId, 'mutation');
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
     
     context.security.validateId(input.patientId);
     context.security.validateId(input.doctorId);
@@ -356,7 +356,7 @@ export const medicalMutations = {
       'CREATE_MEDICAL_RECORD',
       'MedicalRecord',
       medicalRecord.id,
-      { patientId: input.patientId, diagnosis: input.diagnosis }
+      { patientId: input.patientId, diagnosis: input.diagnosis }, context.redisClient
     );
     
     return medicalRecord;
@@ -366,7 +366,7 @@ export const medicalMutations = {
     const { input } = args;
     context.security.requireDoctor(context);
     
-    await context.security.checkRateLimit(context.userId, 'mutation');
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
     
     context.security.validateId(input.medicalRecordId);
     context.security.validateId(input.productId);
@@ -439,7 +439,7 @@ export const medicalMutations = {
         product: product.product_name, 
         dosage: input.dosage,
         medicalRecordId: input.medicalRecordId 
-      }
+      }, context.redisClient
     );
     
     return prescription;
@@ -449,7 +449,7 @@ export const medicalMutations = {
     const { input } = args;
     context.security.requireDoctor(context);
     
-    await context.security.checkRateLimit(context.userId, 'mutation');
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
     
     context.security.validateId(input.patientId);
     context.security.validateId(input.doctorId);
@@ -487,7 +487,7 @@ export const medicalMutations = {
       'CREATE_TREATMENT_PLAN',
       'TreatmentPlan',
       treatmentPlan.id,
-      { patientId: input.patientId }
+      { patientId: input.patientId }, context.redisClient
     );
     
     return treatmentPlan;
@@ -498,7 +498,7 @@ export const medicalMutations = {
     const { input } = args;
     context.security.requireStaff(context);
     
-    await context.security.checkRateLimit(context.userId, 'mutation');
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
     
     const sanitizedInput = {
       name: context.security.sanitizeString(input.name),
@@ -522,7 +522,7 @@ export const medicalMutations = {
       'CREATE_SUPPLIER',
       'Supplier',
       supplier.id,
-      { name: supplier.name }
+      { name: supplier.name }, context.redisClient
     );
     
     return supplier;
@@ -532,7 +532,7 @@ export const medicalMutations = {
     const { input } = args;
     context.security.requireStaff(context);
     
-    await context.security.checkRateLimit(context.userId, 'mutation');
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
     
     context.security.validateId(input.supplierId);
     
@@ -619,7 +619,7 @@ export const medicalMutations = {
       'CREATE_PURCHASE',
       'Purchase',
       purchase.id,
-      { supplierId: input.supplierId, total: input.total_amount }
+      { supplierId: input.supplierId, total: input.total_amount }, context.redisClient
     );
     
     return fullPurchase;
@@ -650,7 +650,7 @@ export const medicalMutations = {
       context.userId,
       'ACKNOWLEDGE_STOCK_ALERT',
       'StockAlert',
-      id
+      id, context.redisClient
     );
     
     return stockAlert;
@@ -660,7 +660,7 @@ export const medicalMutations = {
     const { date } = args;
     context.security.requireStaff(context);
     
-    await context.security.checkRateLimit(context.userId, 'mutation');
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
     
     const reportDate = new Date(date);
     const nextDay = new Date(reportDate);
@@ -727,7 +727,7 @@ export const medicalMutations = {
       'GENERATE_DAILY_REPORT',
       'DailyReport',
       dailyReport.id,
-      { date: reportDate }
+      { date: reportDate }, context.redisClient
     );
     
     return dailyReport;

@@ -8,7 +8,7 @@ export const queries = {
     const { filter, pagination } = args;
     context.security.requireAdmin(context);
     
-    await context.security.checkRateLimit(context.userId, 'query');
+    await context.security.checkRateLimit(context.userId, 'query', context.redisClient);
     context.security.validatePagination(pagination);
     
     const where: any = {};
@@ -90,7 +90,7 @@ export const queries = {
     const { pagination } = args;
     context.security.requireStaff(context);
     
-    await context.security.checkRateLimit(context.userId, 'query');
+    await context.security.checkRateLimit(context.userId, 'query', context.redisClient);
     context.security.validatePagination(pagination);
     
     const [patients, total] = await Promise.all([
@@ -164,7 +164,7 @@ export const queries = {
     const { filter, pagination } = args;
     context.security.requireStaff(context);
     
-    await context.security.checkRateLimit(context.userId, 'query');
+    await context.security.checkRateLimit(context.userId, 'query', context.redisClient);
     context.security.validatePagination(pagination);
     
     const where: any = {};
@@ -271,7 +271,7 @@ export const queries = {
     const { filter, pagination } = args;
     context.security.requireStaff(context);
     
-    await context.security.checkRateLimit(context.userId, 'query');
+    await context.security.checkRateLimit(context.userId, 'query', context.redisClient);
     context.security.validatePagination(pagination);
     
     const where: any = {};

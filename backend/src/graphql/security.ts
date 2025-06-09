@@ -1,10 +1,8 @@
 import { GraphQLError } from "graphql";
 import { verify } from "jsonwebtoken";
 import { PrismaClient } from "@prisma/client";
-import { createClient } from "redis";
 
 const prisma = new PrismaClient();
-const redisClient = createClient();
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
 
 // Rate limiting configuration
@@ -113,13 +111,20 @@ export class SecurityService {
     this.requireRole(context, ['admin', 'doctor', 'cashier', 'staff']);
   }
 
-  // Rate limiting
+  // Rate limiting - now accepts redisClient as parameter
   static async checkRateLimit(
     key: string, 
-    type: 'query' | 'mutation' | 'sensitive' = 'query'
+    type: 'query' | 'mutation' | 'sensitive' = 'query',
+    redisClient?: any
   ): Promise<void> {
     const limit = RATE_LIMITS[type];
     const redisKey = `rate_limit:${type}:${key}`;
+    
+    // Skip rate limiting if no Redis client is available
+    if (!redisClient || !redisClient.isReady) {
+      console.warn('Redis client not available, skipping rate limiting');
+      return;
+    }
     
     try {
       const current = await redisClient.incr(redisKey);
@@ -224,13 +229,14 @@ export class SecurityService {
     }
   }
 
-  // Audit logging
+  // Audit logging - now accepts redisClient as parameter
   static async logSensitiveOperation(
     userId: string,
     operation: string,
     entityType: string,
     entityId: string,
-    details?: any
+    details?: any,
+    redisClient?: any
   ) {
     try {
       // Log to audit table (you may want to create this table)
@@ -243,15 +249,18 @@ export class SecurityService {
         timestamp: new Date().toISOString()
       });
       
-      // Store in Redis for recent activity tracking
-      const auditKey = `audit:${userId}:${Date.now()}`;
-      await redisClient.setex(auditKey, 24 * 60 * 60, JSON.stringify({
-        operation,
-        entityType,
-        entityId,
-        details,
-        timestamp: new Date().toISOString()
-      }));
+      // Store in Redis for recent activity tracking if Redis client is available
+      if (redisClient && redisClient.isReady) {
+        const auditKey = `audit:${userId}:${Date.now()}`;
+        // Use setEx instead of setex for Redis v5 compatibility
+        await redisClient.setEx(auditKey, 24 * 60 * 60, JSON.stringify({
+          operation,
+          entityType,
+          entityId,
+          details,
+          timestamp: new Date().toISOString()
+        }));
+      }
     } catch (error) {
       console.error('Audit logging error:', error);
     }
@@ -340,7 +349,7 @@ export const customScalars = {
 };
 
 // Context creator with security
-export async function createGraphQLContext(request: any) {
+export async function createGraphQLContext(request: any, redisClient?: any) {
   const auth = await SecurityService.authenticate({ request });
   
   return {

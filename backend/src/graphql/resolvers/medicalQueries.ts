@@ -6,7 +6,7 @@ export const medicalQueries = {
     const { pagination } = args;
     context.security.requireStaff(context);
     
-    await context.security.checkRateLimit(context.userId, 'query');
+    await context.security.checkRateLimit(context.userId, 'query', context.redisClient);
     context.security.validatePagination(pagination);
     
     const where: any = {};

@@ -98,11 +98,11 @@ const app = new Elysia()
           };
 
           // Create GraphQL context with authentication and security
-          const context = await createGraphQLContext(contextRequest);
+          const context = await createGraphQLContext(contextRequest, redisClient);
 
           // Add rate limiting check for GraphQL endpoint
           if (context.isAuthenticated) {
-            await SecurityService.checkRateLimit(context.userId!, "query");
+            await SecurityService.checkRateLimit(context.userId!, "query", redisClient);
           }
 
           return context;

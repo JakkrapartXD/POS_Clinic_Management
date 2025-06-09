@@ -7,7 +7,7 @@ export const mutations = {
     const { input } = args;
     context.security.requireAdmin(context);
     
-    await context.security.checkRateLimit(context.userId, 'mutation');
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
     
     // Validate input
     if (!context.security.validateEmail(input.email)) {
@@ -60,7 +60,8 @@ export const mutations = {
       'CREATE_USER',
       'User',
       user.id,
-      { username: user.username, role: user.role }
+      { username: user.username, role: user.role },
+      context.redisClient, context.redisClient
     );
     
     return user;
@@ -71,7 +72,7 @@ export const mutations = {
     context.security.requireAdmin(context);
     context.security.validateId(id);
     
-    await context.security.checkRateLimit(context.userId, 'mutation');
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
     
     const updateData: any = {};
     
@@ -126,7 +127,7 @@ export const mutations = {
       'UPDATE_USER',
       'User',
       id,
-      updateData
+      updateData, context.redisClient
     );
     
     return user;
@@ -137,7 +138,7 @@ export const mutations = {
     context.security.requireAdmin(context);
     context.security.validateId(id);
     
-    await context.security.checkRateLimit(context.userId, 'sensitive');
+    await context.security.checkRateLimit(context.userId, 'sensitive', context.redisClient);
     
     // Prevent self-deletion
     if (id === context.userId) {
@@ -177,7 +178,7 @@ export const mutations = {
       context.userId,
       'DELETE_USER',
       'User',
-      id
+      id, context.redisClient
     );
     
     return true;
@@ -188,7 +189,7 @@ export const mutations = {
     const { input } = args;
     context.security.requireStaff(context);
     
-    await context.security.checkRateLimit(context.userId, 'mutation');
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
     
     // Validate and sanitize input
     const sanitizedInput = {
@@ -219,7 +220,7 @@ export const mutations = {
       'CREATE_PATIENT',
       'Patient',
       patient.id,
-      { name: `${patient.first_name} ${patient.last_name}` }
+      { name: `${patient.first_name} ${patient.last_name}` }, context.redisClient
     );
     
     return patient;
@@ -230,7 +231,7 @@ export const mutations = {
     context.security.requireStaff(context);
     context.security.validateId(id);
     
-    await context.security.checkRateLimit(context.userId, 'mutation');
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
     
     const updateData: any = {};
     
@@ -262,7 +263,7 @@ export const mutations = {
       'UPDATE_PATIENT',
       'Patient',
       id,
-      updateData
+      updateData, context.redisClient
     );
     
     return patient;
@@ -273,7 +274,7 @@ export const mutations = {
     context.security.requireAdmin(context); // Only admins can delete patients
     context.security.validateId(id);
     
-    await context.security.checkRateLimit(context.userId, 'sensitive');
+    await context.security.checkRateLimit(context.userId, 'sensitive', context.redisClient);
     
     // Check for dependent records
     const dependencies = await context.prisma.patient.findUnique({
@@ -308,7 +309,7 @@ export const mutations = {
       context.userId,
       'DELETE_PATIENT',
       'Patient',
-      id
+      id, context.redisClient
     );
     
     return true;
@@ -319,7 +320,7 @@ export const mutations = {
     const { input } = args;
     context.security.requireStaff(context);
     
-    await context.security.checkRateLimit(context.userId, 'mutation');
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
     
     // Validate required fields
     if (!input.product_name || !input.sale_price) {
@@ -372,7 +373,7 @@ export const mutations = {
       'CREATE_PRODUCT',
       'Product',
       product.id,
-      { name: product.product_name }
+      { name: product.product_name }, context.redisClient
     );
     
     return product;
@@ -383,7 +384,7 @@ export const mutations = {
     context.security.requireStaff(context);
     context.security.validateId(id);
     
-    await context.security.checkRateLimit(context.userId, 'mutation');
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
     
     const updateData: any = {};
     
@@ -430,7 +431,7 @@ export const mutations = {
       'UPDATE_PRODUCT',
       'Product',
       id,
-      updateData
+      updateData, context.redisClient
     );
     
     return product;
@@ -441,7 +442,7 @@ export const mutations = {
     context.security.requireStaff(context);
     context.security.validateId(productId);
     
-    await context.security.checkRateLimit(context.userId, 'mutation');
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
     
     if (quantity === 0) {
       throw new GraphQLError('Quantity adjustment cannot be zero');
@@ -493,7 +494,7 @@ export const mutations = {
       'ADJUST_STOCK',
       'Product',
       productId,
-      { quantity, newStock: newStockQuantity }
+      { quantity, newStock: newStockQuantity }, context.redisClient
     );
     
     return stockMovement;

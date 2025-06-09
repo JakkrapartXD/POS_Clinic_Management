@@ -352,7 +352,7 @@ const additionalMutations = {
     context.security.requireAdmin(context);
     context.security.validateId(id);
     
-    await context.security.checkRateLimit(context.userId, 'sensitive');
+    await context.security.checkRateLimit(context.userId, 'sensitive', context.redisClient);
     
     // Check for dependencies
     const dependencies = await context.prisma.product.findUnique({
@@ -387,7 +387,7 @@ const additionalMutations = {
       context.userId,
       'DELETE_PRODUCT',
       'Product',
-      id
+      id, context.redisClient
     );
     
     return true;
@@ -420,7 +420,7 @@ const additionalMutations = {
       'UPDATE_ORDER',
       'Order',
       id,
-      updateData
+      updateData, context.redisClient
     );
     
     return order;
@@ -431,7 +431,7 @@ const additionalMutations = {
     context.security.requireAdmin(context);
     context.security.validateId(id);
     
-    await context.security.checkRateLimit(context.userId, 'sensitive');
+    await context.security.checkRateLimit(context.userId, 'sensitive', context.redisClient);
     
     // Check if order has payments
     const order = await context.prisma.order.findUnique({
@@ -455,7 +455,7 @@ const additionalMutations = {
       context.userId,
       'DELETE_ORDER',
       'Order',
-      id
+      id, context.redisClient
     );
     
     return true;
