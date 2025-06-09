@@ -1,17 +1,24 @@
 import { Elysia, t } from "elysia";
 import { cookie } from "@elysiajs/cookie";
 import { AuthService } from "../services/AuthService";
-import { UserModel } from "../models/UserModel";
 
 const authService = new AuthService();
-const userModel = new UserModel();
 
 // Validation schemas
-const authModel = t.Object({
+const authSignUpModel = t.Object({
   username: t.String(),
   password: t.String({
     minLength: 8,
   }),
+  email: t.String()
+});
+
+// Login validation schema (without email)
+const authSignInModel = t.Object({
+  username: t.String(),
+  password: t.String({
+    minLength: 8,
+  })
 });
 
 export const authController = (app: Elysia) =>
@@ -19,21 +26,22 @@ export const authController = (app: Elysia) =>
     .use(cookie())
     .put(
       "/sign-up",
-      async ({ body: { username, password } }) => {
-        return await authService.signUp(username, password);
+      async ({ body: { username, password, email } }) => {
+        return await authService.signUp(username, password, email);
       },
       {
-        body: authModel,
+        body: authSignUpModel,
       }
     )
     .post(
       "/sign-in",
       async ({ set, cookie, body: { username, password } }) => {
+        // Get the login credentials and verify password
         const result = await authService.signIn(username, password);
         
         if (!result.success) {
           set.status = 401;
-          return result.error;
+          return { success: false, error: result.error };
         }
         
         // Set cookies
@@ -60,12 +68,13 @@ export const authController = (app: Elysia) =>
         };
       },
       {
-        body: authModel,
+        body: authSignInModel,
       }
     )
     .get("/sign-out", async ({ cookie }) => {
       const sessionToken = cookie["next-auth.session-token"]?.value;
       if (sessionToken) {
+
         await authService.signOut(sessionToken);
         
         // Remove both cookies
@@ -103,6 +112,7 @@ export const authController = (app: Elysia) =>
           id: payload.sub,
           name: typeof payload === "object" && payload !== null && "name" in payload ? payload.name : undefined,
           email: typeof payload === "object" && payload !== null && "email" in payload ? payload.email : undefined,
+          role: typeof payload === "object" && payload !== null && "role" in payload ? payload.role : undefined,
         },
       };
     });
