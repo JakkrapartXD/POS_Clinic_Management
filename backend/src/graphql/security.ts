@@ -1,8 +1,7 @@
 import { GraphQLError } from "graphql";
 import { verify } from "jsonwebtoken";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "../lib/database";
 
-const prisma = new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
 
 // Rate limiting configuration
@@ -350,13 +349,25 @@ export const customScalars = {
 
 // Context creator with security
 export async function createGraphQLContext(request: any, redisClient?: any) {
-  const auth = await SecurityService.authenticate({ request });
-  
-  return {
-    prisma,
-    redisClient,
-    ...auth,
-    request,
-    security: SecurityService
-  };
+  try {
+    const auth = await SecurityService.authenticate({ request });
+    
+    return {
+      prisma,
+      redisClient,
+      ...auth,
+      request,
+      security: SecurityService
+    };
+  } catch (error) {
+    console.error('Error creating GraphQL context:', error);
+    // Return minimal context if there are database issues
+    return {
+      prisma,
+      redisClient,
+      isAuthenticated: false,
+      request,
+      security: SecurityService
+    };
+  }
 } 

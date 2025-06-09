@@ -13,7 +13,7 @@ import { resolvers } from "./graphql/resolvers";
 import { createGraphQLContext, SecurityService } from "./graphql/security";
 
 // Import routes
-import { authRoutes } from "./routes/authRoutes";
+import { AuthRoutes } from "./routes/authRoutes";
 import { userRoutes } from "./routes/userRoutes";
 
 // Initialize Redis connection
@@ -124,15 +124,32 @@ const app = new Elysia()
   .use(bearer())
 
   // Health check endpoint
-  .get("/health", () => ({
-    status: "healthy",
-    timestamp: new Date().toISOString(),
-    services: {
-      database: "connected",
-      redis: redisClient.isReady ? "connected" : "disconnected",
-      graphql: "active",
-    },
-  }))
+  .get("/health", async () => {
+    const health = {
+      status: "healthy",
+      timestamp: new Date().toISOString(),
+      services: {
+        redis: redisClient.isReady ? "connected" : "disconnected",
+        graphql: "active",
+        database: "unknown"
+      },
+    };
+
+    // Try to check database connectivity
+    try {
+      const { PrismaClient } = require("@prisma/client");
+      const testPrisma = new PrismaClient();
+      await testPrisma.$queryRaw`SELECT 1`;
+      health.services.database = "connected";
+      await testPrisma.$disconnect();
+    } catch (error) {
+      console.error('Database health check failed:', error);
+      health.services.database = "disconnected";
+      health.status = "degraded";
+    }
+
+    return health;
+  })
 
   // API documentation endpoint
   .get("/api-info", () => ({
@@ -185,7 +202,7 @@ const app = new Elysia()
   })
 
   // Register routes
-  .use(authRoutes)
+  .use(AuthRoutes)
   .use(userRoutes)
 
   // Default route
@@ -216,7 +233,10 @@ const app = new Elysia()
     }
   })
 
-  .listen(4000);
+  .listen({
+    hostname: "0.0.0.0",
+    port: 4000,
+  });
 
 console.log(`
 🚀 SN Medical API Server is running!

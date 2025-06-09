@@ -5,9 +5,14 @@ import { SessionModel } from "../models/SessionModel";
 
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
 const userModel = new UserModel();
-const sessionModel = new SessionModel();
 
 export class AuthService {
+  private sessionModel: SessionModel;
+
+  constructor(redisClient?: any) {
+    this.sessionModel = new SessionModel(redisClient);
+  }
+
   async signUp(username: string, password: string, email: string) {
     const hashedPassword = await hash(password, 10);
     const user = await userModel.create({
@@ -40,7 +45,7 @@ export class AuthService {
     const sessionToken = this.generateSessionToken();
     const expires = new Date(Date.now() + 1 * 24 * 60 * 60 * 1000); // 1 วัน
 
-    await sessionModel.create(sessionToken, user.id, expires);
+    await this.sessionModel.create(sessionToken, user.id, expires);
 
     // สร้าง JWT token
     const token = sign(
@@ -86,10 +91,10 @@ export class AuthService {
 
   async signOut(sessionToken: string) {
     // ดึง userId จาก session
-    const userId = await sessionModel.getUserIdByToken(sessionToken);
+    const userId = await this.sessionModel.getUserIdByToken(sessionToken);
     
     // ลบ session
-    await sessionModel.delete(sessionToken);
+    await this.sessionModel.delete(sessionToken);
     
     // อัพเดต status ของ user เป็น inactive หากพบ userId
     if (userId) {
