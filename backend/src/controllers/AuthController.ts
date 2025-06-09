@@ -2,8 +2,6 @@ import { Elysia, t } from "elysia";
 import { cookie } from "@elysiajs/cookie";
 import { AuthService } from "../services/AuthService";
 
-const authService = new AuthService();
-
 // Validation schemas
 const authSignUpModel = t.Object({
   username: t.String(),
@@ -21,8 +19,10 @@ const authSignInModel = t.Object({
   })
 });
 
-export const authController = (app: Elysia) =>
-  app
+export const authController = (app: Elysia, redisClient?: any) => {
+  const authService = new AuthService(redisClient);
+  
+  return app
     .use(cookie())
     .put(
       "/sign-up",
@@ -116,3 +116,4 @@ export const authController = (app: Elysia) =>
         },
       };
     });
+};

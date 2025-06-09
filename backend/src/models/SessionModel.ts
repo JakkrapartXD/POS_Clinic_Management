@@ -1,22 +1,12 @@
-import { PrismaClient } from "@prisma/client";
-import { createClient, RedisClientType } from "redis";
+import { prisma } from "../lib/database";
+import { RedisClientType } from "redis";
 
-const prisma = new PrismaClient();
-let redisClient: RedisClientType | null = null;
-
-// สร้าง Redis client ถ้าจำเป็น
-try {
-  redisClient = createClient();
-  
-  // Initialize Redis connection
-  (async () => {
-    await redisClient.connect();
-  })();
-} catch (error) {
-  console.warn("Redis client couldn't be initialized, using database only");
-}
+// Note: Redis client should be passed from the main application
+// instead of creating a new connection here
 
 export class SessionModel {
+  constructor(private redisClient?: RedisClientType) {}
+
   async create(sessionToken: string, userId: string, expires: Date) {
     // Create in database
     await prisma.session.create({
@@ -28,9 +18,9 @@ export class SessionModel {
     });
 
     // Cache in Redis if available
-    if (redisClient) {
+    if (this.redisClient && this.redisClient.isReady) {
       try {
-        await redisClient.set(
+        await this.redisClient.set(
           `session:${sessionToken}`,
           JSON.stringify({
             userId,
@@ -47,9 +37,9 @@ export class SessionModel {
 
   async findByToken(sessionToken: string) {
     // Try Redis first if available
-    if (redisClient) {
+    if (this.redisClient && this.redisClient.isReady) {
       try {
-        const sessionData = await redisClient.get(`session:${sessionToken}`);
+        const sessionData = await this.redisClient.get(`session:${sessionToken}`);
         if (sessionData) {
           const session = JSON.parse(sessionData);
           if (new Date(session.expires) > new Date()) {
@@ -69,9 +59,9 @@ export class SessionModel {
 
     if (session && session.expires > new Date()) {
       // Cache for next time if Redis available
-      if (redisClient) {
+      if (this.redisClient && this.redisClient.isReady) {
         try {
-          await redisClient.set(
+          await this.redisClient.set(
             `session:${sessionToken}`,
             JSON.stringify({
               userId: session.userId,
@@ -92,9 +82,9 @@ export class SessionModel {
   async getUserIdByToken(sessionToken: string): Promise<string | null> {
     try {
       // ลองดึงข้อมูลจาก Redis ก่อน
-      if (redisClient) {
+      if (this.redisClient && this.redisClient.isReady) {
         try {
-          const sessionData = await redisClient.get(`session:${sessionToken}`);
+          const sessionData = await this.redisClient.get(`session:${sessionToken}`);
           if (sessionData) {
             const session = JSON.parse(sessionData);
             if (new Date(session.expires) > new Date()) {
@@ -131,9 +121,9 @@ export class SessionModel {
     }
 
     // Remove from Redis if available
-    if (redisClient) {
+    if (this.redisClient && this.redisClient.isReady) {
       try {
-        await redisClient.del(`session:${sessionToken}`);
+        await this.redisClient.del(`session:${sessionToken}`);
       } catch (error) {
         console.error("Failed to delete session from Redis:", error);
       }
