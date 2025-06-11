@@ -2,44 +2,47 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { apiClient } from '@/clients/api'
+import { API_CONFIG } from '@/config/api'
+import { APP_CONSTANTS } from '@/constants'
+import { setCookie } from '@/utils/common'
+
+interface AuthResponse {
+  accessToken?: string
+  token?: string
+}
 
 export default function LoginPage() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [showPassword, setShowPassword] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+    setIsLoading(true)
 
     try {
-      const res = await fetch('http://localhost:4000/auth/sign-in', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ username, password }),
+      const data = await apiClient.post<AuthResponse>(API_CONFIG.ENDPOINTS.AUTH.SIGN_IN, {
+        username,
+        password,
       })
 
-      if (!res.ok) {
-        throw new Error('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง')
-      }
-
-      const data = await res.json()
-
-      // สมมติว่า API ส่ง token กลับมาใน data.accessToken หรือ data.token
       const token = data.accessToken || data.token
       if (!token) throw new Error('ไม่พบโทเคนจากเซิร์ฟเวอร์')
 
-      // เก็บ token ลง cookie แทน localStorage
-      document.cookie = `next-auth.jwt-token=${token}; path=/; secure; samesite=strict`
+      // Use utility function to set cookie
+      setCookie(APP_CONSTANTS.COOKIES.AUTH_TOKEN, token, 7)
 
-      // redirect ไปหน้า dashboard
-      router.push('/dashboard')
+      // redirect to dashboard
+      router.push(APP_CONSTANTS.ROUTES.DASHBOARD)
     } catch (err: any) {
       setError(err.message || 'เกิดข้อผิดพลาด')
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -60,6 +63,7 @@ export default function LoginPage() {
           onChange={(e) => setUsername(e.target.value)}
           className="w-full p-2 border rounded-xl mb-4 block appearance-none w-full bg-white border border-grey-light hover:border-grey transition-transform hover:scale-[1.02] focus:scale-[1.02]"
           required
+          disabled={isLoading}
         />
 
         <div className="relative mb-4">
@@ -70,11 +74,13 @@ export default function LoginPage() {
             onChange={(e) => setPassword(e.target.value)}
             className="w-full p-2 border rounded-xl block appearance-none w-full bg-white border border-grey-light hover:border-grey transition-transform hover:scale-[1.02] focus:scale-[1.02]"
             required
+            disabled={isLoading}
           />
           <button 
             type="button" 
             onClick={() => setShowPassword(!showPassword)}
             className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+            disabled={isLoading}
           >
             {showPassword ? (
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
@@ -91,9 +97,10 @@ export default function LoginPage() {
 
         <button
           type="submit"
-          className="w-full bg-teal-500 hover:bg-teal-600 text-white py-2 rounded-xl transition-transform hover:scale-[1.02] active:scale-[1.02]"
+          className="w-full bg-teal-500 hover:bg-teal-600 text-white py-2 rounded-xl transition-transform hover:scale-[1.02] active:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled={isLoading}
         >
-          เข้าสู่ระบบ
+          {isLoading ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ'}
         </button>
       </form>
     </div>

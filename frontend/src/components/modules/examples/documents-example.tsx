@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import DocumentCard from "@/components/documents/document-card"
+import DocumentCard from "@/components/modules/documents/document-card"
 import PageHeader from "@/components/layout/page-header"
 import PageContainer from "@/components/ui/page-container"
 import CardGrid from "@/components/ui/card-grid"

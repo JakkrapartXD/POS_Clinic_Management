@@ -4,20 +4,19 @@ import { useState } from "react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 import { Bell, ShoppingCart, Pill, Tag, LayoutGrid, Package, BarChart3, Settings, Users } from "lucide-react"
-import { PATHS, APP_CONFIG } from "@/constants/app-config"
 
 export default function Sidebar() {
   const [activeItem, setActiveItem] = useState<string>("inventory")
 
   const menuItems = [
-    { id: "notifications", icon: Bell, href: PATHS.notifications },
-    { id: "pos", icon: ShoppingCart, href: PATHS.pos },
-    { id: "inventory", icon: Pill, href: PATHS.inventory },
-    { id: "tags", icon: Tag, href: PATHS.discounts },
-    { id: "documents", icon: LayoutGrid, href: PATHS.documents },
+    { id: "notifications", icon: Bell, href: "/dashboard/notifications" },
+    { id: "pos", icon: ShoppingCart, href: "/dashboard/pos" },
+    { id: "inventory", icon: Pill, href: "/dashboard/inventory" },
+    { id: "tags", icon: Tag, href: "/dashboard/discounts" },
+    { id: "documents", icon: LayoutGrid, href: "/dashboard/documents" },
     { id: "orders", icon: Package, href: "/dashboard/orders" },
     { id: "reports", icon: BarChart3, href: "/dashboard/reports" },
-    { id: "settings", icon: Settings, href: PATHS.settings },
+    { id: "settings", icon: Settings, href: "/dashboard/settings" },
   ]
 
   return (
@@ -49,7 +48,7 @@ export default function Sidebar() {
           </Link>
         ))}
       </nav>
-      <div className="mt-auto text-xs text-gray-400">{APP_CONFIG.version}</div>
+      <div className="mt-auto text-xs text-gray-400">1.1.109</div>
     </div>
   )
-} 
+}

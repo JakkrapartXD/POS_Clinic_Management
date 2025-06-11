@@ -1,8 +1,8 @@
 "use client"
 
 import { useState } from "react"
-import ClinicInfoCard from "@/components/profile/clinic-info-card"
-import PaymentHistoryCard from "@/components/profile/payment-history-card"
+import ClinicInfoCard from "@/components/modules/profile/clinic-info-card"
+import PaymentHistoryCard from "@/components/modules/profile/payment-history-card"
 import PageHeader from "@/components/layout/page-header"
 import PageContainer from "@/components/ui/page-container"
 
