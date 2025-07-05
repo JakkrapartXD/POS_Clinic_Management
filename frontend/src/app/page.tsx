@@ -2,6 +2,9 @@
 
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { apiClient } from '@/clients/api'
+import { API_CONFIG } from '@/config/api'
+import { log } from 'console'
 
 export default function Home() {
   const router = useRouter()
@@ -9,19 +12,15 @@ export default function Home() {
   useEffect(() => {
     const verifyToken = async () => {
       try {
-        const res = await fetch('http://localhost:4000/auth/token-verify', {
-          method: 'GET',
-          credentials: 'include', 
-        })
-
-        if (res.ok) {
+        const res = await apiClient.get<{ valid: boolean }>(API_CONFIG.ENDPOINTS.AUTH.VERIFY_TOKEN)
+        console.log(res);
+        if (res.valid) {
           router.replace('/dashboard')
         } else {
           router.replace('/login')
         }
       } catch (err) {
         console.error('Token verification failed:', err)
-        router.replace('/login')
       }
     }
 

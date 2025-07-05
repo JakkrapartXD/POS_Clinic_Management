@@ -5,6 +5,7 @@ export const API_CONFIG = {
       SIGN_IN: '/auth/sign-in',
       SIGN_OUT: '/auth/sign-out',
       REFRESH: '/auth/refresh',
+      VERIFY_TOKEN: '/auth/token-verify',
     },
     USER: {
       PROFILE: '/user/profile',

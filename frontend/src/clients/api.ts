@@ -20,6 +20,7 @@ class ApiClient {
 
     const config: RequestInit = {
       ...options,
+      credentials: 'include',
       headers: {
         ...getAuthHeaders(token || undefined),
         ...options.headers,
@@ -95,6 +96,7 @@ class ApiClient {
 
     const response = await fetch(url, {
       method: 'POST',
+      credentials: 'include',
       headers: {
         ...(token && { Authorization: `Bearer ${token}` }),
       },
