@@ -31,11 +31,8 @@ export default function LoginPage() {
         password,
       })
 
-      const token = data.accessToken || data.token
-      if (!token) throw new Error('ไม่พบโทเคนจากเซิร์ฟเวอร์')
-
-      // Use utility function to set cookie
-      setCookie(APP_CONSTANTS.COOKIES.AUTH_TOKEN, token, 7)
+      // Backend automatically sets HttpOnly cookies, no need to set client-side cookies
+      if (!data.success) throw new Error('Login failed')
 
       // redirect to dashboard
       router.push(APP_CONSTANTS.ROUTES.DASHBOARD)

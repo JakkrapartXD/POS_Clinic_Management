@@ -12,15 +12,25 @@ export default function Home() {
   useEffect(() => {
     const verifyToken = async () => {
       try {
-        const res = await apiClient.get<{ valid: boolean }>(API_CONFIG.ENDPOINTS.AUTH.VERIFY_TOKEN)
-        console.log(res);
-        if (res.valid) {
-          router.replace('/dashboard')
+        // Use fetch with credentials to check HttpOnly cookies
+        const response = await fetch('http://localhost:4000/auth/token-verify', {
+          method: 'GET',
+          credentials: 'include',
+        });
+        
+        if (response.ok) {
+          const res = await response.json();
+          if (res.valid) {
+            router.replace('/dashboard');
+          } else {
+            router.replace('/login');
+          }
         } else {
-          router.replace('/login')
+          router.replace('/login');
         }
       } catch (err) {
-        console.error('Token verification failed:', err)
+        console.error('Token verification failed:', err);
+        router.replace('/login');
       }
     }
 

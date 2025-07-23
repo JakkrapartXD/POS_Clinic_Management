@@ -111,4 +111,7 @@ class ApiClient {
   }
 }
 
-export const apiClient = new ApiClient(); 
+export const apiClient = new ApiClient();
+
+// Re-export GraphQL functionality for convenience
+export { GraphQLAPI, graphqlClient } from './graphql'; 

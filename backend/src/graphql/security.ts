@@ -23,18 +23,29 @@ export class SecurityService {
   static async authenticate(context: any): Promise<AuthContext> {
     let token: string | undefined;
 
+    // Debug: Log request details
+    console.log('=== Backend Authentication Debug ===');
+    console.log('Request headers:', context.request?.headers);
+    console.log('Request cookies:', context.request?.cookies);
+    console.log('Authorization header:', context.request?.headers?.authorization);
+    
     // Try to extract token from multiple sources
     if (context.request) {
       // From Authorization header (Bearer token)
       const authHeader = context.request.headers?.authorization;
       if (authHeader && authHeader.startsWith('Bearer ')) {
         token = authHeader.replace('Bearer ', '');
+        console.log('Found token in Authorization header');
       } 
       // From cookies
       else if (context.request.cookies?.['next-auth.jwt-token']) {
         token = context.request.cookies['next-auth.jwt-token'];
+        console.log('Found token in cookies');
       }
     }
+
+    console.log('Final token:', token ? 'Found' : 'Not found');
+    console.log('================================');
 
     if (!token) {
       return { isAuthenticated: false };

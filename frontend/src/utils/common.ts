@@ -57,7 +57,12 @@ export const setCookie = (name: string, value: string, days: number = 7): void =
   
   const expires = new Date();
   expires.setTime(expires.getTime() + days * 24 * 60 * 60 * 1000);
-  document.cookie = `${name}=${value}; expires=${expires.toUTCString()}; path=/; secure; samesite=strict`;
+  
+  // Check if we're in production for secure flag
+  const isProduction = process.env.NODE_ENV === 'production';
+  const secure = isProduction ? '; secure' : '';
+  
+  document.cookie = `${name}=${value}; expires=${expires.toUTCString()}; path=/${secure}; samesite=lax`;
 };
 
 /**

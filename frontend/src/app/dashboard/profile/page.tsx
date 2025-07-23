@@ -3,76 +3,12 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useRouter } from "next/navigation"
-import { log } from "node:console"
-
-interface UserData {
-  role: string
-  email: string
-  username: string
-}
-
-// GraphQL query function
-async function fetchUserData(): Promise<UserData | null> {
-  try {
-    // Extract JWT token from cookie
-    const getCookie = (name: string): string | null => {
-      const value = `; ${document.cookie}`;
-      const parts = value.split(`; ${name}=`);
-      if (parts.length === 2) {
-        return parts.pop()?.split(';').shift() || null;
-      }
-      return null;
-    }
-
-    const token = getCookie('next-auth.jwt-token');
-    
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-
-    // Add Authorization header if token exists
-    // console.log(token);
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    const response = await fetch('http://localhost:4000/graphql', {
-      method: 'POST',
-      headers,
-      // credentials: 'include', // Still include cookies for additional security
-      body: JSON.stringify({
-        query: `
-          query Me {
-            me {
-              role
-              email
-              username
-            }
-          }
-        `
-      })
-    })
-
-    if (!response.ok) {
-      throw new Error('Failed to fetch user data')
-    }
-
-    const result = await response.json()
-    
-    if (result.errors) {
-      throw new Error(result.errors[0]?.message || 'GraphQL error')
-    }
-
-    return result.data?.me || null
-  } catch (error) {
-    console.error('Error fetching user data:', error)
-    return null
-  }
-}
+import { GraphQLAPI } from "@/clients/graphql"
+import { User } from "@/types/user"
 
 export default function ProfilePage() {
   const router = useRouter()
-  const [userData, setUserData] = useState<UserData | null>(null)
+  const [userData, setUserData] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -81,9 +17,9 @@ export default function ProfilePage() {
     const loadUserData = async () => {
       try {
         setLoading(true)
-        const data = await fetchUserData()
-        if (data) {
-          setUserData(data)
+        const response = await GraphQLAPI.getCurrentUser()
+        if (response.me) {
+          setUserData(response.me)
         } else {
           setError('Failed to load user data')
         }
@@ -99,10 +35,19 @@ export default function ProfilePage() {
   }, [])
 
   // ฟังก์ชันสำหรับ logout
-  const handleLogout = () => {
-    // ลบ cookie authToken โดยตั้งค่าวันหมดอายุเป็นอดีต
-    document.cookie = "next-auth.jwt-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; samesite=strict"
-    router.replace("/login")
+  const handleLogout = async () => {
+    try {
+      // Call backend logout endpoint to clear HttpOnly cookies
+      await fetch('http://localhost:4000/auth/sign-out', {
+        method: 'GET',
+        credentials: 'include',
+      });
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      // Redirect to login regardless of logout success
+      router.replace("/login")
+    }
   }
 
   if (loading) {
