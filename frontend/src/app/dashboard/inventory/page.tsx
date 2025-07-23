@@ -4,6 +4,7 @@ import { useState, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
+import AddProductForm from "@/components/forms/AddProductForm"
 import {
   Plus,
   Import as FileImport,
@@ -15,11 +16,14 @@ import {
 } from "lucide-react"
 
 type AlphabetMode = 'english' | 'thai' | 'numbers'
+type ViewMode = 'list' | 'add-product'
 
 export default function InventoryPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedLetter, setSelectedLetter] = useState<string>("")
   const [alphabetMode, setAlphabetMode] = useState<AlphabetMode>('english')
+  const [viewMode, setViewMode] = useState<ViewMode>('list')
+  const [submitTrigger, setSubmitTrigger] = useState(0)
 
   const alphabet = Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i))
   const thaiLetters = ["ก", "ข", "ค", "ง", "จ", "ฉ", "ช", "ซ", "ฌ", "ญ", "ด", "ต", "ท", "ธ", "น", "บ", "ป", "ผ", "ฝ", "พ", "ฟ", "ภ", "ม", "ย", "ร", "ล", "ว", "ศ", "ษ", "ส", "ห", "ฬ", "อ", "ฮ"]
@@ -128,6 +132,26 @@ export default function InventoryPage() {
       case 'numbers': return '0-9'
       default: return 'A-Z'
     }
+  }
+
+  const handleAddProduct = () => {
+    setViewMode('add-product')
+  }
+
+  const handleBackToList = () => {
+    setViewMode('list')
+  }
+
+  const handleSubmitProduct = (productData: any) => {
+    // Handle form submission here - connect to your API
+    console.log("New product data:", productData)
+    // After successful submission, go back to list
+    setViewMode('list')
+    // You can also show a success message or refresh the product list
+  }
+
+  const handleSaveButtonClick = () => {
+    setSubmitTrigger(prev => prev + 1)
   }
 
   return (
@@ -266,82 +290,105 @@ export default function InventoryPage() {
         {/* Header - Fixed */}
         <div className="bg-white border-b p-6 flex-shrink-0">
           <div className="flex justify-between items-center">
-            <h1 className="text-2xl font-semibold text-gray-700">สต็อกสินค้า</h1>
-            <Button className="text-purple-500 bg-white hover:bg-purple-50 border border-purple-200">
-              ตัวเลือก
-            </Button>
+            <h1 className="text-2xl font-semibold text-gray-700">
+              {viewMode === 'add-product' ? 'เพิ่มสินค้าใหม่' : 'สต็อกสินค้า'}
+            </h1>
+            {viewMode === 'list' ? (
+              <Button className="text-purple-500 bg-white hover:bg-purple-50 border border-purple-200">
+                ตัวเลือก
+              </Button>
+            ) : (
+              <div className="flex space-x-3">
+                <Button variant="outline" onClick={handleBackToList}>
+                  ยกเลิก
+                </Button>
+                <Button onClick={handleSaveButtonClick} className="bg-purple-500 hover:bg-purple-600">
+                  บันทึกสินค้า
+                </Button>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Action Cards - Scrollable */}
+        {/* Dynamic Content - Scrollable */}
         <div className="flex-1 overflow-y-auto">
-          <div className="p-6">
-            <div className="grid grid-cols-3 gap-6">
-              <Card className="bg-white shadow-sm border border-gray-200 hover:shadow-md transition-shadow cursor-pointer">
-                <CardContent className="p-8 text-center">
-                  <Plus className="h-12 w-12 text-purple-500 mb-4 mx-auto" />
-                  <div className="text-purple-500 font-medium mb-2 text-lg">เพิ่มสินค้าใหม่</div>
-                  <div className="text-gray-500 text-sm">Create New Item</div>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-white shadow-sm border border-gray-200 hover:shadow-md transition-shadow cursor-pointer">
-                <CardContent className="p-8 text-center">
-                  <FileImport className="h-12 w-12 text-purple-500 mb-4 mx-auto" />
-                  <div className="text-purple-500 font-medium mb-2 text-lg">เพิ่มชุดสินค้า/นำเข้า/แก้ไข</div>
-                  <div className="text-gray-500 text-sm">Import</div>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-white shadow-sm border border-gray-200 hover:shadow-md transition-shadow cursor-pointer">
-                <CardContent className="p-8 text-center">
-                  <FileExport className="h-12 w-12 text-purple-500 mb-4 mx-auto" />
-                  <div className="text-purple-500 font-medium mb-2 text-lg">ส่งออกยอดสินค้า</div>
-                  <div className="text-gray-500 text-sm">Export</div>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-white shadow-sm border border-gray-200 hover:shadow-md transition-shadow cursor-pointer">
-                <CardContent className="p-8 text-center">
-                  <Trash2 className="h-12 w-12 text-purple-500 mb-4 mx-auto" />
-                  <div className="text-purple-500 font-medium mb-2 text-lg">ลบสินค้า</div>
-                  <div className="text-gray-500 text-sm">Remove Product</div>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-white shadow-sm border border-gray-200 hover:shadow-md transition-shadow cursor-pointer">
-                <CardContent className="p-8 text-center">
-                  <Barcode className="h-12 w-12 text-purple-500 mb-4 mx-auto" />
-                  <div className="text-purple-500 font-medium mb-2 text-lg">พิมพ์บาร์โค้ด</div>
-                  <div className="text-gray-500 text-sm">Barcode</div>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-white shadow-sm border border-gray-200 hover:shadow-md transition-shadow cursor-pointer">
-                <CardContent className="p-8 text-center">
-                  <Tag className="h-12 w-12 text-purple-500 mb-4 mx-auto" />
-                  <div className="text-purple-500 font-medium mb-2 text-lg">พิมพ์ป้ายราคาสินค้า</div>
-                  <div className="text-gray-500 text-sm">Price Tag</div>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-white shadow-sm border border-gray-200 hover:shadow-md transition-shadow cursor-pointer">
-                <CardContent className="p-8 text-center">
-                  <Tag className="h-12 w-12 text-purple-500 mb-4 mx-auto" />
-                  <div className="text-purple-500 font-medium mb-2 text-lg">พิมพ์ฉลากยา</div>
-                  <div className="text-gray-500 text-sm">Label</div>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-white shadow-sm border border-gray-200 hover:shadow-md transition-shadow cursor-pointer">
-                <CardContent className="p-8 text-center">
-                  <Clipboard className="h-12 w-12 text-purple-500 mb-4 mx-auto" />
-                  <div className="text-purple-500 font-medium mb-2 text-lg">รายงานรับเข้า/ออกของสินค้า</div>
-                  <div className="text-gray-500 text-sm">Product IN/OUT Report</div>
-                </CardContent>
-              </Card>
+          {viewMode === 'add-product' ? (
+            <div className="h-full">
+              <AddProductForm 
+                submitTrigger={submitTrigger}
+                onBack={handleBackToList}
+                onSubmit={handleSubmitProduct}
+              />
             </div>
-          </div>
+          ) : (
+            <div className="p-6">
+              <div className="grid grid-cols-3 gap-6">
+                <Card className="bg-white shadow-sm border border-gray-200 hover:shadow-md transition-shadow cursor-pointer" onClick={handleAddProduct}>
+                  <CardContent className="p-8 text-center">
+                    <Plus className="h-12 w-12 text-purple-500 mb-4 mx-auto" />
+                    <div className="text-purple-500 font-medium mb-2 text-lg">เพิ่มสินค้าใหม่</div>
+                    <div className="text-gray-500 text-sm">Create New Item</div>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-white shadow-sm border border-gray-200 hover:shadow-md transition-shadow cursor-pointer">
+                  <CardContent className="p-8 text-center">
+                    <FileImport className="h-12 w-12 text-purple-500 mb-4 mx-auto" />
+                    <div className="text-purple-500 font-medium mb-2 text-lg">เพิ่มชุดสินค้า/นำเข้า/แก้ไข</div>
+                    <div className="text-gray-500 text-sm">Import</div>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-white shadow-sm border border-gray-200 hover:shadow-md transition-shadow cursor-pointer">
+                  <CardContent className="p-8 text-center">
+                    <FileExport className="h-12 w-12 text-purple-500 mb-4 mx-auto" />
+                    <div className="text-purple-500 font-medium mb-2 text-lg">ส่งออกยอดสินค้า</div>
+                    <div className="text-gray-500 text-sm">Export</div>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-white shadow-sm border border-gray-200 hover:shadow-md transition-shadow cursor-pointer">
+                  <CardContent className="p-8 text-center">
+                    <Trash2 className="h-12 w-12 text-purple-500 mb-4 mx-auto" />
+                    <div className="text-purple-500 font-medium mb-2 text-lg">ลบสินค้า</div>
+                    <div className="text-gray-500 text-sm">Remove Product</div>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-white shadow-sm border border-gray-200 hover:shadow-md transition-shadow cursor-pointer">
+                  <CardContent className="p-8 text-center">
+                    <Barcode className="h-12 w-12 text-purple-500 mb-4 mx-auto" />
+                    <div className="text-purple-500 font-medium mb-2 text-lg">พิมพ์บาร์โค้ด</div>
+                    <div className="text-gray-500 text-sm">Barcode</div>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-white shadow-sm border border-gray-200 hover:shadow-md transition-shadow cursor-pointer">
+                  <CardContent className="p-8 text-center">
+                    <Tag className="h-12 w-12 text-purple-500 mb-4 mx-auto" />
+                    <div className="text-purple-500 font-medium mb-2 text-lg">พิมพ์ป้ายราคาสินค้า</div>
+                    <div className="text-gray-500 text-sm">Price Tag</div>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-white shadow-sm border border-gray-200 hover:shadow-md transition-shadow cursor-pointer">
+                  <CardContent className="p-8 text-center">
+                    <Tag className="h-12 w-12 text-purple-500 mb-4 mx-auto" />
+                    <div className="text-purple-500 font-medium mb-2 text-lg">พิมพ์ฉลากยา</div>
+                    <div className="text-gray-500 text-sm">Label</div>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-white shadow-sm border border-gray-200 hover:shadow-md transition-shadow cursor-pointer">
+                  <CardContent className="p-8 text-center">
+                    <Clipboard className="h-12 w-12 text-purple-500 mb-4 mx-auto" />
+                    <div className="text-purple-500 font-medium mb-2 text-lg">รายงานรับเข้า/ออกของสินค้า</div>
+                    <div className="text-gray-500 text-sm">Product IN/OUT Report</div>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

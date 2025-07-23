@@ -32,14 +32,12 @@ class GraphQLClient {
     query: string,
     options: GraphQLRequestOptions = {}
   ): Promise<T> {
-    const token = getCookie(APP_CONSTANTS.COOKIES.AUTH_TOKEN);
     const url = `${this.baseURL}${this.endpoint}`;
 
-    // Debug: Log cookie information
+    // Debug: Log request information
     console.log('=== GraphQL Request Debug ===');
-    console.log('Looking for cookie:', APP_CONSTANTS.COOKIES.AUTH_TOKEN);
-    console.log('Token from getCookie:', token);
-    console.log('All cookies:', document.cookie);
+    console.log('Sending request to:', url);
+    console.log('Using HttpOnly cookies for authentication');
     console.log('============================');
 
     const body = {
@@ -48,22 +46,14 @@ class GraphQLClient {
       ...(options.operationName && { operationName: options.operationName }),
     };
 
-    // Prepare headers - ensure we send both Authorization header AND include cookies
+    // Prepare headers - rely on HttpOnly cookies for authentication
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
 
-    // Add Authorization header if token exists
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-      console.log('Added Authorization header');
-    } else {
-      console.log('No token found, relying on HttpOnly cookies');
-    }
-
     const config: RequestInit = {
       method: 'POST',
-      credentials: 'include', // This ensures cookies are sent
+      credentials: 'include', // This ensures HttpOnly cookies are sent automatically
       headers,
       body: JSON.stringify(body),
     };
