@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import PageGuard from "@/components/guards/page-guard"
 import { 
   BarChart3, 
   TrendingUp, 
@@ -59,12 +60,13 @@ export default function ReportsPage() {
   const [selectedPeriod, setSelectedPeriod] = useState("daily")
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">รายงานและการวิเคราะห์</h1>
-        <p className="text-gray-600 mt-2">ติดตามประสิทธิภาพและสร้างรายงานต่างๆ</p>
-      </div>
+    <PageGuard requiredPermission="reports">
+      <div className="p-6 max-w-7xl mx-auto space-y-6">
+        {/* Header */}
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">รายงานและการวิเคราะห์</h1>
+          <p className="text-gray-600 mt-2">ติดตามประสิทธิภาพและสร้างรายงานต่างๆ</p>
+        </div>
 
       {/* Quick Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -300,5 +302,6 @@ export default function ReportsPage() {
         </TabsContent>
       </Tabs>
     </div>
+    </PageGuard>
   )
 } 

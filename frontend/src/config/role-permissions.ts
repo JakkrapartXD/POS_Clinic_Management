@@ -20,6 +20,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
       'inventory',
       'discounts',
       'documents',
+      'users',
       'orders',
       'reports',
       'settings',
@@ -31,6 +32,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
       'inventory', 
       'discounts',
       'documents',
+      'users',
       'orders',
       'reports',
       'settings'

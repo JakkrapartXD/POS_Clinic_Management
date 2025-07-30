@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Search, Eye, Package, Calendar, User, DollarSign } from "lucide-react"
+import PageGuard from "@/components/guards/page-guard"
 
 // Mock data for orders
 const mockOrders = [
@@ -69,12 +70,13 @@ export default function OrdersPage() {
   const completedOrders = filteredOrders.filter(order => order.status === 'completed').length
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">คำสั่งซื้อ</h1>
-        <p className="text-gray-600 mt-2">จัดการและติดตามคำสั่งซื้อของคลินิก</p>
-      </div>
+    <PageGuard requiredPermission="orders">
+      <div className="p-6 max-w-7xl mx-auto space-y-6">
+        {/* Header */}
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">คำสั่งซื้อ</h1>
+          <p className="text-gray-600 mt-2">จัดการและติดตามคำสั่งซื้อของคลินิก</p>
+        </div>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -194,5 +196,6 @@ export default function OrdersPage() {
         </CardContent>
       </Card>
     </div>
+    </PageGuard>
   )
 } 

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import PageGuard from "@/components/guards/page-guard"
 import { 
   Search, 
   Plus, 
@@ -134,12 +135,13 @@ export default function UsersPage() {
   )
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">ผู้ใช้งานและผู้ป่วย</h1>
-        <p className="text-gray-600 mt-2">จัดการข้อมูลผู้ป่วยและพนักงานในระบบ</p>
-      </div>
+    <PageGuard requiredPermission="users">
+      <div className="p-6 max-w-7xl mx-auto space-y-6">
+        {/* Header */}
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">ผู้ใช้งานและผู้ป่วย</h1>
+          <p className="text-gray-600 mt-2">จัดการข้อมูลผู้ป่วยและพนักงานในระบบ</p>
+        </div>
 
       {/* Quick Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -366,5 +368,6 @@ export default function UsersPage() {
         </TabsContent>
       </Tabs>
     </div>
+    </PageGuard>
   )
 } 
