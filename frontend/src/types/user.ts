@@ -2,7 +2,7 @@ export interface User {
   id: string;
   username: string;
   email: string;
-  role: 'admin' | 'doctor' | 'staff' | 'cashier';
+  role: 'admin' | 'doctor' | 'staff' | 'cashier' | 'pharmacist';
   status: 'active' | 'inactive' | 'suspended';
   createdAt?: string;
   updatedAt?: string;
@@ -15,7 +15,7 @@ export interface UserProfile extends User {
 export interface UpdateUserInput {
   username?: string;
   email?: string;
-  role?: 'admin' | 'doctor' | 'staff' | 'cashier';
+  role?: 'admin' | 'doctor' | 'staff' | 'cashier' | 'pharmacist';
   status?: 'active' | 'inactive' | 'suspended';
 }
 
