@@ -1,3 +1,62 @@
+# Frontend Project Structure
+
+## Overview
+This is the frontend of the SN Clinic project, built with Next.js.
+
+## Directory Structure
+
+```
+frontend/
+├── public/                 # Static assets served directly
+│   ├── images/             # Image assets
+│   └── favicon.ico         # Website favicon
+├── src/                    # Source code
+│   ├── app/                # Next.js App Router (pages, layouts, API routes)
+│   ├── components/         # React components
+│   │   ├── ui/             # UI components (buttons, inputs, etc.)
+│   │   ├── modules/        # Feature-specific components
+│   │   └── layout/         # Layout components
+│   ├── core/               # Core application logic
+│   ├── providers/          # React Context Providers
+│   ├── hooks/              # Custom React hooks
+│   ├── lib/                # Utility libraries and helper functions
+│   ├── utils/              # Utility functions
+│   ├── constants/          # Application constants
+│   ├── config/             # Configuration settings
+│   ├── clients/            # API clients
+│   └── styles/             # Global styles
+└── public/                 # Static assets
+```
+
+## Image Assets
+- All image assets should be placed in `public/images/`
+- To reference these images in components: `/images/filename.png`
+
+## Component Organization
+- Generic UI components: `src/components/ui/`
+- Feature-specific components: `src/components/modules/`
+- Layout components: `src/components/layout/`
+
+## Development
+
+```bash
+# Install dependencies
+npm install
+
+# Run development server
+npm run dev
+```
+
+## Build
+
+```bash
+# Build for production
+npm run build
+
+# Start production server
+npm start
+```
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started

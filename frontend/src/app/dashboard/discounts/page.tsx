@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Plus, Search, Tag, Package } from "lucide-react"
 import EmptyState from "@/components/ui/empty-state"
+import PageGuard from "@/components/guards/page-guard"
 
 export default function DiscountsPage() {
   const [searchQuery, setSearchQuery] = useState("")
@@ -14,14 +15,15 @@ export default function DiscountsPage() {
   const [promotions] = useState<any[]>([]) // Empty for now
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-xl font-semibold">เรียงลำดับ</h1>
-        <Button className="bg-purple-500 hover:bg-purple-600">
-          <Plus className="h-4 w-4 mr-2" />
-          เพิ่มส่วนลดใหม่
-        </Button>
-      </div>
+    <PageGuard requiredPermission="discounts">
+      <div className="p-6">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-xl font-semibold">เรียงลำดับ</h1>
+          <Button className="bg-purple-500 hover:bg-purple-600">
+            <Plus className="h-4 w-4 mr-2" />
+            เพิ่มส่วนลดใหม่
+          </Button>
+        </div>
 
       <div className="relative mb-6">
         <Input
@@ -140,5 +142,6 @@ export default function DiscountsPage() {
         </TabsContent>
       </Tabs>
     </div>
+    </PageGuard>
   )
 }

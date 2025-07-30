@@ -18,7 +18,7 @@ import { userRoutes } from "./routes/userRoutes";
 
 // Initialize Redis connection
 const redisClient = createClient({
-  url: process.env.REDIS_URL || "redis://localhost:6379",
+  url: process.env.REDIS_URL || "redis://redis:6379",
 });
 
 redisClient.on("error", (err) => {
@@ -76,12 +76,40 @@ const app = new Elysia()
     yoga({
       typeDefs,
       resolvers: resolvers as any,
-      context: async ({ request }: any) => {
+      context: async ({ request, ...elysiaCtx }: any) => {
         try {
           // Extract authorization from different possible sources
           const authHeader = request.headers?.get?.('authorization') || 
                            request.headers?.authorization ||
                            request.headers?.Authorization;
+
+          // Extract cookies from request headers
+          const cookieHeader = request.headers?.get?.('cookie') || 
+                              request.headers?.cookie ||
+                              request.headers?.Cookie || '';
+          
+          // Parse cookies from header string
+          const parsedCookies: Record<string, string> = {};
+          if (cookieHeader) {
+            cookieHeader.split(';').forEach((cookie: string) => {
+              const [name, ...rest] = cookie.trim().split('=');
+              if (name && rest.length > 0) {
+                parsedCookies[name] = rest.join('=');
+              }
+            });
+          }
+          
+          // Try to also get from Elysia context as fallback
+          const elysiaContextCookies = elysiaCtx.cookie || {};
+          
+          // Debug: Log cookies information
+          console.log('=== GraphQL Context Debug ===');
+          console.log('Cookie header:', cookieHeader);
+          console.log('Parsed cookies:', parsedCookies);
+          console.log('Elysia context cookie:', elysiaContextCookies);
+          console.log('JWT token from parsed:', parsedCookies['next-auth.jwt-token']);
+          console.log('JWT token from Elysia:', elysiaContextCookies['next-auth.jwt-token']?.value || elysiaContextCookies['next-auth.jwt-token']);
+          console.log('================================');
           
           // Create a compatible request object for GraphQL context
           const contextRequest = {
@@ -92,20 +120,27 @@ const app = new Elysia()
                   Object.fromEntries(request.headers.entries()) : 
                   request.headers || {})
             },
-            cookies: request.cookies || {},
+            cookies: {
+              'next-auth.jwt-token': parsedCookies['next-auth.jwt-token'] || 
+                                   elysiaContextCookies['next-auth.jwt-token']?.value || 
+                                   elysiaContextCookies['next-auth.jwt-token'],
+              'next-auth.session-token': parsedCookies['next-auth.session-token'] || 
+                                       elysiaContextCookies['next-auth.session-token']?.value || 
+                                       elysiaContextCookies['next-auth.session-token'],
+            },
             url: request.url,
             method: request.method
           };
 
           // Create GraphQL context with authentication and security
-          const context = await createGraphQLContext(contextRequest, redisClient);
+          const graphqlContext = await createGraphQLContext(contextRequest, redisClient);
 
           // Add rate limiting check for GraphQL endpoint
-          if (context.isAuthenticated) {
-            await SecurityService.checkRateLimit(context.userId!, "query", redisClient);
+          if (graphqlContext.isAuthenticated) {
+            await SecurityService.checkRateLimit(graphqlContext.userId!, "query", redisClient);
           }
 
-          return context;
+          return graphqlContext;
         } catch (error) {
           console.error("GraphQL Context Error:", error);
           // Return minimal context for unauthenticated requests

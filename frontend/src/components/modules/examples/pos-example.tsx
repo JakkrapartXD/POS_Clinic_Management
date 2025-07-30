@@ -1,14 +1,14 @@
 "use client"
 
 import { useState } from "react"
-import ProductSearch from "@/components/inventory/product-search"
-import CategoryTabs from "@/components/pos/category-tabs"
-import ProductGrid from "@/components/pos/product-grid"
-import CartItem from "@/components/pos/cart-item"
-import EmptyCart from "@/components/pos/empty-cart"
-import CustomerSelector from "@/components/pos/customer-selector"
-import CartSummary from "@/components/pos/cart-summary"
-import CheckoutButton from "@/components/pos/checkout-button"
+import ProductSearch from "@/components/modules/inventory/product-search"
+import CategoryTabs from "@/components/modules/pos/category-tabs"
+import ProductGrid from "@/components/modules/pos/product-grid"
+import CartItem from "@/components/modules/pos/cart-item"
+import EmptyCart from "@/components/modules/pos/empty-cart"
+import CustomerSelector from "@/components/modules/pos/customer-selector"
+import CartSummary from "@/components/modules/pos/cart-summary"
+import CheckoutButton from "@/components/modules/pos/checkout-button"
 
 export default function POSExample() {
   const [searchQuery, setSearchQuery] = useState("")

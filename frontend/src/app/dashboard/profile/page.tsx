@@ -1,16 +1,73 @@
 'use client'
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useRouter } from "next/navigation"
+import { GraphQLAPI } from "@/clients/graphql"
+import { User } from "@/types/user"
 
 export default function ProfilePage() {
   const router = useRouter()
+  const [userData, setUserData] = useState<User | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  // Fetch user data on component mount
+  useEffect(() => {
+    const loadUserData = async () => {
+      try {
+        setLoading(true)
+        const response = await GraphQLAPI.getCurrentUser()
+        if (response.me) {
+          setUserData(response.me)
+        } else {
+          setError('Failed to load user data')
+        }
+      } catch (err) {
+        setError('Error loading user data')
+        console.error(err)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadUserData()
+  }, [])
 
   // ฟังก์ชันสำหรับ logout
-  const handleLogout = () => {
-    // ลบ cookie authToken โดยตั้งค่าวันหมดอายุเป็นอดีต
-    document.cookie = "next-auth.jwt-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; samesite=strict"
-    router.replace("/login")
+  const handleLogout = async () => {
+    try {
+      // Call backend logout endpoint to clear HttpOnly cookies
+      await fetch('http://localhost:4000/auth/sign-out', {
+        method: 'GET',
+        credentials: 'include',
+      });
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      // Redirect to login regardless of logout success
+      router.replace("/login")
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="p-6 max-w-5xl mx-auto bg-white relative">
+        <div className="flex justify-center items-center h-64">
+          <div className="text-gray-500">กำลังโหลดข้อมูล...</div>
+        </div>
+      </div>
+    )
+  }
+
+  if (error || !userData) {
+    return (
+      <div className="p-6 max-w-5xl mx-auto bg-white relative">
+        <div className="flex justify-center items-center h-64">
+          <div className="text-red-500">{error || 'ไม่สามารถโหลดข้อมูลได้'}</div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -24,14 +81,14 @@ export default function ProfilePage() {
       </button>
 
       <header className="mb-8">
-        <h1 className="text-2xl font-semibold text-center text-gray-700">เจ้าของร้าน — SN clinic </h1>
+        <h1 className="text-2xl font-semibold text-center text-gray-700">เจ้าของร้าน — {userData.username}</h1>
       </header>
 
       <div className="grid md:grid-cols-3 gap-6">
         <div className="md:col-span-1 flex flex-col items-center">
           <div className="w-32 h-32 bg-gray-100 rounded-full mb-4"></div>
-          <h2 className="text-xl font-medium">SN clinic</h2>
-          <p className="text-gray-500">test@gmail.com</p>
+          <h2 className="text-xl font-medium">{userData.username}</h2>
+          <p className="text-gray-500">{userData.email}</p>
         </div>
 
         <div className="md:col-span-2">
@@ -43,13 +100,17 @@ export default function ProfilePage() {
             <CardContent className="space-y-4">
               <div className="grid grid-cols-3 gap-4">
                 <div className="text-gray-500">อีเมล:</div>
-                <div className="col-span-2 text-gray-500">jakkrapart.x78@gmail.com</div>
+                <div className="col-span-2 text-gray-500">{userData.email}</div>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="text-gray-500">บทบาท:</div>
+                <div className="col-span-2 text-gray-500">{userData.role}</div>
               </div>
               <div className="grid grid-cols-3 gap-4">
                 <div className="text-gray-500">แพ็กเกจ:</div>
                 <div className="col-span-2 flex items-center gap-2 text-gray-500">
                   Basic
-                  <Button variant="link" className="text-purple-500 p-0 h-auto">
+                  <Button className="text-purple-500 p-0 h-auto bg-transparent hover:bg-transparent border-none shadow-none underline">
                     <span className="flex items-center">
                       <svg
                         xmlns="http://www.w3.org/2000/svg"

@@ -44,7 +44,7 @@ export class UserModel {
       select: {
         id: true,
         username: true,
-        password_hash: true, // เปลี่ยนจาก password เป็น password_hash
+        password_hash: true, 
         email: true,
         role: true,
         status: true,

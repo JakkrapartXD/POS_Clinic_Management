@@ -2,6 +2,19 @@
 
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { apiClient } from '@/clients/api'
+import { API_CONFIG } from '@/config/api'
+import { APP_CONSTANTS } from '@/constants'
+
+interface TokenVerifyResponse {
+  valid: boolean;
+  user?: {
+    id: string;
+    name?: string;
+    email?: string;
+    role?: string;
+  };
+}
 
 export default function Home() {
   const router = useRouter()
@@ -9,19 +22,17 @@ export default function Home() {
   useEffect(() => {
     const verifyToken = async () => {
       try {
-        const res = await fetch('http://localhost:4000/auth/token-verify', {
-          method: 'GET',
-          credentials: 'include', // <-- สำคัญ! เพื่อส่ง cookie ไปด้วย
-        })
-
-        if (res.ok) {
-          router.replace('/dashboard')
+        // Use API client with configured endpoints
+        const response = await apiClient.get<TokenVerifyResponse>(API_CONFIG.ENDPOINTS.AUTH.VERIFY_TOKEN);
+        
+        if (response.valid) {
+          router.replace(APP_CONSTANTS.ROUTES.DASHBOARD);
         } else {
-          router.replace('/login')
+          router.replace(APP_CONSTANTS.ROUTES.LOGIN);
         }
       } catch (err) {
-        console.error('Token verification failed:', err)
-        router.replace('/login')
+        console.error('Token verification failed:', err);
+        router.replace(APP_CONSTANTS.ROUTES.LOGIN);
       }
     }
 
