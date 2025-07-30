@@ -29,17 +29,21 @@ export default function Sidebar() {
     : []
 
   // Debug logging
-  // console.log('🔍 Sidebar Debug:')
-  // console.log('User:', user)
-  // console.log('User role:', user?.role)
-  // console.log('Allowed menu items:', allowedMenuItems)
-  // console.log('All menu items:', allMenuItems.map(item => item.id))
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🔍 Sidebar Debug:')
+    console.log('User:', user)
+    console.log('User role:', user?.role)
+    console.log('Allowed menu items:', allowedMenuItems)
+    console.log('All menu items:', allMenuItems.map(item => item.id))
+  }
 
   const visibleMenuItems = allMenuItems.filter(item => 
     allowedMenuItems.includes(item.id)
   )
 
-  // console.log('Visible menu items:', visibleMenuItems.map(item => item.id))
+  if (process.env.NODE_ENV === 'development') {
+    console.log('Visible menu items:', visibleMenuItems.map(item => item.id))
+  }
 
   // Show loading state
   if (loading) {
