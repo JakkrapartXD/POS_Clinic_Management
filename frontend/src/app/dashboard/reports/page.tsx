@@ -5,7 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import PageGuard from "@/components/guards/page-guard"
 import { 
   BarChart3, 
   TrendingUp, 
@@ -16,6 +15,7 @@ import {
   Download,
   Eye
 } from "lucide-react"
+import PageGuard from "@/components/guards/page-guard"
 
 // Mock data for reports
 const salesData = {

@@ -24,7 +24,8 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
       'orders',
       'reports',
       'settings',
-      'profile'
+      'profile',
+      'admin/users'
     ],
     menuItems: [
       'notifications',
@@ -35,7 +36,8 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
       'users',
       'orders',
       'reports',
-      'settings'
+      'settings',
+      'admin/users'
     ]
   },
   cashier: {

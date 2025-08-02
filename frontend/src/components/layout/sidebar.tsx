@@ -3,7 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
-import { Bell, ShoppingCart, Pill, Tag, LayoutGrid, Package, BarChart3, Settings, Users, FileText } from "lucide-react"
+import { Bell, ShoppingCart, Pill, Tag, LayoutGrid, Package, BarChart3, Settings, Users, FileText, Shield } from "lucide-react"
 import { useUser } from "@/hooks/use-user"
 import { getMenuItemsForRole } from "@/config/role-permissions"
 
@@ -21,6 +21,7 @@ export default function Sidebar() {
     { id: "orders", icon: Package, href: "/dashboard/orders", label: "คำสั่งซื้อ" },
     { id: "reports", icon: BarChart3, href: "/dashboard/reports", label: "รายงาน" },
     { id: "settings", icon: Settings, href: "/dashboard/settings", label: "ตั้งค่า" },
+    { id: "admin/users", icon: Shield, href: "/dashboard/admin/users", label: "จัดการผู้ใช้" },
   ]
 
   // Get allowed menu items based on user role
