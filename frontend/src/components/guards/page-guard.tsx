@@ -7,6 +7,7 @@ import { hasPermission } from '@/config/role-permissions'
 import { Card, CardContent } from '@/components/ui/card'
 import { AlertTriangle, Lock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { logger } from '@/lib/logger'
 
 interface PageGuardProps {
   children: React.ReactNode
@@ -33,9 +34,7 @@ export default function PageGuard({ children, requiredPermission }: PageGuardPro
     // Check if user has permission to access this page
     const hasAccess = hasPermission(user.role as any, requiredPermission)
     
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`🔐 PageGuard checking permission "${requiredPermission}" for role "${user.role}":`, hasAccess)
-    }
+    logger.auth.permissionCheck(requiredPermission, user.role, hasAccess)
     
     if (!hasAccess) {
       setIsAuthorized(false)

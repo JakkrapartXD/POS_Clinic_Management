@@ -16,19 +16,22 @@ import { createGraphQLContext, SecurityService } from "./graphql/security";
 import { AuthRoutes } from "./routes/authRoutes";
 import { userRoutes } from "./routes/userRoutes";
 
+// Import logger
+import { logger } from "./lib/logger";
+
 // Initialize Redis connection
 const redisClient = createClient({
   url: process.env.REDIS_URL || "redis://redis:6379",
 });
 
 redisClient.on("error", (err) => {
-  console.error("Redis Client Error:", err);
+  logger.redis.error('Redis client error', err);
 });
 
 // Connect to Redis
 await redisClient.connect();
 
-console.log("Connected to Redis");
+logger.redis.connected();
 
 const app = new Elysia()
   .use(

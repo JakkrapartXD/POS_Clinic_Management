@@ -133,8 +133,8 @@ export default function UserManagementPage() {
           email: user.email,
           role: user.role,
           status: user.status,
-          created_at: user.createdAt || new Date().toISOString(),
-          updated_at: user.updatedAt || new Date().toISOString()
+          created_at: user.created_at || new Date().toISOString(),
+          updated_at: user.updated_at || new Date().toISOString()
         }))
         setUsers(localUsers)
         setTotal(response.users.total)

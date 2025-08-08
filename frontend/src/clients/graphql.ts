@@ -2,6 +2,7 @@ import { API_CONFIG, getAuthHeaders } from '@/config/api';
 import { getCookie } from '@/utils/common';
 import { APP_CONSTANTS } from '@/constants';
 import { User, UserProfile, UpdateUserInput, UsersResponse, ChangePasswordResponse } from '@/types/user';
+import { logger } from '@/lib/logger';
 
 // Additional types for GraphQL
 interface CreateUserInput {
@@ -94,10 +95,7 @@ class GraphQLClient {
     const url = `${this.baseURL}${this.endpoint}`;
 
     // Debug: Log request information
-    console.log('=== GraphQL Request Debug ===');
-    console.log('Sending request to:', url);
-    console.log('Using HttpOnly cookies for authentication');
-    console.log('============================');
+    logger.api.request(url, 'POST');
 
     const body = {
       query: query.trim(),
@@ -136,7 +134,7 @@ class GraphQLClient {
       const result: GraphQLResponse<T> = await response.json();
 
       if (result.errors && result.errors.length > 0) {
-        console.error('GraphQL Errors:', result.errors);
+        logger.error('GraphQL operation returned errors', result.errors, 'GRAPHQL');
         throw new Error(result.errors[0].message);
       }
 
@@ -146,7 +144,7 @@ class GraphQLClient {
 
       return result.data;
     } catch (error) {
-      console.error('GraphQL Request Error:', error);
+      logger.api.error(url, error);
       if (error instanceof Error) {
         throw new Error(`GraphQL request failed: ${error.message}`);
       }
@@ -189,8 +187,8 @@ export const GraphQLQueries = {
         email
         role
         status
-        createdAt
-        updatedAt
+        created_at
+        updated_at
       }
     }
   `,
