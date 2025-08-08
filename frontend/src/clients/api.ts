@@ -39,12 +39,29 @@ class ApiClient {
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        // Get response body for error details
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch {
+          errorData = null;
+        }
+        
+        // Create enhanced error object with status and response data
+        const error = new Error(`HTTP error! status: ${response.status}`);
+        (error as any).status = response.status;
+        (error as any).statusCode = response.status;
+        (error as any).responseData = errorData;
+        throw error;
       }
 
       return await response.json();
     } catch (error) {
       if (error instanceof Error) {
+        // Preserve status and responseData if they exist
+        if ((error as any).status || (error as any).responseData) {
+          throw error; // Don't wrap errors that already have status info
+        }
         throw new Error(`API request failed: ${error.message}`);
       }
       throw error;

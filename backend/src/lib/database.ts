@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { logger } from "./logger";
 
 // Create a single shared Prisma instance
 export const prisma = new PrismaClient({
@@ -10,9 +11,9 @@ export const prisma = new PrismaClient({
 export async function connectDatabase() {
   try {
     await prisma.$connect();
-    console.log("Database connected successfully");
+    logger.database.connected();
   } catch (error) {
-    console.error("Database connection failed:", error);
+    logger.database.error('Connection failed', error);
   }
 }
 
@@ -20,8 +21,8 @@ export async function connectDatabase() {
 export async function disconnectDatabase() {
   try {
     await prisma.$disconnect();
-    console.log("Database disconnected successfully");
+    logger.database.disconnected();
   } catch (error) {
-    console.error("Error disconnecting database:", error);
+    logger.database.error('Disconnect failed', error);
   }
 } 

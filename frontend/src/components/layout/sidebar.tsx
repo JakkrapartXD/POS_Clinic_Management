@@ -3,9 +3,10 @@
 import { useState } from "react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
-import { Bell, ShoppingCart, Pill, Tag, LayoutGrid, Package, BarChart3, Settings, Users, FileText } from "lucide-react"
+import { Bell, ShoppingCart, Pill, Tag, LayoutGrid, Package, BarChart3, Settings, Users, FileText, Shield } from "lucide-react"
 import { useUser } from "@/hooks/use-user"
 import { getMenuItemsForRole } from "@/config/role-permissions"
+import { logger } from "@/lib/logger"
 
 export default function Sidebar() {
   const [activeItem, setActiveItem] = useState<string>("notifications")
@@ -21,6 +22,7 @@ export default function Sidebar() {
     { id: "orders", icon: Package, href: "/dashboard/orders", label: "คำสั่งซื้อ" },
     { id: "reports", icon: BarChart3, href: "/dashboard/reports", label: "รายงาน" },
     { id: "settings", icon: Settings, href: "/dashboard/settings", label: "ตั้งค่า" },
+    { id: "admin/users", icon: Shield, href: "/dashboard/admin/users", label: "จัดการผู้ใช้" },
   ]
 
   // Get allowed menu items based on user role
@@ -30,11 +32,12 @@ export default function Sidebar() {
 
   // Debug logging
   if (process.env.NODE_ENV === 'development') {
-    console.log('🔍 Sidebar Debug:')
-    console.log('User:', user)
-    console.log('User role:', user?.role)
-    console.log('Allowed menu items:', allowedMenuItems)
-    console.log('All menu items:', allMenuItems.map(item => item.id))
+    logger.debug('Sidebar debug info', {
+      user: user?.id,
+      userRole: user?.role,
+      allowedMenuItems,
+      allMenuItemIds: allMenuItems.map(item => item.id)
+    }, 'SIDEBAR')
   }
 
   const visibleMenuItems = allMenuItems.filter(item => 
@@ -42,7 +45,9 @@ export default function Sidebar() {
   )
 
   if (process.env.NODE_ENV === 'development') {
-    console.log('Visible menu items:', visibleMenuItems.map(item => item.id))
+    logger.debug('Visible menu items calculated', {
+      visibleMenuItemIds: visibleMenuItems.map(item => item.id)
+    }, 'SIDEBAR')
   }
 
   // Show loading state

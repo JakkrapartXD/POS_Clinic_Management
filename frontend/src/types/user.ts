@@ -4,8 +4,8 @@ export interface User {
   email: string;
   role: 'admin' | 'doctor' | 'staff' | 'cashier' | 'pharmacist';
   status: 'active' | 'inactive' | 'suspended';
-  createdAt?: string;
-  updatedAt?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface UserProfile extends User {
@@ -22,8 +22,6 @@ export interface UpdateUserInput {
 export interface UsersResponse {
   users: User[];
   total: number;
-  page: number;
-  limit: number;
 }
 
 export interface ChangePasswordResponse {

@@ -1,0 +1,40 @@
+# Production Logging Configuration
+# This file configures logging for production deployments
+
+version: '3.8'
+
+# Logging configuration for Docker Compose
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "50m"
+    max-file: "10"
+    compress: "true"
+
+services:
+  backend:
+    logging: *default-logging
+    environment:
+      - NODE_ENV=production
+      - LOG_LEVEL=info
+      - ENABLE_STRUCTURED_LOGGING=true
+      - ENABLE_AUDIT_LOGGING=true
+      - LOG_FILE_PATH=/var/log/sn-medical/app.log
+    volumes:
+      - /var/log/sn-medical:/var/log/sn-medical
+  
+  frontend:
+    logging: *default-logging
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_LOG_LEVEL=error
+      - NEXT_PUBLIC_ENABLE_DEBUG_LOGS=false
+
+# Log aggregation (optional - for advanced setups)
+# Uncomment and configure if using ELK stack or similar
+#  logstash:
+#    image: docker.elastic.co/logstash/logstash:7.15.0
+#    volumes:
+#      - ./logstash.conf:/usr/share/logstash/pipeline/logstash.conf
+#    ports:
+#      - "5000:5000"

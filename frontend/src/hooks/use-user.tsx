@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { GraphQLAPI } from '@/clients/graphql'
 import { User } from '@/types/user'
+import { logger } from '@/lib/logger'
 
 interface UserContextType {
   user: User | null
@@ -27,19 +28,19 @@ export function UserProvider({ children }: { children: ReactNode }) {
       // Debug: Clear console for fresh debug session
       if (process.env.NODE_ENV === 'development') {
         console.clear()
-        console.log('🔄 Loading user data...')
+        logger.debug('Loading user data', {}, 'USER')
       }
       
       const response = await GraphQLAPI.getCurrentUser()
       if (response.me) {
         if (process.env.NODE_ENV === 'development') {
-          console.log('✅ User data loaded:', response.me)
+          logger.info('User data loaded successfully', { userId: response.me?.id }, 'USER')
         }
         
         // Check if user actually changed
         if (user?.id !== response.me.id || user?.role !== response.me.role) {
           if (process.env.NODE_ENV === 'development') {
-            console.log('🔄 User changed! Triggering storage event')
+            logger.debug('User data changed, triggering storage event', {}, 'USER')
           }
           localStorage.setItem('user_changed', Date.now().toString())
           localStorage.removeItem('user_changed')
@@ -48,14 +49,14 @@ export function UserProvider({ children }: { children: ReactNode }) {
         setUser(response.me)
       } else {
         if (process.env.NODE_ENV === 'development') {
-          console.log('❌ No user data found')
+          logger.debug('No user data found', {}, 'USER')
         }
         setUser(null)
         setError('Unable to load user data')
       }
     } catch (err) {
       if (process.env.NODE_ENV === 'development') {
-        console.error('❌ Error loading user:', err)
+        logger.error('Failed to load user data', err, 'USER')
       }
       setError('Error loading user data')
       setUser(null)
@@ -70,7 +71,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     // Refresh user data when window gains focus (better than polling)
     const handleFocus = () => {
       if (process.env.NODE_ENV === 'development') {
-        console.log('🖼️ Window focused - checking for user changes')
+        logger.debug('Window focused, checking for user changes', {}, 'USER')
       }
       loadUser()
     }
@@ -79,7 +80,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === 'user_changed') {
         if (process.env.NODE_ENV === 'development') {
-          console.log('🔄 User change detected from storage event')
+          logger.debug('User change detected from storage event', {}, 'USER')
         }
         loadUser()
       }
@@ -96,14 +97,14 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
   const refreshUser = async () => {
     if (process.env.NODE_ENV === 'development') {
-      console.log('🔄 Manual refresh triggered')
+      logger.debug('Manual user data refresh triggered', {}, 'USER')
     }
     await loadUser()
   }
 
   const clearUser = () => {
     if (process.env.NODE_ENV === 'development') {
-      console.log('🗑️ Clearing user data')
+      logger.info('User data cleared', {}, 'USER')
     }
     setUser(null)
     setError(null)
