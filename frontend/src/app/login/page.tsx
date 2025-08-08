@@ -251,7 +251,14 @@ export default function LoginPage() {
 
   const handleRetry = () => {
     setLoginError(null)
-    handleLogin({ preventDefault: () => {} } as React.FormEvent)
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    performLogin()
+  }
+
+  const handleRetry = () => {
+    setLoginError(null)
+    performLogin()
   }
 
   const handleInputChange = (field: 'username' | 'password', value: string) => {
