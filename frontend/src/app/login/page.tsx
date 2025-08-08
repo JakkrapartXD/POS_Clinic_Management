@@ -201,9 +201,8 @@ export default function LoginPage() {
     }
   }
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault()
-    
+  // Extract login logic into a separate function
+  const performLogin = async () => {
     // Clear previous errors
     setLoginError(null)
     setValidationErrors({})
@@ -249,13 +248,13 @@ export default function LoginPage() {
     }
   }
 
-  const handleRetry = () => {
-    setLoginError(null)
+  // Form submit handler
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    performLogin()
+    await performLogin()
   }
 
+  // Retry handler - no fake event object needed
   const handleRetry = () => {
     setLoginError(null)
     performLogin()
