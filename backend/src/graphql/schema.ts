@@ -162,6 +162,36 @@ export const typeDefs = /* GraphQL */ `
     purchase_note: String
   }
 
+  # Bulk import types
+  input BulkImportProductsInput {
+    products: [CreateProductInput!]!
+    settings: ImportSettingsInput
+  }
+
+  input ImportSettingsInput {
+    skipDuplicates: Boolean = true
+    updateExisting: Boolean = false
+    createBackup: Boolean = true
+  }
+
+  type ImportResult {
+    success: Boolean!
+    message: String!
+    imported: Int!
+    failed: Int!
+    skipped: Int!
+    errors: [String!]
+    results: [ProductImportResult!]
+  }
+
+  type ProductImportResult {
+    product: Product
+    status: String!
+    error: String
+    sku: String
+    product_name: String!
+  }
+
   input UpdateProductInput {
     product_name: String
     product_type: String
@@ -618,6 +648,9 @@ export const typeDefs = /* GraphQL */ `
     updateProduct(id: String!, input: UpdateProductInput!): Product!
     deleteProduct(id: String!): Boolean!
     adjustStock(productId: String!, quantity: Int!, note: String): StockMovement!
+    
+    # Bulk import
+    bulkImportProducts(input: BulkImportProductsInput!): ImportResult!
 
     # Order Mutations
     createOrder(input: CreateOrderInput!): Order!

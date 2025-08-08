@@ -3,6 +3,7 @@ import { getCookie } from '@/utils/common';
 import { APP_CONSTANTS } from '@/constants';
 import { User, UserProfile, UpdateUserInput, UsersResponse, ChangePasswordResponse } from '@/types/user';
 import { logger } from '@/lib/logger';
+import { MappedProductData, ImportResult, ImportSettings } from '@/types/csv-import';
 
 // Additional types for GraphQL
 interface CreateUserInput {
@@ -246,9 +247,103 @@ export const GraphQLQueries = {
       }
     }
   `,
+
+  // Product queries
+  ALL_PRODUCTS: `
+    query Products($filter: ProductFilterInput, $pagination: PaginationInput) {
+      products(filter: $filter, pagination: $pagination) {
+        total
+        products {
+          id
+          product_name
+          product_type
+          generic_name
+          short_name
+          status
+          vat_percent
+          expiration_warning_date
+          sale_price
+          unit
+          pack_size
+          reorder_point
+          cost
+          sku
+          barcode
+          stock_quantity
+          volume
+          volume_unit
+          shelf_code
+          shelf_row
+          category
+          symptom_category
+          license_number
+          dosage_unit
+          dosage
+          times_per_day
+          interval_hours
+          before_meal
+          after_meal
+          after_meal_immediate
+          morning
+          noon
+          evening
+          before_bed
+          properties
+          usage_instruction
+          sale_note
+          purchase_note
+          created_at
+          updated_at
+        }
+      }
+    }
+  `,
+
+  SEARCH_PRODUCTS: `
+    query SearchProducts($query: String!) {
+      searchProducts(query: $query) {
+        id
+        product_name
+        product_type
+        short_name
+        sale_price
+        unit
+        stock_quantity
+        sku
+        barcode
+        category
+      }
+    }
+  `,
 };
 
 export const GraphQLMutations = {
+  // Bulk import products
+  BULK_IMPORT_PRODUCTS: `
+    mutation BulkImportProducts($input: BulkImportProductsInput!) {
+      bulkImportProducts(input: $input) {
+        success
+        message
+        imported
+        failed
+        skipped
+        errors
+        results {
+          product {
+            id
+            product_name
+            sku
+            sale_price
+          }
+          status
+          error
+          sku
+          product_name
+        }
+      }
+    }
+  `,
+
   // Update user profile
   UPDATE_PROFILE: `
     mutation UpdateProfile($input: UpdateUserInput!) {
@@ -347,6 +442,8 @@ export const GraphQLMutations = {
       deletePatient(id: $id)
     }
   `,
+
+
 };
 
 // Typed GraphQL API functions
@@ -409,5 +506,25 @@ export const GraphQLAPI = {
   deletePatient: (id: string): Promise<{ deletePatient: boolean }> =>
     graphqlClient.mutation(GraphQLMutations.DELETE_PATIENT, {
       variables: { id }
+    }),
+
+  // Product Operations
+  getAllProducts: (variables?: { filter?: any; pagination?: PaginationInput }): Promise<{ products: any }> =>
+    graphqlClient.query(GraphQLQueries.ALL_PRODUCTS, { variables }),
+
+  searchProducts: (query: string): Promise<{ searchProducts: any[] }> =>
+    graphqlClient.query(GraphQLQueries.SEARCH_PRODUCTS, {
+      variables: { query }
+    }),
+
+  // Bulk import products
+  bulkImportProducts: (products: MappedProductData[], settings: ImportSettings): Promise<{ bulkImportProducts: ImportResult }> =>
+    graphqlClient.mutation(GraphQLMutations.BULK_IMPORT_PRODUCTS, {
+      variables: { 
+        input: { 
+          products, 
+          settings 
+        } 
+      }
     }),
 }; 

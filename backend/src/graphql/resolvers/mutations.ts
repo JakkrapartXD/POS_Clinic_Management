@@ -1,5 +1,6 @@
 import { GraphQLError } from "graphql";
 import { hash } from "bcrypt";
+import { logger } from "../../lib/logger";
 
 export const mutations = {
   // User Mutations
@@ -498,5 +499,219 @@ export const mutations = {
     );
     
     return stockMovement;
+  },
+
+  // Bulk Import Products
+  async bulkImportProducts(parent: any, args: any, context: any) {
+    const { input } = args;
+    const { products, settings = {} } = input;
+    
+    // Check permissions - require admin or staff
+    context.security.requireAdmin(context);
+    
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
+    
+    logger.info('Starting bulk product import', { 
+      productCount: products.length, 
+      userId: context.userId,
+      settings 
+    }, 'IMPORT');
+
+    const results = [];
+    let imported = 0;
+    let failed = 0;
+    let skipped = 0;
+    const errors = [];
+
+    // Create backup if requested
+    if (settings.createBackup) {
+      try {
+        logger.info('Creating backup before import', {}, 'IMPORT');
+        // You could implement backup logic here
+      } catch (error) {
+        logger.error('Failed to create backup', error, 'IMPORT');
+        errors.push('ไม่สามารถสร้างข้อมูลสำรองได้');
+      }
+    }
+
+    // Process each product
+    for (const productInput of products) {
+      try {
+        // Validate required fields
+        if (!productInput.product_name || !productInput.sale_price) {
+          failed++;
+          results.push({
+            product: null,
+            status: 'FAILED',
+            error: 'ข้อมูลไม่ครบถ้วน: ต้องมีชื่อสินค้าและราคาขาย',
+            sku: productInput.sku,
+            product_name: productInput.product_name || 'ไม่ระบุ'
+          });
+          continue;
+        }
+
+        // Sanitize input
+        const sanitizedInput = {
+          product_name: context.security.sanitizeString(productInput.product_name),
+          product_type: productInput.product_type ? context.security.sanitizeString(productInput.product_type) : null,
+          generic_name: productInput.generic_name ? context.security.sanitizeString(productInput.generic_name) : null,
+          short_name: productInput.short_name ? context.security.sanitizeString(productInput.short_name) : null,
+          status: productInput.status || 'active',
+          vat_percent: productInput.vat_percent || 0,
+          expiration_warning_date: productInput.expiration_warning_date,
+          sale_price: productInput.sale_price,
+          unit: productInput.unit ? context.security.sanitizeString(productInput.unit) : null,
+          pack_size: productInput.pack_size ? context.security.sanitizeString(productInput.pack_size) : null,
+          reorder_point: productInput.reorder_point || 0,
+          cost: productInput.cost || 0,
+          sku: productInput.sku ? context.security.sanitizeString(productInput.sku) : null,
+          barcode: productInput.barcode ? context.security.sanitizeString(productInput.barcode) : null,
+          stock_quantity: productInput.stock_quantity || 0,
+          volume: productInput.volume,
+          volume_unit: productInput.volume_unit ? context.security.sanitizeString(productInput.volume_unit) : null,
+          shelf_code: productInput.shelf_code ? context.security.sanitizeString(productInput.shelf_code) : null,
+          shelf_row: productInput.shelf_row ? context.security.sanitizeString(productInput.shelf_row) : null,
+          category: productInput.category ? context.security.sanitizeString(productInput.category) : null,
+          symptom_category: productInput.symptom_category ? context.security.sanitizeString(productInput.symptom_category) : null,
+          license_number: productInput.license_number ? context.security.sanitizeString(productInput.license_number) : null,
+          dosage_unit: productInput.dosage_unit ? context.security.sanitizeString(productInput.dosage_unit) : null,
+          dosage: productInput.dosage ? context.security.sanitizeString(productInput.dosage) : null,
+          times_per_day: productInput.times_per_day,
+          interval_hours: productInput.interval_hours,
+          before_meal: productInput.before_meal,
+          after_meal: productInput.after_meal,
+          after_meal_immediate: productInput.after_meal_immediate,
+          morning: productInput.morning,
+          noon: productInput.noon,
+          evening: productInput.evening,
+          before_bed: productInput.before_bed,
+          properties: productInput.properties ? context.security.sanitizeString(productInput.properties) : null,
+          usage_instruction: productInput.usage_instruction ? context.security.sanitizeString(productInput.usage_instruction) : null,
+          sale_note: productInput.sale_note ? context.security.sanitizeString(productInput.sale_note) : null,
+          purchase_note: productInput.purchase_note ? context.security.sanitizeString(productInput.purchase_note) : null
+        };
+
+        // Check for duplicates
+        const existingProduct = await context.prisma.product.findFirst({
+          where: {
+            OR: [
+              { sku: sanitizedInput.sku },
+              { product_name: sanitizedInput.product_name },
+              { barcode: sanitizedInput.barcode }
+            ].filter(condition => Object.values(condition)[0] != null)
+          }
+        });
+
+        if (existingProduct) {
+          if (settings.skipDuplicates) {
+            skipped++;
+            results.push({
+              product: existingProduct,
+              status: 'SKIPPED',
+              error: 'สินค้านี้มีอยู่แล้วในระบบ',
+              sku: sanitizedInput.sku,
+              product_name: sanitizedInput.product_name
+            });
+            continue;
+          } else if (settings.updateExisting) {
+            // Update existing product
+            const updatedProduct = await context.prisma.product.update({
+              where: { id: existingProduct.id },
+              data: sanitizedInput
+            });
+            
+            imported++;
+            results.push({
+              product: updatedProduct,
+              status: 'UPDATED',
+              error: null,
+              sku: sanitizedInput.sku,
+              product_name: sanitizedInput.product_name
+            });
+
+            await context.security.logSensitiveOperation(
+              context.userId,
+              'UPDATE_PRODUCT_BULK',
+              'Product',
+              updatedProduct.id,
+              { product_name: updatedProduct.product_name },
+              context.redisClient
+            );
+            continue;
+          } else {
+            failed++;
+            results.push({
+              product: null,
+              status: 'FAILED',
+              error: 'สินค้านี้มีอยู่แล้วในระบบ',
+              sku: sanitizedInput.sku,
+              product_name: sanitizedInput.product_name
+            });
+            continue;
+          }
+        }
+
+        // Create new product
+        const newProduct = await context.prisma.product.create({
+          data: sanitizedInput
+        });
+
+        imported++;
+        results.push({
+          product: newProduct,
+          status: 'CREATED',
+          error: null,
+          sku: sanitizedInput.sku,
+          product_name: sanitizedInput.product_name
+        });
+
+        await context.security.logSensitiveOperation(
+          context.userId,
+          'CREATE_PRODUCT_BULK',
+          'Product',
+          newProduct.id,
+          { product_name: newProduct.product_name },
+          context.redisClient
+        );
+
+      } catch (error) {
+        failed++;
+        const errorMessage = error instanceof Error ? error.message : 'เกิดข้อผิดพลาดไม่ทราบสาเหตุ';
+        
+        results.push({
+          product: null,
+          status: 'FAILED',
+          error: errorMessage,
+          sku: productInput.sku,
+          product_name: productInput.product_name || 'ไม่ระบุ'
+        });
+
+        logger.error('Failed to import product', { 
+          error: errorMessage, 
+          productInput 
+        }, 'IMPORT');
+        
+        errors.push(`${productInput.product_name || 'ไม่ระบุ'}: ${errorMessage}`);
+      }
+    }
+
+    // Log summary
+    logger.info('Bulk import completed', {
+      totalProducts: products.length,
+      imported,
+      failed,
+      skipped,
+      userId: context.userId
+    }, 'IMPORT');
+
+    return {
+      success: failed === 0,
+      message: `นำเข้าสำเร็จ ${imported} รายการ, ล้มเหลว ${failed} รายการ, ข้าม ${skipped} รายการ`,
+      imported,
+      failed,
+      skipped,
+      errors,
+      results
+    };
   }
 }; 
