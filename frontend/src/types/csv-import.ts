@@ -20,6 +20,7 @@ export interface ImportPreviewResult {
     totalRows: number
     validRows: number
     invalidRows: number
+    uniqueProducts: number
     warnings: string[]
   }
 }
@@ -56,6 +57,7 @@ export interface MappedProductData {
   short_name?: string
   status?: string
   vat_percent?: number
+  expiration_warning_date?: number
   sale_price: number
   unit?: string
   pack_size?: string
@@ -68,7 +70,7 @@ export interface MappedProductData {
   volume_unit?: string
   shelf_code?: string
   shelf_row?: string
-  category?: string
+  categoryId?: string  // Changed from 'category' to 'categoryId'
   symptom_category?: string
   license_number?: string
   dosage_unit?: string
@@ -78,10 +80,10 @@ export interface MappedProductData {
   before_meal?: boolean
   after_meal?: boolean
   after_meal_immediate?: boolean
-  morning?: boolean
-  noon?: boolean
-  evening?: boolean
-  before_bed?: boolean
+  morning?: string     // Changed from boolean to string per GraphQL schema
+  noon?: string        // Changed from boolean to string per GraphQL schema
+  evening?: string     // Changed from boolean to string per GraphQL schema
+  before_bed?: string  // Changed from boolean to string per GraphQL schema
   properties?: string
   usage_instruction?: string
   sale_note?: string

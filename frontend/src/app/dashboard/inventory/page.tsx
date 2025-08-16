@@ -9,11 +9,12 @@ import InventoryActionsGrid from "@/components/modules/inventory/inventory-actio
 import ImportProductsView from "@/components/modules/inventory/import-products-view"
 import ExportProductsView from "@/components/modules/inventory/export-products-view"
 import DeleteProductsView from "@/components/modules/inventory/delete-products-view"
+import ProductDetailView from "@/components/modules/inventory/product-detail-view"
 import { GraphQLAPI } from "@/clients/graphql"
 import { logger } from "@/lib/logger"
 
 type AlphabetMode = 'english' | 'thai' | 'numbers'
-type ViewMode = 'list' | 'add-product' | 'import-products' | 'export-products' | 'delete-products' | 'print-barcode' | 'print-price-tag' | 'print-medicine-label' | 'product-report'
+type ViewMode = 'list' | 'add-product' | 'product-detail' | 'import-products' | 'export-products' | 'delete-products' | 'print-barcode' | 'print-price-tag' | 'print-medicine-label' | 'product-report'
 
 interface Product {
   id: string
@@ -38,6 +39,8 @@ export default function InventoryPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(null)
+  const [isProductEditing, setIsProductEditing] = useState(false)
 
   const alphabet = Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i))
   const thaiLetters = ["ก", "ข", "ค", "ง", "จ", "ฉ", "ช", "ซ", "ฌ", "ญ", "ด", "ต", "ท", "ธ", "น", "บ", "ป", "ผ", "ฝ", "พ", "ฟ", "ภ", "ม", "ย", "ร", "ล", "ว", "ศ", "ษ", "ส", "ห", "ฬ", "อ", "ฮ"]
@@ -177,6 +180,12 @@ export default function InventoryPage() {
   const handlePrintMedicineLabel = () => setViewMode('print-medicine-label')
   const handleProductReport = () => setViewMode('product-report')
 
+  // Product detail handler
+  const handleProductClick = (productId: string) => {
+    setSelectedProductId(productId)
+    setViewMode('product-detail')
+  }
+
   // Submit handlers
   const handleSubmitProduct = (productData: any) => {
     console.log("New product data:", productData)
@@ -226,6 +235,7 @@ export default function InventoryPage() {
   const getViewTitle = () => {
     switch (viewMode) {
       case 'add-product': return 'เพิ่มสินค้าใหม่'
+      case 'product-detail': return 'รายละเอียดสินค้า'
       case 'import-products': return 'เพิ่มชุดสินค้า/นำเข้า/แก้ไข'
       case 'export-products': return 'ส่งออกยอดสินค้า'
       case 'delete-products': return 'ลบสินค้า'
@@ -246,6 +256,7 @@ export default function InventoryPage() {
           onSearchChange={setSearchQuery}
           selectedLetter={selectedLetter}
           products={transformedProducts}
+          onProductClick={handleProductClick}
         />
       )}
 
@@ -262,35 +273,39 @@ export default function InventoryPage() {
 
       {/* Main Content Area - Scrollable */}
       <div className="flex-1 flex flex-col h-full overflow-hidden">
-        {/* Header - Fixed */}
-        <div className="bg-white border-b p-6 flex-shrink-0">
-          <div className="flex justify-between items-center">
-            <h1 className="text-2xl font-semibold text-gray-700">
-              {getViewTitle()}
-            </h1>
-            {viewMode === 'list' ? (
-              <Button className="text-purple-500 bg-white hover:bg-purple-50 border border-purple-200">
-                ตัวเลือก
-              </Button>
-            ) : viewMode === 'add-product' ? (
-              <div className="flex space-x-3">
+        {/* Header - Fixed - Hide when product is being edited */}
+        {!isProductEditing && (
+          <div className="bg-white border-b p-6 flex-shrink-0">
+            <div className="flex justify-between items-center">
+              <h1 className="text-2xl font-semibold text-gray-700">
+                {getViewTitle()}
+              </h1>
+              {viewMode === 'list' ? (
+                <Button className="text-purple-500 bg-white hover:bg-purple-50 border border-purple-200">
+                  ตัวเลือก
+                </Button>
+              ) : viewMode === 'add-product' ? (
+                <div className="flex space-x-3">
+                  <Button variant="outline" onClick={handleBackToList}>
+                    ยกเลิก
+                  </Button>
+                  <Button onClick={handleSaveButtonClick} className="bg-purple-500 hover:bg-purple-600">
+                    บันทึกสินค้า
+                  </Button>
+                </div>
+              ) : viewMode === 'product-detail' ? (
+                null // ProductDetailView handles its own header buttons
+              ) : (
                 <Button variant="outline" onClick={handleBackToList}>
-                  ยกเลิก
+                  ย้อนกลับ
                 </Button>
-                <Button onClick={handleSaveButtonClick} className="bg-purple-500 hover:bg-purple-600">
-                  บันทึกสินค้า
-                </Button>
-              </div>
-            ) : (
-              <Button variant="outline" onClick={handleBackToList}>
-                ย้อนกลับ
-              </Button>
-            )}
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Dynamic Content - Scrollable */}
-        <div className="flex-1 overflow-y-auto">
+        <div className={`flex-1 overflow-y-auto ${isProductEditing ? 'h-full' : ''}`}>
           {/* Loading State */}
           {loading && viewMode === 'list' && (
             <div className="flex items-center justify-center h-64">
@@ -341,6 +356,14 @@ export default function InventoryPage() {
                 onSubmit={handleSubmitProduct}
               />
             </div>
+          )}
+
+          {viewMode === 'product-detail' && selectedProductId && (
+            <ProductDetailView 
+              productId={selectedProductId}
+              onBack={handleBackToList}
+              onEditingChange={setIsProductEditing}
+            />
           )}
 
           {viewMode === 'import-products' && (

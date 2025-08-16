@@ -7,9 +7,10 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { Upload, FileText, Download, CheckCircle, AlertTriangle, Info, RefreshCw } from "lucide-react"
-import { parseCSV, createImportPreview, readFileAsText, downloadCSVTemplate } from "@/utils/csv-parser"
-import { ImportPreviewResult, ImportSettings } from "@/types/csv-import"
+import { parseCSV, createImportPreview, readFileAsText, downloadCSVTemplate, ImportPreviewResult } from "@/utils/csv-parser"
+import { ImportSettings } from "@/types/csv-import"
 import { GraphQLAPI } from "@/clients/graphql"
 import { logger } from "@/lib/logger"
 
@@ -23,9 +24,13 @@ export default function ImportProductsView({ onBack, onImport }: ImportProductsV
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
   const [isImporting, setIsImporting] = useState(false)
+  const [isLoadingProducts, setIsLoadingProducts] = useState(false)
   const [previewResult, setPreviewResult] = useState<ImportPreviewResult | null>(null)
   const [importResult, setImportResult] = useState<any>(null)
   const [notes, setNotes] = useState("")
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false)
+  const [existingProducts, setExistingProducts] = useState<any[]>([])
+  const [existingCategories, setExistingCategories] = useState<any[]>([])
   const [importSettings, setImportSettings] = useState<ImportSettings>({
     skipDuplicates: true,
     updateExisting: false,
@@ -63,18 +68,73 @@ export default function ImportProductsView({ onBack, onImport }: ImportProductsV
     setPreviewResult(null)
     setImportResult(null)
     
-    // Auto-process file for preview
-    await processFile(file)
+    // Load existing products first, then process file
+    const loadedData = await loadExistingProducts()
+    await processFile(file, loadedData)
   }
 
-  const processFile = async (file: File) => {
+  const loadExistingProducts = async () => {
+    setIsLoadingProducts(true)
+    try {
+      logger.info('Loading existing products and categories for import validation', {}, 'IMPORT')
+      
+      // Load products and categories in parallel
+      const [productsResult, categoriesResult] = await Promise.all([
+        GraphQLAPI.getAllProductsForDuplicateCheck(),
+        GraphQLAPI.getAllCategories()
+      ])
+      
+      const products = productsResult.products.products || []
+      const categories = categoriesResult.categories || []
+      
+      setExistingProducts(products)
+      setExistingCategories(categories)
+      
+      // Debug: Log first few products
+      console.log('Loaded existing products sample:', products.slice(0, 5).map(p => ({
+        id: p.id,
+        product_name: p.product_name
+      })))
+      
+      logger.info('Loaded existing data', { 
+        productsCount: products.length,
+        categoriesCount: categories.length
+      }, 'IMPORT')
+
+      // Return the loaded data for immediate use
+      return { products, categories }
+    } catch (error) {
+      logger.error('Failed to load existing data', error, 'IMPORT')
+      // Continue without existing data check if loading fails
+      setExistingProducts([])
+      setExistingCategories([])
+      alert('ไม่สามารถโหลดข้อมูลที่มีอยู่แล้วได้ การตรวจสอบข้อมูลซ้ำจะไม่ทำงาน')
+      return { products: [], categories: [] }
+    } finally {
+      setIsLoadingProducts(false)
+    }
+  }
+
+  const processFile = async (file: File, loadedData?: { products: any[], categories: any[] }) => {
     setIsProcessing(true)
     try {
       logger.info('Processing CSV file', { fileName: file.name, size: file.size }, 'IMPORT')
       
+      // Use loaded data directly instead of state (to avoid timing issues)
+      const productsToCheck = loadedData?.products || existingProducts
+      
+      // Debug: Check existing products before processing
+      console.log('Processing file with existing products:', {
+        existingProductsCount: productsToCheck.length,
+        existingProductsSample: productsToCheck.slice(0, 3).map(p => ({
+          id: p.id,
+          product_name: p.product_name
+        }))
+      })
+      
       const content = await readFileAsText(file)
       const csvData = parseCSV(content)
-      const preview = createImportPreview(csvData)
+      const preview = createImportPreview(csvData, productsToCheck)
       
       setPreviewResult(preview)
       logger.info('CSV preview generated', { 
@@ -91,12 +151,84 @@ export default function ImportProductsView({ onBack, onImport }: ImportProductsV
     }
   }
 
-  const handleImport = async () => {
+  const handleImportClick = () => {
     if (!previewResult || previewResult.validRows.length === 0) {
       alert('ไม่มีข้อมูลที่ถูกต้องสำหรับการนำเข้า')
       return
     }
+    setShowConfirmDialog(true)
+  }
 
+  const mapCategoryNameToId = (categoryName: string): string | undefined => {
+    if (!categoryName) return undefined
+    
+    const category = existingCategories.find(cat => 
+      cat.name.toLowerCase() === categoryName.toLowerCase() ||
+      cat.code?.toLowerCase() === categoryName.toLowerCase()
+    )
+    
+    return category ? category.id : undefined
+  }
+
+  const transformProductsForGraphQL = (products: any[]) => {
+    return products.map(product => {
+      // Map category name to categoryId
+      const categoryName = product.category
+      const categoryId = categoryName ? mapCategoryNameToId(categoryName) : undefined
+      
+      // Create clean product object that matches GraphQL schema
+      const transformedProduct: any = {
+        product_name: product.product_name,
+        sale_price: product.sale_price,
+        stock_quantity: product.stock_quantity || 0
+      }
+
+      // Add optional fields only if they have valid values
+      if (product.product_type) transformedProduct.product_type = product.product_type
+      if (product.generic_name) transformedProduct.generic_name = product.generic_name
+      if (product.short_name) transformedProduct.short_name = product.short_name
+      if (product.status) transformedProduct.status = product.status
+      if (product.vat_percent !== undefined && !isNaN(product.vat_percent)) transformedProduct.vat_percent = product.vat_percent
+      if (product.expiration_warning_date !== undefined && !isNaN(product.expiration_warning_date)) transformedProduct.expiration_warning_date = product.expiration_warning_date
+      if (product.unit) transformedProduct.unit = product.unit
+      if (product.pack_size) transformedProduct.pack_size = product.pack_size
+      if (product.reorder_point !== undefined && !isNaN(product.reorder_point)) transformedProduct.reorder_point = product.reorder_point
+      if (product.cost !== undefined && !isNaN(product.cost)) transformedProduct.cost = product.cost
+      if (product.sku) transformedProduct.sku = product.sku
+      if (product.barcode) transformedProduct.barcode = product.barcode
+      if (product.volume !== undefined && !isNaN(product.volume)) transformedProduct.volume = product.volume
+      if (product.volume_unit) transformedProduct.volume_unit = product.volume_unit
+      if (product.shelf_code) transformedProduct.shelf_code = product.shelf_code
+      if (product.shelf_row) transformedProduct.shelf_row = product.shelf_row
+      if (categoryId) transformedProduct.categoryId = categoryId
+      if (product.symptom_category) transformedProduct.symptom_category = product.symptom_category
+      if (product.license_number) transformedProduct.license_number = product.license_number
+      if (product.dosage_unit) transformedProduct.dosage_unit = product.dosage_unit
+      if (product.dosage) transformedProduct.dosage = product.dosage
+      if (product.times_per_day !== undefined && !isNaN(product.times_per_day)) transformedProduct.times_per_day = product.times_per_day
+      if (product.interval_hours !== undefined && !isNaN(product.interval_hours)) transformedProduct.interval_hours = product.interval_hours
+      if (product.before_meal !== undefined) transformedProduct.before_meal = product.before_meal
+      if (product.after_meal !== undefined) transformedProduct.after_meal = product.after_meal
+      if (product.after_meal_immediate !== undefined) transformedProduct.after_meal_immediate = product.after_meal_immediate
+      if (product.morning) transformedProduct.morning = product.morning
+      if (product.noon) transformedProduct.noon = product.noon
+      if (product.evening) transformedProduct.evening = product.evening
+      if (product.before_bed) transformedProduct.before_bed = product.before_bed
+      if (product.properties) transformedProduct.properties = product.properties
+      if (product.usage_instruction) transformedProduct.usage_instruction = product.usage_instruction
+      if (product.sale_note) transformedProduct.sale_note = product.sale_note
+      if (product.purchase_note) transformedProduct.purchase_note = product.purchase_note
+
+      return transformedProduct
+    })
+  }
+
+  const handleConfirmImport = async () => {
+    if (!previewResult || previewResult.validRows.length === 0) {
+      return
+    }
+
+    setShowConfirmDialog(false)
     setIsImporting(true)
     try {
       logger.info('Starting bulk import', { 
@@ -104,7 +236,10 @@ export default function ImportProductsView({ onBack, onImport }: ImportProductsV
         settings: importSettings 
       }, 'IMPORT')
       
-      const result = await GraphQLAPI.bulkImportProducts(previewResult.validRows, importSettings)
+      // Transform products to match GraphQL schema
+      const transformedProducts = transformProductsForGraphQL(previewResult.validRows)
+      
+      const result = await GraphQLAPI.bulkImportProducts(transformedProducts, importSettings)
       
       setImportResult(result.bulkImportProducts)
       logger.info('Bulk import completed', result.bulkImportProducts, 'IMPORT')
@@ -284,12 +419,14 @@ export default function ImportProductsView({ onBack, onImport }: ImportProductsV
       </div>
 
       {/* Processing Status */}
-      {isProcessing && (
+      {(isLoadingProducts || isProcessing) && (
         <Card className="mt-6">
           <CardContent className="p-6">
             <div className="flex items-center justify-center space-x-3">
               <RefreshCw className="h-5 w-5 animate-spin text-purple-500" />
-              <span className="text-gray-600">กำลังประมวลผลไฟล์...</span>
+              <span className="text-gray-600">
+                {isLoadingProducts ? 'กำลังโหลดข้อมูลสินค้าจากฐานข้อมูลเพื่อตรวจสอบข้อมูลซ้ำ...' : 'กำลังประมวลผลไฟล์...'}
+              </span>
             </div>
           </CardContent>
         </Card>
@@ -302,7 +439,8 @@ export default function ImportProductsView({ onBack, onImport }: ImportProductsV
             <CardTitle className="flex items-center justify-between">
               <span>ตัวอย่างข้อมูล</span>
               <div className="flex space-x-4 text-sm">
-                <span className="text-green-600">ถูกต้อง: {previewResult.summary.validRows}</span>
+                <span className="text-blue-600">สินค้า: {previewResult.summary.uniqueProducts} ชนิด</span>
+                <span className="text-green-600">รายการถูกต้อง: {previewResult.summary.validRows}</span>
                 <span className="text-red-600">ผิดพลาด: {previewResult.summary.invalidRows}</span>
                 <span className="text-gray-600">รวม: {previewResult.summary.totalRows}</span>
               </div>
@@ -310,7 +448,11 @@ export default function ImportProductsView({ onBack, onImport }: ImportProductsV
           </CardHeader>
           <CardContent>
             {/* Summary */}
-            <div className="grid grid-cols-3 gap-4 mb-4">
+            <div className="grid grid-cols-4 gap-4 mb-4">
+              <div className="bg-blue-50 p-3 rounded-lg text-center">
+                <div className="text-2xl font-bold text-blue-600">{previewResult.summary.uniqueProducts}</div>
+                <div className="text-sm text-blue-700">สินค้าที่ไม่ซ้ำ</div>
+              </div>
               <div className="bg-green-50 p-3 rounded-lg text-center">
                 <div className="text-2xl font-bold text-green-600">{previewResult.summary.validRows}</div>
                 <div className="text-sm text-green-700">รายการถูกต้อง</div>
@@ -324,6 +466,35 @@ export default function ImportProductsView({ onBack, onImport }: ImportProductsV
                 <div className="text-sm text-gray-700">รายการทั้งหมด</div>
               </div>
             </div>
+
+            {/* Debug Info */}
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="text-sm text-blue-700">
+                <div className="font-medium mb-1">Debug Info:</div>
+                <div>• สินค้าในฐานข้อมูล: {existingProducts.length} รายการ</div>
+                <div>• หมวดหมู่ในฐานข้อมูล: {existingCategories.length} รายการ</div>
+                {existingProducts.length > 0 && (
+                  <div>• ตัวอย่างสินค้า: {existingProducts.slice(0, 3).map(p => p.product_name).join(', ')}</div>
+                )}
+              </div>
+            </div>
+
+            {/* Warnings */}
+            {previewResult.summary.warnings && previewResult.summary.warnings.length > 0 && (
+              <div className="mb-4">
+                <Alert className="border-yellow-200 bg-yellow-50">
+                  <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                  <AlertDescription className="text-yellow-700">
+                    <div className="font-medium mb-2">คำเตือน:</div>
+                    <div className="space-y-1 text-sm max-h-32 overflow-y-auto">
+                      {previewResult.summary.warnings.map((warning, index) => (
+                        <div key={index}>• {warning}</div>
+                      ))}
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              </div>
+            )}
 
             {/* Valid Rows Preview */}
             {previewResult.validRows.length > 0 && (
@@ -472,20 +643,79 @@ export default function ImportProductsView({ onBack, onImport }: ImportProductsV
         <Button variant="outline" onClick={onBack}>
           ยกเลิก
         </Button>
-        <Button 
-          onClick={handleImport}
-          disabled={!previewResult || previewResult.validRows.length === 0 || isImporting}
-          className="bg-purple-500 hover:bg-purple-600"
-        >
-          {isImporting ? (
-            <>
-              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-              กำลังนำเข้า...
-            </>
-          ) : (
-            `เริ่มการนำเข้า (${previewResult?.validRows.length || 0} รายการ)`
-          )}
-        </Button>
+        
+        <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+          <AlertDialogTrigger asChild>
+            <Button 
+              onClick={handleImportClick}
+              disabled={!previewResult || previewResult.validRows.length === 0 || isImporting || isLoadingProducts || isProcessing}
+              className="bg-purple-500 hover:bg-purple-600"
+            >
+              {isImporting ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  กำลังนำเข้า...
+                </>
+              ) : (
+                `เริ่มการนำเข้า (${previewResult?.summary?.uniqueProducts || 0} ชนิด, ${previewResult?.validRows.length || 0} รายการ)`
+              )}
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>ยืนยันการนำเข้าข้อมูล</AlertDialogTitle>
+              <AlertDialogDescription>
+                <div className="space-y-3">
+                  <p>คุณต้องการนำเข้าสินค้าตามรายละเอียดต่อไปนี้หรือไม่?</p>
+                  
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <span className="font-medium">จำนวนสินค้าที่จะนำเข้า:</span>
+                        <span className="ml-2 text-blue-600 font-bold">{previewResult?.summary?.uniqueProducts || 0} ชนิด</span>
+                      </div>
+                      <div>
+                        <span className="font-medium">จำนวนรายการทั้งหมด:</span>
+                        <span className="ml-2 text-green-600 font-bold">{previewResult?.validRows.length || 0} รายการ</span>
+                      </div>
+                      {previewResult?.summary?.invalidRows && previewResult.summary.invalidRows > 0 && (
+                        <div>
+                          <span className="font-medium">รายการที่มีข้อผิดพลาด:</span>
+                          <span className="ml-2 text-red-600 font-bold">{previewResult.summary.invalidRows} รายการ</span>
+                        </div>
+                      )}
+                      {previewResult?.summary?.warnings && previewResult.summary.warnings.length > 0 && (
+                        <div className="col-span-2">
+                          <span className="font-medium">คำเตือน:</span>
+                          <span className="ml-2 text-yellow-600 font-bold">{previewResult.summary.warnings.length} ข้อ</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="text-sm text-gray-600">
+                    <p><strong>การตั้งค่า:</strong></p>
+                    <ul className="list-disc list-inside ml-2 space-y-1">
+                      <li>{importSettings.skipDuplicates ? '✓' : '✗'} ข้ามสินค้าที่ซ้ำกัน</li>
+                      <li>{importSettings.updateExisting ? '✓' : '✗'} อัปเดตสินค้าที่มีอยู่แล้ว</li>
+                      <li>{importSettings.createBackup ? '✓' : '✗'} สร้างข้อมูลสำรองก่อนนำเข้า</li>
+                    </ul>
+                  </div>
+                  
+                  <p className="text-sm text-gray-500">
+                    การดำเนินการนี้ไม่สามารถยกเลิกได้ กรุณาตรวจสอบข้อมูลให้ถูกต้องก่อนดำเนินการ
+                  </p>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
+              <AlertDialogAction onClick={handleConfirmImport} className="bg-purple-500 hover:bg-purple-600">
+                ยืนยันการนำเข้า
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
   )

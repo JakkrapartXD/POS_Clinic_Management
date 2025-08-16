@@ -72,6 +72,29 @@ export const typeDefs = /* GraphQL */ `
     address: String
   }
 
+  # Category Types
+  type Category {
+    id: String!
+    name: String!
+    description: String
+    code: String
+    created_at: DateTime!
+    updated_at: DateTime!
+    products: [Product!]!
+  }
+
+  input CreateCategoryInput {
+    name: String!
+    description: String
+    code: String
+  }
+
+  input UpdateCategoryInput {
+    name: String
+    description: String
+    code: String
+  }
+
   # Product Types
   type Product {
     id: String!
@@ -81,7 +104,7 @@ export const typeDefs = /* GraphQL */ `
     short_name: String
     status: String
     vat_percent: Float
-    expiration_warning_date: DateTime
+    expiration_warning_date: Int
     sale_price: Float!
     unit: String
     pack_size: String
@@ -94,7 +117,8 @@ export const typeDefs = /* GraphQL */ `
     volume_unit: String
     shelf_code: String
     shelf_row: String
-    category: String
+    category: Category
+    categoryId: String
     symptom_category: String
     license_number: String
     dosage_unit: String
@@ -104,10 +128,10 @@ export const typeDefs = /* GraphQL */ `
     before_meal: Boolean
     after_meal: Boolean
     after_meal_immediate: Boolean
-    morning: Boolean
-    noon: Boolean
-    evening: Boolean
-    before_bed: Boolean
+    morning: String
+    noon: String
+    evening: String
+    before_bed: String
     properties: String
     usage_instruction: String
     sale_note: String
@@ -129,7 +153,7 @@ export const typeDefs = /* GraphQL */ `
     short_name: String
     status: String = "active"
     vat_percent: Float = 0
-    expiration_warning_date: DateTime
+    expiration_warning_date: Int
     sale_price: Float!
     unit: String
     pack_size: String
@@ -142,7 +166,7 @@ export const typeDefs = /* GraphQL */ `
     volume_unit: String
     shelf_code: String
     shelf_row: String
-    category: String
+    categoryId: String
     symptom_category: String
     license_number: String
     dosage_unit: String
@@ -152,10 +176,10 @@ export const typeDefs = /* GraphQL */ `
     before_meal: Boolean
     after_meal: Boolean
     after_meal_immediate: Boolean
-    morning: Boolean
-    noon: Boolean
-    evening: Boolean
-    before_bed: Boolean
+    morning: String
+    noon: String
+    evening: String
+    before_bed: String
     properties: String
     usage_instruction: String
     sale_note: String
@@ -199,7 +223,7 @@ export const typeDefs = /* GraphQL */ `
     short_name: String
     status: String
     vat_percent: Float
-    expiration_warning_date: DateTime
+    expiration_warning_date: Int
     sale_price: Float
     unit: String
     pack_size: String
@@ -212,7 +236,7 @@ export const typeDefs = /* GraphQL */ `
     volume_unit: String
     shelf_code: String
     shelf_row: String
-    category: String
+    categoryId: String
     symptom_category: String
     license_number: String
     dosage_unit: String
@@ -222,10 +246,10 @@ export const typeDefs = /* GraphQL */ `
     before_meal: Boolean
     after_meal: Boolean
     after_meal_immediate: Boolean
-    morning: Boolean
-    noon: Boolean
-    evening: Boolean
-    before_bed: Boolean
+    morning: String
+    noon: String
+    evening: String
+    before_bed: String
     properties: String
     usage_instruction: String
     sale_note: String
@@ -594,6 +618,10 @@ export const typeDefs = /* GraphQL */ `
     patient(id: String!): Patient
     searchPatients(query: String!): [Patient!]!
 
+    # Category Queries
+    categories: [Category!]!
+    category(id: String!): Category
+
     # Product Queries
     products(filter: ProductFilterInput, pagination: PaginationInput): ProductsResponse!
     product(id: String!): Product
@@ -642,6 +670,11 @@ export const typeDefs = /* GraphQL */ `
     createPatient(input: CreatePatientInput!): Patient!
     updatePatient(id: String!, input: UpdatePatientInput!): Patient!
     deletePatient(id: String!): Boolean!
+
+    # Category Mutations
+    createCategory(input: CreateCategoryInput!): Category!
+    updateCategory(id: String!, input: UpdateCategoryInput!): Category!
+    deleteCategory(id: String!): Boolean!
 
     # Product Mutations
     createProduct(input: CreateProductInput!): Product!

@@ -171,7 +171,7 @@ export const queries = {
     
     if (filter) {
       if (filter.product_type) where.product_type = filter.product_type;
-      if (filter.category) where.category = filter.category;
+      if (filter.category) where.categoryId = filter.category;
       if (filter.status) where.status = filter.status;
       if (filter.low_stock) {
         where.stock_quantity = { lte: context.prisma.$raw('reorder_point') };
@@ -183,7 +183,10 @@ export const queries = {
         where,
         skip: pagination?.skip || 0,
         take: pagination?.take || 10,
-        orderBy: { created_at: 'desc' }
+        orderBy: { created_at: 'desc' },
+        include: {
+          category: true
+        }
       }),
       context.prisma.product.count({ where })
     ]);
@@ -199,6 +202,7 @@ export const queries = {
     const product = await context.prisma.product.findUnique({
       where: { id },
       include: {
+        category: true,
         stockMovements: {
           orderBy: { created_at: 'desc' },
           take: 10
@@ -474,5 +478,52 @@ export const queries = {
     }
     
     return purchase;
+  },
+
+  // Category Queries
+  async categories(parent: any, args: any, context: any) {
+    context.security.requireStaff(context);
+    
+    const categories = await context.prisma.category.findMany({
+      orderBy: [
+        { name: 'asc' }
+      ],
+      include: {
+        _count: {
+          select: { products: true }
+        }
+      }
+    });
+    
+    return categories;
+  },
+
+  async category(parent: any, args: any, context: any) {
+    const { id } = args;
+    context.security.requireStaff(context);
+    context.security.validateId(id);
+    
+    const category = await context.prisma.category.findUnique({
+      where: { id },
+      include: {
+        products: {
+          select: {
+            id: true,
+            product_name: true,
+            status: true,
+            stock_quantity: true
+          }
+        },
+        _count: {
+          select: { products: true }
+        }
+      }
+    });
+    
+    if (!category) {
+      throw new GraphQLError('Category not found');
+    }
+    
+    return category;
   }
 }; 

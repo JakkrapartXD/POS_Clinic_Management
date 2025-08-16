@@ -12,12 +12,12 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Switch } from "@/components/ui/switch"
 import { Card, CardContent } from "@/components/ui/card"
 import { Upload } from "lucide-react"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 
-
-interface AddProductFormProps {
+interface EditProductFormProps {
   onBack: () => void
   onSubmit: (productData: any) => void
-  submitTrigger?: number // Increment this to trigger form submission
+  initialData: any // Product data for editing
 }
 
 interface ProductFormData {
@@ -27,6 +27,7 @@ interface ProductFormData {
   generic_name: string
   short_name: string
   category: string
+  categoryId: string
   status: string
   
   // Pricing and Units
@@ -83,52 +84,75 @@ interface ProductFormData {
   image: File | null
 }
 
-export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddProductFormProps) {
+export default function EditProductForm({ onBack, onSubmit, initialData }: EditProductFormProps) {
   
+  // Track form changes
+  const [hasChanges, setHasChanges] = useState(false)
+  const [showExitWarning, setShowExitWarning] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [categories, setCategories] = useState<any[]>([])
+  const [isLoadingCategories, setIsLoadingCategories] = useState(true)
+  
+  // Helper function to parse symptom_category safely
+  const parseSymptomCategory = (data: any) => {
+    if (!data) return []
+    if (Array.isArray(data)) return data
+    if (typeof data === 'string') {
+      try {
+        const parsed = JSON.parse(data)
+        return Array.isArray(parsed) ? parsed : []
+      } catch {
+        return []
+      }
+    }
+    return []
+  }
+
   // Separate state for Select components to handle controlled/uncontrolled issues
   const [selectValues, setSelectValues] = useState({
-    category: "",
-    product_type: "medicine",
-    status: "active"
+    category: initialData?.category || "",
+    product_type: initialData?.product_type || "ยารักษาโรค",
+    status: initialData?.status || "active"
   })
   
   const [formData, setFormData] = useState<ProductFormData>({
-    product_name: "",
-    product_type: "medicine",
-    generic_name: "",
-    short_name: "",
-    category: "",
-    status: "active",
-    sale_price: "",
-    cost: "",
-    unit: "",
-    pack_size: "",
-    vat_percent: "0",
-    stock_quantity: "0",
-    reorder_point: "",
-    sku: "",
-    barcode: "",
-    shelf_code: "",
-    shelf_row: "",
-    expiration_warning_days: "90",
-    symptom_category: [],
-    license_number: "",
+    product_name: initialData?.product_name || "",
+    product_type: initialData?.product_type || "ยารักษาโรค",
+    generic_name: initialData?.generic_name || "",
+    short_name: initialData?.short_name || "",
+    category: initialData?.category || "",
+    categoryId: initialData?.categoryId || initialData?.category?.id || "",
+    status: initialData?.status || "active",
+    sale_price: initialData?.sale_price?.toString() || "",
+    cost: initialData?.cost?.toString() || "",
+    unit: initialData?.unit || "",
+    pack_size: initialData?.pack_size || "",
+    vat_percent: initialData?.vat_percent?.toString() || "0",
+    stock_quantity: initialData?.stock_quantity?.toString() || "0",
+    reorder_point: initialData?.reorder_point?.toString() || "",
+    sku: initialData?.sku || "",
+    barcode: initialData?.barcode || "",
+    shelf_code: initialData?.shelf_code || "",
+    shelf_row: initialData?.shelf_row || "",
+    expiration_warning_days: initialData?.expiration_warning_date?.toString() || "90",
+    symptom_category: parseSymptomCategory(initialData?.symptom_category),
+    license_number: initialData?.license_number || "",
     report_type: [],
-    dosage_unit: "",
-    dosage: "",
-    times_per_day: "",
-    interval_hours: "",
-    before_meal: false,
-    after_meal: false,
-    after_meal_immediate: false,
-    morning: "",
-    noon: "",
-    evening: "",
-    before_bed: "",
-    properties: "",
-    usage_instruction: "",
-    sale_note: "",
-    purchase_note: "",
+    dosage_unit: initialData?.dosage_unit || "",
+    dosage: initialData?.dosage || "",
+    times_per_day: initialData?.times_per_day?.toString() || "",
+    interval_hours: initialData?.interval_hours?.toString() || "",
+    before_meal: initialData?.before_meal || false,
+    after_meal: initialData?.after_meal || false,
+    after_meal_immediate: initialData?.after_meal_immediate || false,
+    morning: initialData?.morning || "",
+    noon: initialData?.noon || "",
+    evening: initialData?.evening || "",
+    before_bed: initialData?.before_bed || "",
+    properties: initialData?.properties || "",
+    usage_instruction: initialData?.usage_instruction || "",
+    sale_note: initialData?.sale_note || "",
+    purchase_note: initialData?.purchase_note || "",
     auto_print_label: false,
     show_dosage_table: false,
     image: null
@@ -136,6 +160,10 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
 
   const handleInputChange = (field: keyof ProductFormData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }))
+    if (!hasChanges) {
+      console.log('Setting hasChanges to true for field:', field)
+      setHasChanges(true)
+    }
   }
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -161,27 +189,143 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
       return
     }
     
+    setIsSubmitting(true)
     try {
       await onSubmit(formData)
+      setHasChanges(false) // Reset changes after successful submit
     } catch (error) {
       console.error('Error submitting form:', error)
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
-
-
-
-
-  // Listen for external submit trigger
-  useEffect(() => {
-    if (submitTrigger && submitTrigger > 0) {
-      handleSubmit()
+  const handleBack = () => {
+    console.log('handleBack called, hasChanges:', hasChanges)
+    if (hasChanges && !showExitWarning) {
+      setShowExitWarning(true)
+      return
     }
-  }, [submitTrigger])
+    console.log('Calling onBack()')
+    onBack()
+  }
+
+  const confirmExit = () => {
+    setHasChanges(false)
+    setShowExitWarning(false)
+    onBack()
+  }
+
+  const cancelExit = () => {
+    setShowExitWarning(false)
+  }
+
+  // Load categories
+  useEffect(() => {
+    const loadCategories = async () => {
+      try {
+        const response = await GraphQLAPI.getAllCategories()
+        setCategories(response.categories)
+      } catch (error) {
+        console.error('Error loading categories:', error)
+      } finally {
+        setIsLoadingCategories(false)
+      }
+    }
+    
+    loadCategories()
+  }, [])
+
+  // Update form data when initialData changes
+  useEffect(() => {
+    if (initialData) {
+      console.log('EditProductForm initialData:', {
+        category: initialData.category,
+        categoryId: initialData.categoryId,
+        product_type: initialData.product_type,
+        status: initialData.status
+      })
+      
+      // Update select values separately
+      setSelectValues({
+        category: initialData.categoryId || initialData.category?.id || "",
+        product_type: initialData.product_type || "ยารักษาโรค",
+        status: initialData.status || "active"
+      })
+      
+      setFormData({
+        product_name: initialData.product_name || "",
+        product_type: initialData.product_type || "ยารักษาโรค",
+        generic_name: initialData.generic_name || "",
+        short_name: initialData.short_name || "",
+        category: initialData.category || "",
+        categoryId: initialData.categoryId || initialData.category?.id || "",
+        status: initialData.status || "active",
+        sale_price: initialData.sale_price?.toString() || "",
+        cost: initialData.cost?.toString() || "",
+        unit: initialData.unit || "",
+        pack_size: initialData.pack_size || "",
+        vat_percent: initialData.vat_percent?.toString() || "0",
+        stock_quantity: initialData.stock_quantity?.toString() || "0",
+        reorder_point: initialData.reorder_point?.toString() || "",
+        sku: initialData.sku || "",
+        barcode: initialData.barcode || "",
+        shelf_code: initialData.shelf_code || "",
+        shelf_row: initialData.shelf_row || "",
+        expiration_warning_days: initialData.expiration_warning_date?.toString() || "90",
+        symptom_category: parseSymptomCategory(initialData.symptom_category),
+        license_number: initialData.license_number || "",
+        report_type: [],
+        dosage_unit: initialData.dosage_unit || "",
+        dosage: initialData.dosage || "",
+        times_per_day: initialData.times_per_day?.toString() || "",
+        interval_hours: initialData.interval_hours?.toString() || "",
+        before_meal: initialData.before_meal || false,
+        after_meal: initialData.after_meal || false,
+        after_meal_immediate: initialData.after_meal_immediate || false,
+        morning: initialData.morning || "",
+        noon: initialData.noon || "",
+        evening: initialData.evening || "",
+        before_bed: initialData.before_bed || "",
+        properties: initialData.properties || "",
+        usage_instruction: initialData.usage_instruction || "",
+        sale_note: initialData.sale_note || "",
+        purchase_note: initialData.purchase_note || "",
+        auto_print_label: false,
+        show_dosage_table: false,
+        image: null
+      })
+    }
+  }, [initialData])
 
   return (
-    <div className="p-6">
-      <div className="max-w-4xl mx-auto space-y-8">
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className="bg-white border-b p-6 flex-shrink-0">
+        <div className="flex justify-between items-center">
+          <div className="flex items-center space-x-3">
+            <h1 className="text-2xl font-semibold text-gray-700">รายละเอียดสินค้า</h1>
+            <Button variant="outline" size="sm" className="text-purple-600 border-purple-200 hover:bg-purple-50">
+              แก้ไข
+            </Button>
+          </div>
+          <div className="flex items-center space-x-3">
+            <Button variant="outline" onClick={handleBack} disabled={isSubmitting}>
+              ยกเลิก
+            </Button>
+            <Button 
+              onClick={handleSubmit} 
+              className="bg-purple-500 hover:bg-purple-600"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? 'กำลังบันทึก...' : 'ยืนยัน'}
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-6">
+        <div className="max-w-4xl mx-auto space-y-8 pb-24">
         
         {/* General Information */}
         <Card>
@@ -222,18 +366,25 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
                   onValueChange={(value) => {
                     const actualValue = value === 'not-specified' ? '' : value
                     setSelectValues(prev => ({ ...prev, category: actualValue }))
-                    handleInputChange('category', actualValue)
+                    handleInputChange('categoryId', actualValue)
                   }}
+                  disabled={isLoadingCategories}
                 >
                   <SelectTrigger className="mt-2 h-12 px-4 rounded-xl border-2 border-gray-200 bg-white focus:bg-white focus:border-purple-300 focus:ring-2 focus:ring-purple-100 transition-all duration-200 shadow-sm">
-                    <SelectValue placeholder="ไม่จำเป็นต้องระบุ" />
+                    <SelectValue placeholder={isLoadingCategories ? "กำลังโหลด..." : "เลือกหมวดหมู่สินค้า"} />
                   </SelectTrigger>
                   <SelectContent className="bg-white">
                     <SelectItem value="not-specified">ไม่จำเป็นต้องระบุ</SelectItem>
-                    <SelectItem value="medicine">ยา</SelectItem>
-                    <SelectItem value="supplement">อาหารเสริม</SelectItem>
-                    <SelectItem value="cosmetics">เครื่องสำอาง</SelectItem>
-                    <SelectItem value="medical-device">อุปกรณ์การแพทย์</SelectItem>
+                    {categories.map((category) => (
+                      <SelectItem key={category.id} value={category.id}>
+                        <div>
+                          <div className="font-medium text-gray-900">{category.name}</div>
+                          {category.description && (
+                            <div className="text-sm text-gray-500">{category.description}</div>
+                          )}
+                        </div>
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -249,16 +400,16 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
                   }}
                 >
                   <SelectTrigger className="mt-2 h-12 px-4 rounded-xl border-2 border-gray-200 bg-white focus:bg-white focus:border-purple-300 focus:ring-2 focus:ring-purple-100 transition-all duration-200 shadow-sm">
-                    <SelectValue placeholder="ยารักษาโรค" />
+                    <SelectValue placeholder="เลือกประเภทสินค้า" />
                   </SelectTrigger>
                   <SelectContent className="bg-white">
-                    <SelectItem value="medicine">ยารักษาโรค</SelectItem>
-                    <SelectItem value="supplement">ผลิตภัณฑ์เสริมอาหาร</SelectItem>
-                    <SelectItem value="cosmetic">ผลิตภัณฑ์เสริมความงาม</SelectItem>
-                    <SelectItem value="medical-device">อุปกรณ์ทางการแพทย์</SelectItem>
-                    <SelectItem value="other-device">อุปกรณ์อื่นๆ</SelectItem>
-                    <SelectItem value="food-beverage">อาหาร/เครื่องดื่ม</SelectItem>
-                    <SelectItem value="cost-advertising">สินค้าต้นทุน/การโฆษณา</SelectItem>
+                    <SelectItem value="ยารักษาโรค">ยารักษาโรค</SelectItem>
+                    <SelectItem value="ผลิตภัณฑ์เสริมอาหาร">ผลิตภัณฑ์เสริมอาหาร</SelectItem>
+                    <SelectItem value="ผลิตภัณฑ์เสริมความงาม">ผลิตภัณฑ์เสริมความงาม</SelectItem>
+                    <SelectItem value="อุปกรณ์ทางการแพทย์">อุปกรณ์ทางการแพทย์</SelectItem>
+                    <SelectItem value="อุปกรณ์อื่นๆ">อุปกรณ์อื่นๆ</SelectItem>
+                    <SelectItem value="อาหาร/เครื่องดื่ม">อาหาร/เครื่องดื่ม</SelectItem>
+                    <SelectItem value="สินค้าต้นทุน/การโฆษณา">สินค้าต้นทุน/การโฆษณา</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -755,7 +906,46 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
           </CardContent>
         </Card>
 
+        </div>
       </div>
+
+      {/* Sticky Save Button at Bottom */}
+      {/* <div className="bg-white border-t p-6 flex-shrink-0">
+        <div className="max-w-4xl mx-auto flex justify-end">
+          <div className="flex space-x-3">
+            <Button variant="outline" onClick={handleBack} disabled={isSubmitting}>
+              ยกเลิก
+            </Button>
+            <Button 
+              onClick={handleSubmit} 
+              className="bg-purple-500 hover:bg-purple-600"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? 'กำลังบันทึก...' : 'ยืนยันการแก้ไข'}
+            </Button>
+          </div>
+        </div>
+      </div> */}
+
+      {/* Exit Warning Dialog */}
+      <AlertDialog open={showExitWarning} onOpenChange={setShowExitWarning}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>ยืนยันการออกจากหน้า</AlertDialogTitle>
+            <AlertDialogDescription>
+              แบบฟอร์มมีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก คุณต้องการออกจากหน้านี้โดยไม่บันทึกหรือไม่?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={cancelExit}>
+              ยกเลิก
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={confirmExit} className="bg-red-500 hover:bg-red-600">
+              ออกโดยไม่บันทึก
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 } 

@@ -354,7 +354,10 @@ export const mutations = {
     }
     
     const product = await context.prisma.product.create({
-      data: sanitizedInput
+      data: sanitizedInput,
+      include: {
+        category: true
+      }
     });
     
     // Create initial stock movement
@@ -424,7 +427,10 @@ export const mutations = {
     
     const product = await context.prisma.product.update({
       where: { id },
-      data: updateData
+      data: updateData,
+      include: {
+        category: true
+      }
     });
     
     await context.security.logSensitiveOperation(
@@ -713,5 +719,140 @@ export const mutations = {
       errors,
       results
     };
+  },
+
+  // Category Mutations
+  async createCategory(parent: any, args: any, context: any) {
+    const { input } = args;
+    context.security.requireAdmin(context);
+    
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
+    
+    const sanitizedInput = {
+      name: context.security.sanitizeString(input.name),
+      description: input.description ? context.security.sanitizeString(input.description) : null,
+      code: input.code ? context.security.sanitizeString(input.code) : null
+    };
+    
+    try {
+      const category = await context.prisma.category.create({
+        data: sanitizedInput
+      });
+      
+      await context.security.logSensitiveOperation(
+        context.userId,
+        'CREATE_CATEGORY',
+        'Category',
+        category.id,
+        { name: category.name }, context.redisClient
+      );
+      
+      return category;
+    } catch (error: any) {
+      if (error.code === 'P2002') {
+        if (error.meta?.target?.includes('name')) {
+          throw new GraphQLError('Category name already exists');
+        }
+        if (error.meta?.target?.includes('code')) {
+          throw new GraphQLError('Category code already exists');
+        }
+      }
+      throw new GraphQLError('Failed to create category');
+    }
+  },
+
+  async updateCategory(parent: any, args: any, context: any) {
+    const { id, input } = args;
+    context.security.requireAdmin(context);
+    context.security.validateId(id);
+    
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
+    
+    const updateData: any = {};
+    
+    if (input.name) updateData.name = context.security.sanitizeString(input.name);
+    if (input.description !== undefined) {
+      updateData.description = input.description ? context.security.sanitizeString(input.description) : null;
+    }
+    if (input.code !== undefined) {
+      updateData.code = input.code ? context.security.sanitizeString(input.code) : null;
+    }
+    
+    try {
+      const category = await context.prisma.category.update({
+        where: { id },
+        data: updateData
+      });
+      
+      await context.security.logSensitiveOperation(
+        context.userId,
+        'UPDATE_CATEGORY',
+        'Category',
+        category.id,
+        { name: category.name }, context.redisClient
+      );
+      
+      return category;
+    } catch (error: any) {
+      if (error.code === 'P2002') {
+        if (error.meta?.target?.includes('name')) {
+          throw new GraphQLError('Category name already exists');
+        }
+        if (error.meta?.target?.includes('code')) {
+          throw new GraphQLError('Category code already exists');
+        }
+      }
+      if (error.code === 'P2025') {
+        throw new GraphQLError('Category not found');
+      }
+      throw new GraphQLError('Failed to update category');
+    }
+  },
+
+  async deleteCategory(parent: any, args: any, context: any) {
+    const { id } = args;
+    context.security.requireAdmin(context);
+    context.security.validateId(id);
+    
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
+    
+    // Check if category has products
+    const productsCount = await context.prisma.product.count({
+      where: { categoryId: id }
+    });
+    
+    if (productsCount > 0) {
+      throw new GraphQLError(`Cannot delete category. It has ${productsCount} products associated with it.`);
+    }
+    
+    try {
+      const category = await context.prisma.category.findUnique({
+        where: { id },
+        select: { name: true }
+      });
+      
+      if (!category) {
+        throw new GraphQLError('Category not found');
+      }
+      
+      await context.prisma.category.delete({
+        where: { id }
+      });
+      
+      await context.security.logSensitiveOperation(
+        context.userId,
+        'DELETE_CATEGORY',
+        'Category',
+        id,
+        { name: category.name }, context.redisClient
+      );
+      
+      return true;
+    } catch (error: any) {
+      if (error.code === 'P2025') {
+        throw new GraphQLError('Category not found');
+      }
+      throw new GraphQLError('Failed to delete category');
+    }
   }
 }; 

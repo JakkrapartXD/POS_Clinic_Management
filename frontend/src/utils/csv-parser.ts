@@ -26,6 +26,7 @@ export interface ImportPreviewResult {
     totalRows: number
     validRows: number
     invalidRows: number
+    uniqueProducts: number
     warnings: string[]
   }
 }
@@ -37,6 +38,7 @@ export interface ProductImportData {
   short_name?: string
   status?: string
   vat_percent?: number
+  expiration_warning_date?: number
   sale_price: number
   unit?: string
   pack_size?: string
@@ -49,7 +51,8 @@ export interface ProductImportData {
   volume_unit?: string
   shelf_code?: string
   shelf_row?: string
-  category?: string
+  category?: string    // Temporary field for CSV import mapping
+  categoryId?: string  // For GraphQL schema
   symptom_category?: string
   license_number?: string
   dosage_unit?: string
@@ -59,10 +62,10 @@ export interface ProductImportData {
   before_meal?: boolean
   after_meal?: boolean
   after_meal_immediate?: boolean
-  morning?: boolean
-  noon?: boolean
-  evening?: boolean
-  before_bed?: boolean
+  morning?: string     // Changed from boolean to string per GraphQL schema
+  noon?: string        // Changed from boolean to string per GraphQL schema
+  evening?: string     // Changed from boolean to string per GraphQL schema
+  before_bed?: string  // Changed from boolean to string per GraphQL schema
   properties?: string
   usage_instruction?: string
   sale_note?: string
@@ -156,10 +159,20 @@ function parseCSVLine(line: string): string[] {
   return result
 }
 
-export function createImportPreview(csvData: CSVRow[]): ImportPreviewResult {
+export function createImportPreview(csvData: CSVRow[], existingProducts: any[] = []): ImportPreviewResult {
   const validRows: ProductImportData[] = []
   const invalidRows: { row: number; data: CSVRow; errors: ValidationError[] }[] = []
   const warnings: string[] = []
+  const duplicates: { row: number; data: CSVRow; errors: ValidationError[] }[] = []
+
+  // Debug: Log existing products count
+  console.log('createImportPreview called with:', {
+    csvDataLength: csvData.length,
+    existingProductsLength: existingProducts.length
+  })
+
+  // Track products within CSV file for internal duplicate checking
+  const csvProductMap = new Map<string, { product: ProductImportData, row: number }>()
 
   csvData.forEach((row, index) => {
     const rowNumber = index + 2 // +2 because index starts at 0 and we skip header
@@ -167,6 +180,52 @@ export function createImportPreview(csvData: CSVRow[]): ImportPreviewResult {
     
     // Transform CSV row to product data
     const productData = transformCSVRowToProduct(row, rowNumber, errors)
+    
+    if (errors.length === 0) {
+      // Check for duplicates with existing database products
+      const duplicateInDb = existingProducts.find(existing => 
+        existing.product_name.toLowerCase() === productData.product_name.toLowerCase()
+      )
+      
+      // Debug: Log duplicate check for first product only
+      if (rowNumber === 2) {
+        console.log(`Sample duplicate check for "${productData.product_name}":`, {
+          existingProductsCount: existingProducts.length,
+          duplicateFound: !!duplicateInDb,
+          duplicateProduct: duplicateInDb ? { 
+            id: duplicateInDb.id, 
+            name: duplicateInDb.product_name 
+          } : null
+        })
+      }
+      
+      if (duplicateInDb) {
+        errors.push({
+          row: rowNumber,
+          field: 'product_name',
+          value: productData.product_name,
+          message: `สินค้าซ้ำกับที่มีอยู่แล้วในฐานข้อมูล: "${duplicateInDb.product_name}"`
+        })
+        warnings.push(`แถวที่ ${rowNumber}: สินค้า "${productData.product_name}" ซ้ำกับข้อมูลที่มีอยู่แล้ว`)
+      }
+
+      // Check for internal duplicates within CSV
+      const productKey = `${productData.product_name.toLowerCase()}_${(productData.unit || '').toLowerCase()}`
+      const existingInCsv = csvProductMap.get(productKey)
+      
+      if (existingInCsv) {
+        errors.push({
+          row: rowNumber,
+          field: 'product_name',
+          value: productData.product_name,
+          message: `สินค้าซ้ำกับแถวที่ ${existingInCsv.row}: ชื่อ "${productData.product_name}" หน่วยนับ "${productData.unit || 'ไม่ระบุ'}"`
+        })
+        warnings.push(`แถวที่ ${rowNumber}: สินค้า "${productData.product_name}" (หน่วย: ${productData.unit || 'ไม่ระบุ'}) ซ้ำกับแถวที่ ${existingInCsv.row}`)
+      } else {
+        // Same product name but different unit is allowed (no warning needed)
+        csvProductMap.set(productKey, { product: productData, row: rowNumber })
+      }
+    }
     
     if (errors.length === 0) {
       validRows.push(productData)
@@ -179,6 +238,10 @@ export function createImportPreview(csvData: CSVRow[]): ImportPreviewResult {
     }
   })
 
+  // Count unique products by name (regardless of unit)
+  const uniqueProductNames = new Set(validRows.map(product => product.product_name.toLowerCase()))
+  const uniqueProductCount = uniqueProductNames.size
+
   return {
     totalRows: csvData.length,
     validRows,
@@ -187,6 +250,7 @@ export function createImportPreview(csvData: CSVRow[]): ImportPreviewResult {
       totalRows: csvData.length,
       validRows: validRows.length,
       invalidRows: invalidRows.length,
+      uniqueProducts: uniqueProductCount,
       warnings
     }
   }
@@ -229,31 +293,31 @@ function transformCSVRowToProduct(row: CSVRow, rowNumber: number, errors: Valida
   product.short_name = getFieldValue(row, 'ชื่อย่อ') || undefined
   product.status = getFieldValue(row, 'สถานะสินค้า') || 'active'
   
-  // Numeric fields
+  // Numeric fields with proper validation
   const vatPercent = parseFloat(getFieldValue(row, 'ภาษีมูลค่าเพิ่ม') || '0')
-  if (vatPercent) product.vat_percent = vatPercent
+  if (vatPercent && !isNaN(vatPercent)) product.vat_percent = vatPercent
   
   const cost = parseFloat(getFieldValue(row, 'ต้นทุน') || '0')
-  if (cost) product.cost = cost
+  if (cost && !isNaN(cost)) product.cost = cost
   
   const reorderPoint = parseInt(getFieldValue(row, 'จุดสั่งซื้อ') || '0')
-  if (reorderPoint) product.reorder_point = reorderPoint
+  if (reorderPoint && !isNaN(reorderPoint)) product.reorder_point = reorderPoint
   
   const stockQuantity = parseInt(getFieldValue(row, 'คงเหลือ') || '0')
-  if (stockQuantity) product.stock_quantity = stockQuantity
+  if (!isNaN(stockQuantity)) product.stock_quantity = stockQuantity || 0
   
   const volume = parseFloat(getFieldValue(row, 'ปริมาณ') || '0')
-  if (volume) product.volume = volume
+  if (volume && !isNaN(volume)) product.volume = volume
   
   const timesPerDay = parseInt(getFieldValue(row, 'จำนวนครั้งต่อวัน') || '0')
-  if (timesPerDay) product.times_per_day = timesPerDay
+  if (timesPerDay && !isNaN(timesPerDay)) product.times_per_day = timesPerDay
   
   const intervalHours = parseInt(getFieldValue(row, 'ทานยาทุก ๆ ชั่วโมง') || '0')
-  if (intervalHours) product.interval_hours = intervalHours
+  if (intervalHours && !isNaN(intervalHours)) product.interval_hours = intervalHours
 
   // String fields
   product.unit = getFieldValue(row, 'หน่วยนับ') || undefined
-  product.pack_size = getFieldValue(row, 'ขนาดบรรจุ') || undefined
+  product.pack_size = getFieldValue(row, 'ขนาดบรรจุ') || "1" // Default pack size is 1
   product.sku = getFieldValue(row, 'SKU') || undefined
   
   // Clean barcode (remove quotes and equals sign)
@@ -265,6 +329,8 @@ function transformCSVRowToProduct(row: CSVRow, rowNumber: number, errors: Valida
   product.volume_unit = getFieldValue(row, 'หน่วยปริมาณ') || undefined
   product.shelf_code = getFieldValue(row, 'รหัสชั้นวาง') || undefined
   product.shelf_row = getFieldValue(row, 'แถว') || undefined
+  
+  // Store category name temporarily for mapping to categoryId later
   product.category = getFieldValue(row, 'หมวดหมู่') || undefined
   product.symptom_category = getFieldValue(row, 'หมวดหมู่ยาแยกตามอาการที่รักษา') || undefined
   product.license_number = getFieldValue(row, 'ทะเบียนบัญชี') || undefined
@@ -275,14 +341,20 @@ function transformCSVRowToProduct(row: CSVRow, rowNumber: number, errors: Valida
   product.sale_note = getFieldValue(row, 'หมายเหตุการขาย') || undefined
   product.purchase_note = getFieldValue(row, 'หมายเหตุการสั่งซื้อ') || undefined
 
-  // Boolean fields
-  product.before_meal = parseBooleanField(getFieldValue(row, 'ก่อนอาหาร'))
-  product.after_meal = parseBooleanField(getFieldValue(row, 'หลังอาหาร'))
-  product.after_meal_immediate = parseBooleanField(getFieldValue(row, 'หลังอาหารทันที'))
-  product.morning = parseBooleanField(getFieldValue(row, 'เช้า'))
-  product.noon = parseBooleanField(getFieldValue(row, 'กลางวัน'))
-  product.evening = parseBooleanField(getFieldValue(row, 'เย็น'))
-  product.before_bed = parseBooleanField(getFieldValue(row, 'ก่อนนอน'))
+  // Boolean fields for meal timing
+  const beforeMeal = parseBooleanField(getFieldValue(row, 'ก่อนอาหาร'))
+  const afterMeal = parseBooleanField(getFieldValue(row, 'หลังอาหาร'))
+  const afterMealImmediate = parseBooleanField(getFieldValue(row, 'หลังอาหารทันที'))
+  
+  if (beforeMeal !== undefined) product.before_meal = beforeMeal
+  if (afterMeal !== undefined) product.after_meal = afterMeal
+  if (afterMealImmediate !== undefined) product.after_meal_immediate = afterMealImmediate
+
+  // String fields for time periods (per GraphQL schema)
+  product.morning = getFieldValue(row, 'เช้า') || undefined
+  product.noon = getFieldValue(row, 'กลางวัน') || undefined
+  product.evening = getFieldValue(row, 'เย็น') || undefined
+  product.before_bed = getFieldValue(row, 'ก่อนนอน') || undefined
 
   return product
 }

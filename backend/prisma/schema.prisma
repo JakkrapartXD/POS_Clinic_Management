@@ -43,6 +43,18 @@ model Patient {
   treatmentPlans TreatmentPlan[]
 }
 
+model Category {
+  id          String    @id @default(cuid())
+  name        String    @unique  // หมวดหมู่สินค้า
+  description String?            // คำอธิบาย
+  code        String?   @unique  // รหัสหมวดหมู่ (nullable)
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+  
+  // Relations
+  products    Product[]
+}
+
 model Product {
   id                      String          @id @default(cuid())
   product_name            String
@@ -51,7 +63,7 @@ model Product {
   short_name              String?
   status                  String?         @default("active")
   vat_percent             Float?          @default(0)
-  expiration_warning_date DateTime?
+  expiration_warning_date Int?
   sale_price              Float
   unit                    String?
   pack_size               String?
@@ -64,7 +76,8 @@ model Product {
   volume_unit             String?
   shelf_code              String?
   shelf_row               String?
-  category                String?
+  category                Category?       @relation(fields: [categoryId], references: [id])
+  categoryId              String?
   symptom_category        String?
   license_number          String?
   dosage_unit             String?
@@ -74,10 +87,10 @@ model Product {
   before_meal             Boolean?
   after_meal              Boolean?
   after_meal_immediate    Boolean?
-  morning                 Boolean?
-  noon                    Boolean?
-  evening                 Boolean?
-  before_bed              Boolean?
+  morning                 String?
+  noon                    String?
+  evening                 String?
+  before_bed              String?
   properties              String?
   usage_instruction       String?
   sale_note               String?

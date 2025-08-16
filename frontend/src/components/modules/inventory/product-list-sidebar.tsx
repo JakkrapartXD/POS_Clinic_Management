@@ -18,13 +18,15 @@ interface ProductListSidebarProps {
   onSearchChange: (value: string) => void
   selectedLetter: string
   products: Product[]
+  onProductClick?: (productId: string) => void
 }
 
 export default function ProductListSidebar({
   searchQuery,
   onSearchChange,
   selectedLetter,
-  products
+  products,
+  onProductClick
 }: ProductListSidebarProps) {
   // Group products by first letter
   const groupedProducts = useMemo(() => {
@@ -100,6 +102,7 @@ export default function ProductListSidebar({
                   <div 
                     key={product.id} 
                     className="p-3 hover:bg-gray-50 rounded-lg border border-gray-100 bg-white cursor-pointer transition-colors"
+                    onClick={() => onProductClick?.(product.id.toString())}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex-1">
