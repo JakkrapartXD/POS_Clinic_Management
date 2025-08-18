@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { apiClient } from '@/clients/api'
 import { API_CONFIG } from '@/config/api'
@@ -31,7 +31,26 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [retryCount, setRetryCount] = useState(0)
   const [validationErrors, setValidationErrors] = useState<{username?: string, password?: string}>({})
+  const [isOnline, setIsOnline] = useState(true)
   const router = useRouter()
+
+  // Handle online/offline status
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setIsOnline(navigator.onLine)
+      
+      const handleOnline = () => setIsOnline(true)
+      const handleOffline = () => setIsOnline(false)
+      
+      window.addEventListener('online', handleOnline)
+      window.addEventListener('offline', handleOffline)
+      
+      return () => {
+        window.removeEventListener('online', handleOnline)
+        window.removeEventListener('offline', handleOffline)
+      }
+    }
+  }, [])
 
   // Validate form inputs
   const validateForm = () => {
@@ -58,7 +77,7 @@ export default function LoginPage() {
     console.log('Error details:', error) // Debug logging
     
     // Network connectivity issues
-    if (!navigator.onLine) {
+    if (!isOnline) {
       return {
         type: 'NETWORK_ERROR',
         message: 'ไม่มีการเชื่อมต่ออินเทอร์เน็ต',
@@ -337,7 +356,7 @@ export default function LoginPage() {
         )}
 
         {/* Network Status Indicator */}
-        {!navigator.onLine && (
+        {!isOnline && (
           <div className="mb-4 p-3 bg-gray-100 rounded-lg flex items-center">
             <WifiOff className="h-4 w-4 text-gray-500 mr-2" />
             <span className="text-sm text-gray-700">ไม่มีการเชื่อมต่ออินเทอร์เน็ต</span>
@@ -403,14 +422,14 @@ export default function LoginPage() {
         <button
           type="submit"
           className="w-full bg-teal-500 hover:bg-teal-600 text-white py-3 rounded-xl transition-all duration-200 hover:scale-[1.02] active:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center"
-          disabled={isLoading || !navigator.onLine}
+          disabled={isLoading || !isOnline}
         >
           {isLoading ? (
             <>
               <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
               กำลังเข้าสู่ระบบ...
             </>
-          ) : !navigator.onLine ? (
+          ) : !isOnline ? (
             <>
               <WifiOff className="w-4 h-4 mr-2" />
               ไม่มีการเชื่อมต่อ

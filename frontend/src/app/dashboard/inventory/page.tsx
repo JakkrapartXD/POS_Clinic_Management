@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import AddProductForm from "@/components/forms/AddProductForm"
 import ProductListSidebar from "@/components/modules/inventory/product-list-sidebar"
@@ -12,6 +13,7 @@ import DeleteProductsView from "@/components/modules/inventory/delete-products-v
 import ProductDetailView from "@/components/modules/inventory/product-detail-view"
 import { GraphQLAPI } from "@/clients/graphql"
 import { logger } from "@/lib/logger"
+import { useAuth } from "@/components/providers/auth-provider"
 
 type AlphabetMode = 'english' | 'thai' | 'numbers'
 type ViewMode = 'list' | 'add-product' | 'product-detail' | 'import-products' | 'export-products' | 'delete-products' | 'print-barcode' | 'print-price-tag' | 'print-medicine-label' | 'product-report'
@@ -31,6 +33,8 @@ interface Product {
 }
 
 export default function InventoryPage() {
+  const router = useRouter()
+  const { handleAuthError } = useAuth()
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedLetter, setSelectedLetter] = useState<string>("")
   const [alphabetMode, setAlphabetMode] = useState<AlphabetMode>('english')
@@ -81,6 +85,19 @@ export default function InventoryPage() {
         }
       } catch (err) {
         logger.error('Failed to load products', err, 'INVENTORY')
+        
+        // Check if it's an authentication error
+        if (err instanceof Error && (
+          err.message.includes('Authentication required') ||
+          err.message.includes('Unauthorized') ||
+          err.message.includes('Not authenticated') ||
+          err.message.includes('Invalid token') ||
+          err.message.includes('Token expired')
+        )) {
+          handleAuthError(err)
+          return
+        }
+        
         setError(err instanceof Error ? err.message : 'Failed to load products')
         setProducts([]) // Fallback to empty array
       } finally {

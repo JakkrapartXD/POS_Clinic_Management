@@ -4,6 +4,8 @@ import { Inter } from "next/font/google"
 import "../../styles/globals.css"
 import Sidebar from "@/components/layout/sidebar"
 import { ThemeProvider } from "@/providers/theme-provider"
+import { AuthProvider } from "@/components/providers/auth-provider"
+import { ErrorBoundary } from "@/components/error-boundary"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -19,11 +21,15 @@ export default function DashboardLayout({
   children: React.ReactNode
 }>) {
   return (
-        <ThemeProvider attribute="class" defaultTheme="light">
+    <ThemeProvider attribute="class" defaultTheme="light">
+      <ErrorBoundary>
+        <AuthProvider>
           <div className="flex h-screen">
             <Sidebar />
             <main className="flex-1 overflow-auto bg-white">{children}</main>
           </div>
-        </ThemeProvider>
+        </AuthProvider>
+      </ErrorBoundary>
+    </ThemeProvider>
   )
 }

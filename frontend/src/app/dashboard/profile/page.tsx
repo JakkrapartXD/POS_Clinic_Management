@@ -5,9 +5,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useRouter } from "next/navigation"
 import { GraphQLAPI } from "@/clients/graphql"
 import { User } from "@/types/user"
+import { useAuth } from "@/components/providers/auth-provider"
 
 export default function ProfilePage() {
   const router = useRouter()
+  const { logout, handleAuthError } = useAuth()
   const [userData, setUserData] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -24,30 +26,32 @@ export default function ProfilePage() {
           setError('Failed to load user data')
         }
       } catch (err) {
+        console.error('Error loading user data:', err)
+        
+        // Check if it's an authentication error
+        if (err instanceof Error && (
+          err.message.includes('Authentication required') ||
+          err.message.includes('Unauthorized') ||
+          err.message.includes('Not authenticated') ||
+          err.message.includes('Invalid token') ||
+          err.message.includes('Token expired')
+        )) {
+          handleAuthError(err)
+          return
+        }
+        
         setError('Error loading user data')
-        console.error(err)
       } finally {
         setLoading(false)
       }
     }
 
     loadUserData()
-  }, [])
+  }, [handleAuthError])
 
   // ฟังก์ชันสำหรับ logout
   const handleLogout = async () => {
-    try {
-      // Call backend logout endpoint to clear HttpOnly cookies
-      await fetch('http://localhost:4000/auth/sign-out', {
-        method: 'GET',
-        credentials: 'include',
-      });
-    } catch (error) {
-      console.error('Logout error:', error);
-    } finally {
-      // Redirect to login regardless of logout success
-      router.replace("/login")
-    }
+    await logout()
   }
 
   if (loading) {

@@ -4,6 +4,7 @@ import { APP_CONSTANTS } from '@/constants';
 import { User, UserProfile, UpdateUserInput, UsersResponse, ChangePasswordResponse } from '@/types/user';
 import { logger } from '@/lib/logger';
 import { MappedProductData, ImportResult, ImportSettings } from '@/types/csv-import';
+import { handleAuthError } from '@/utils/auth';
 
 // Product interface for GraphQL operations
 interface Product {
@@ -159,11 +160,17 @@ class GraphQLClient {
   private baseURL: string;
   private endpoint: string;
   private timeout: number;
+  private authErrorHandler?: (error: any) => void;
 
   constructor() {
     this.baseURL = API_CONFIG.BASE_URL;
     this.endpoint = API_CONFIG.ENDPOINTS.GRAPHQL;
     this.timeout = API_CONFIG.TIMEOUT;
+  }
+
+  // Set authentication error handler
+  setAuthErrorHandler(handler: (error: any) => void) {
+    this.authErrorHandler = handler;
   }
 
   private async request<T>(
@@ -206,13 +213,30 @@ class GraphQLClient {
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+        const error = new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+        (error as any).status = response.status;
+        throw error;
       }
 
       const result: GraphQLResponse<T> = await response.json();
 
       if (result.errors && result.errors.length > 0) {
         logger.error('GraphQL operation returned errors', result.errors, 'GRAPHQL');
+        
+        // Check for authentication errors
+        const authError = result.errors.find(err => 
+          err.message?.includes('Authentication required') ||
+          err.message?.includes('Unauthorized') ||
+          err.message?.includes('Not authenticated') ||
+          err.message?.includes('Invalid token') ||
+          err.message?.includes('Token expired')
+        );
+        
+        if (authError && this.authErrorHandler) {
+          this.authErrorHandler(authError);
+          return {} as T; // Return empty data to prevent further processing
+        }
+        
         throw new Error(result.errors[0].message);
       }
 
@@ -223,6 +247,14 @@ class GraphQLClient {
       return result.data;
     } catch (error) {
       logger.api.error(url, error);
+      
+      // Handle authentication errors
+      if (this.authErrorHandler) {
+        handleAuthError(error, () => {
+          this.authErrorHandler?.(error);
+        });
+      }
+      
       if (error instanceof Error) {
         throw new Error(`GraphQL request failed: ${error.message}`);
       }
