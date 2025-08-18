@@ -32,7 +32,7 @@ export default function ImportProductsView({ onBack, onImport }: ImportProductsV
   const [existingProducts, setExistingProducts] = useState<any[]>([])
   const [existingCategories, setExistingCategories] = useState<any[]>([])
   const [importSettings, setImportSettings] = useState<ImportSettings>({
-    skipDuplicates: true,
+    skipDuplicates: false, // Changed to false to see all products
     updateExisting: false,
     createBackup: true
   })
@@ -128,8 +128,16 @@ export default function ImportProductsView({ onBack, onImport }: ImportProductsV
         existingProductsCount: productsToCheck.length,
         existingProductsSample: productsToCheck.slice(0, 3).map(p => ({
           id: p.id,
-          product_name: p.product_name
+          product_name: p.product_name,
+          unit: p.unit,
+          sku: p.sku
         }))
+      })
+      
+      // Log all existing products for duplicate checking
+      console.log('🔍 All existing products in database:')
+      productsToCheck.forEach((product, index) => {
+        console.log(`  ${index + 1}. ${product.product_name} (${product.unit}) - SKU: ${product.sku}`)
       })
       
       const content = await readFileAsText(file)
@@ -171,6 +179,15 @@ export default function ImportProductsView({ onBack, onImport }: ImportProductsV
   }
 
   const transformProductsForGraphQL = (products: any[]) => {
+    // Preprocess to avoid unique barcode conflicts: if multiple rows share the same barcode,
+    // keep barcode only for the base pack (pack_size === '1'), clear for others
+    const barcodeCounts = products.reduce<Record<string, number>>((acc, p) => {
+      const bc = (p.barcode || '').trim()
+      if (!bc) return acc
+      acc[bc] = (acc[bc] || 0) + 1
+      return acc
+    }, {})
+
     return products.map(product => {
       // Map category name to categoryId
       const categoryName = product.category
@@ -195,7 +212,12 @@ export default function ImportProductsView({ onBack, onImport }: ImportProductsV
       if (product.reorder_point !== undefined && !isNaN(product.reorder_point)) transformedProduct.reorder_point = product.reorder_point
       if (product.cost !== undefined && !isNaN(product.cost)) transformedProduct.cost = product.cost
       if (product.sku) transformedProduct.sku = product.sku
-      if (product.barcode) transformedProduct.barcode = product.barcode
+      // Handle duplicate barcodes: only keep barcode for base pack (pack_size === '1')
+      const hasDuplicateBarcode = !!product.barcode && barcodeCounts[(product.barcode || '').trim()] > 1
+      const isBasePack = String(product.pack_size || '1') === '1'
+      if (product.barcode && (!hasDuplicateBarcode || (hasDuplicateBarcode && isBasePack))) {
+        transformedProduct.barcode = product.barcode
+      }
       if (product.volume !== undefined && !isNaN(product.volume)) transformedProduct.volume = product.volume
       if (product.volume_unit) transformedProduct.volume_unit = product.volume_unit
       if (product.shelf_code) transformedProduct.shelf_code = product.shelf_code
@@ -239,9 +261,101 @@ export default function ImportProductsView({ onBack, onImport }: ImportProductsV
       // Transform products to match GraphQL schema
       const transformedProducts = transformProductsForGraphQL(previewResult.validRows)
       
+      // Debug: Log what we're sending to backend
+      console.log('🔍 Sending to backend:', {
+        productsCount: transformedProducts.length,
+        products: transformedProducts.map(p => ({
+          product_name: p.product_name,
+          unit: p.unit,
+          pack_size: p.pack_size,
+          sku: p.sku
+        })),
+        settings: importSettings
+      })
+      
+      // Log each product in detail
+      console.log('🔍 Products being sent:')
+      transformedProducts.forEach((product, index) => {
+        console.log(`  ${index + 1}. ${product.product_name}`)
+        console.log(`     Unit: ${product.unit}`)
+        console.log(`     Pack Size: ${product.pack_size}`)
+        console.log(`     SKU: ${product.sku}`)
+        console.log(`     Price: ${product.sale_price}`)
+        console.log('')
+      })
+      
+      // Check for potential duplicates with new products
+      console.log('🔍 Checking for potential duplicates:')
+      transformedProducts.forEach((newProduct: any) => {
+        const duplicates = existingProducts.filter(existing => 
+          existing.product_name.toLowerCase() === newProduct.product_name.toLowerCase() &&
+          existing.unit === newProduct.unit
+        )
+        if (duplicates.length > 0) {
+          console.log(`  ⚠️ Potential duplicate: ${newProduct.product_name} (${newProduct.unit})`)
+          duplicates.forEach(dup => {
+            console.log(`    - Existing: ${dup.product_name} (${dup.unit}) - SKU: ${dup.sku}`)
+          })
+        }
+      })
+      
+      console.log('🔍 Calling backend bulk import...')
       const result = await GraphQLAPI.bulkImportProducts(transformedProducts, importSettings)
+      console.log('🔍 Backend call completed')
       
       setImportResult(result.bulkImportProducts)
+      
+      // Debug: Log backend response
+      console.log('🔍 Backend response:', {
+        success: result.bulkImportProducts.success,
+        message: result.bulkImportProducts.message,
+        imported: result.bulkImportProducts.imported,
+        failed: result.bulkImportProducts.failed,
+        skipped: result.bulkImportProducts.skipped,
+        errors: result.bulkImportProducts.errors,
+        results: result.bulkImportProducts.results?.map((r: any) => ({
+          product_name: r.product_name,
+          sku: r.sku,
+          status: r.status,
+          error: r.error
+        }))
+      })
+      
+      // Log the full response for debugging
+      console.log('🔍 Full backend response:', JSON.stringify(result.bulkImportProducts, null, 2))
+      
+      // Check which products failed and why
+      if (result.bulkImportProducts.results) {
+        console.log('🔍 Detailed results:')
+        result.bulkImportProducts.results.forEach((r: any, index: number) => {
+          console.log(`  ${index + 1}. ${r.product_name} (${r.sku}) - ${r.status}${r.error ? ` - Error: ${r.error}` : ''}`)
+        })
+        
+        // Analyze results
+        const imported = result.bulkImportProducts.results.filter((r: any) => r.status === 'CREATED' || r.status === 'UPDATED')
+        const failed = result.bulkImportProducts.results.filter((r: any) => r.status === 'FAILED')
+        const skipped = result.bulkImportProducts.results.filter((r: any) => r.status === 'SKIPPED')
+        
+        console.log('🔍 Analysis:')
+        console.log(`  Imported: ${imported.length} products`)
+        console.log(`  Failed: ${failed.length} products`)
+        console.log(`  Skipped: ${skipped.length} products`)
+        
+        if (failed.length > 0) {
+          console.log('🔍 Failed products:')
+          failed.forEach((r: any) => {
+            console.log(`  - ${r.product_name} (${r.sku}): ${r.error}`)
+          })
+        }
+        
+        if (skipped.length > 0) {
+          console.log('🔍 Skipped products:')
+          skipped.forEach((r: any) => {
+            console.log(`  - ${r.product_name} (${r.sku}): ${r.error || 'No error message'}`)
+          })
+        }
+      }
+      
       logger.info('Bulk import completed', result.bulkImportProducts, 'IMPORT')
       
       // Call parent onImport with result
@@ -665,48 +779,47 @@ export default function ImportProductsView({ onBack, onImport }: ImportProductsV
             <AlertDialogHeader>
               <AlertDialogTitle>ยืนยันการนำเข้าข้อมูล</AlertDialogTitle>
               <AlertDialogDescription>
-                <div className="space-y-3">
-                  <p>คุณต้องการนำเข้าสินค้าตามรายละเอียดต่อไปนี้หรือไม่?</p>
-                  
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <div className="grid grid-cols-2 gap-3 text-sm">
-                      <div>
-                        <span className="font-medium">จำนวนสินค้าที่จะนำเข้า:</span>
-                        <span className="ml-2 text-blue-600 font-bold">{previewResult?.summary?.uniqueProducts || 0} ชนิด</span>
-                      </div>
-                      <div>
-                        <span className="font-medium">จำนวนรายการทั้งหมด:</span>
-                        <span className="ml-2 text-green-600 font-bold">{previewResult?.validRows.length || 0} รายการ</span>
-                      </div>
-                      {previewResult?.summary?.invalidRows && previewResult.summary.invalidRows > 0 && (
-                        <div>
-                          <span className="font-medium">รายการที่มีข้อผิดพลาด:</span>
-                          <span className="ml-2 text-red-600 font-bold">{previewResult.summary.invalidRows} รายการ</span>
-                        </div>
-                      )}
-                      {previewResult?.summary?.warnings && previewResult.summary.warnings.length > 0 && (
-                        <div className="col-span-2">
-                          <span className="font-medium">คำเตือน:</span>
-                          <span className="ml-2 text-yellow-600 font-bold">{previewResult.summary.warnings.length} ข้อ</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="text-sm text-gray-600">
-                    <p><strong>การตั้งค่า:</strong></p>
-                    <ul className="list-disc list-inside ml-2 space-y-1">
-                      <li>{importSettings.skipDuplicates ? '✓' : '✗'} ข้ามสินค้าที่ซ้ำกัน</li>
-                      <li>{importSettings.updateExisting ? '✓' : '✗'} อัปเดตสินค้าที่มีอยู่แล้ว</li>
-                      <li>{importSettings.createBackup ? '✓' : '✗'} สร้างข้อมูลสำรองก่อนนำเข้า</li>
-                    </ul>
-                  </div>
-                  
-                  <p className="text-sm text-gray-500">
-                    การดำเนินการนี้ไม่สามารถยกเลิกได้ กรุณาตรวจสอบข้อมูลให้ถูกต้องก่อนดำเนินการ
-                  </p>
-                </div>
+                คุณต้องการนำเข้าสินค้าตามรายละเอียดต่อไปนี้หรือไม่?
               </AlertDialogDescription>
+              <div className="space-y-3 mt-3">
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <span className="font-medium">จำนวนสินค้าที่จะนำเข้า:</span>
+                      <span className="ml-2 text-blue-600 font-bold">{previewResult?.summary?.uniqueProducts || 0} ชนิด</span>
+                    </div>
+                    <div>
+                      <span className="font-medium">จำนวนรายการทั้งหมด:</span>
+                      <span className="ml-2 text-green-600 font-bold">{previewResult?.validRows.length || 0} รายการ</span>
+                    </div>
+                    {previewResult?.summary?.invalidRows && previewResult.summary.invalidRows > 0 && (
+                      <div>
+                        <span className="font-medium">รายการที่มีข้อผิดพลาด:</span>
+                        <span className="ml-2 text-red-600 font-bold">{previewResult.summary.invalidRows} รายการ</span>
+                      </div>
+                    )}
+                    {previewResult?.summary?.warnings && previewResult.summary.warnings.length > 0 && (
+                      <div className="col-span-2">
+                        <span className="font-medium">คำเตือน:</span>
+                        <span className="ml-2 text-yellow-600 font-bold">{previewResult.summary.warnings.length} ข้อ</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="text-sm text-gray-600">
+                  <div className="font-semibold">การตั้งค่า:</div>
+                  <ul className="list-disc list-inside ml-2 space-y-1">
+                    <li>{importSettings.skipDuplicates ? '✓' : '✗'} ข้ามสินค้าที่ซ้ำกัน</li>
+                    <li>{importSettings.updateExisting ? '✓' : '✗'} อัปเดตสินค้าที่มีอยู่แล้ว</li>
+                    <li>{importSettings.createBackup ? '✓' : '✗'} สร้างข้อมูลสำรองก่อนนำเข้า</li>
+                  </ul>
+                </div>
+                
+                <div className="text-sm text-gray-500">
+                  การดำเนินการนี้ไม่สามารถยกเลิกได้ กรุณาตรวจสอบข้อมูลให้ถูกต้องก่อนดำเนินการ
+                </div>
+              </div>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>ยกเลิก</AlertDialogCancel>

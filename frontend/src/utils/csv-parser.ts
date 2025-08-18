@@ -163,7 +163,6 @@ export function createImportPreview(csvData: CSVRow[], existingProducts: any[] =
   const validRows: ProductImportData[] = []
   const invalidRows: { row: number; data: CSVRow; errors: ValidationError[] }[] = []
   const warnings: string[] = []
-  const duplicates: { row: number; data: CSVRow; errors: ValidationError[] }[] = []
 
   // Debug: Log existing products count
   console.log('createImportPreview called with:', {
@@ -171,9 +170,9 @@ export function createImportPreview(csvData: CSVRow[], existingProducts: any[] =
     existingProductsLength: existingProducts.length
   })
 
-  // Track products within CSV file for internal duplicate checking
-  const csvProductMap = new Map<string, { product: ProductImportData, row: number }>()
-
+  // Transform all CSV rows to product data first
+  const transformedProducts: { product: ProductImportData, row: number, originalRow: CSVRow }[] = []
+  
   csvData.forEach((row, index) => {
     const rowNumber = index + 2 // +2 because index starts at 0 and we skip header
     const errors: ValidationError[] = []
@@ -182,53 +181,7 @@ export function createImportPreview(csvData: CSVRow[], existingProducts: any[] =
     const productData = transformCSVRowToProduct(row, rowNumber, errors)
     
     if (errors.length === 0) {
-      // Check for duplicates with existing database products
-      const duplicateInDb = existingProducts.find(existing => 
-        existing.product_name.toLowerCase() === productData.product_name.toLowerCase()
-      )
-      
-      // Debug: Log duplicate check for first product only
-      if (rowNumber === 2) {
-        console.log(`Sample duplicate check for "${productData.product_name}":`, {
-          existingProductsCount: existingProducts.length,
-          duplicateFound: !!duplicateInDb,
-          duplicateProduct: duplicateInDb ? { 
-            id: duplicateInDb.id, 
-            name: duplicateInDb.product_name 
-          } : null
-        })
-      }
-      
-      if (duplicateInDb) {
-        errors.push({
-          row: rowNumber,
-          field: 'product_name',
-          value: productData.product_name,
-          message: `สินค้าซ้ำกับที่มีอยู่แล้วในฐานข้อมูล: "${duplicateInDb.product_name}"`
-        })
-        warnings.push(`แถวที่ ${rowNumber}: สินค้า "${productData.product_name}" ซ้ำกับข้อมูลที่มีอยู่แล้ว`)
-      }
-
-      // Check for internal duplicates within CSV
-      const productKey = `${productData.product_name.toLowerCase()}_${(productData.unit || '').toLowerCase()}`
-      const existingInCsv = csvProductMap.get(productKey)
-      
-      if (existingInCsv) {
-        errors.push({
-          row: rowNumber,
-          field: 'product_name',
-          value: productData.product_name,
-          message: `สินค้าซ้ำกับแถวที่ ${existingInCsv.row}: ชื่อ "${productData.product_name}" หน่วยนับ "${productData.unit || 'ไม่ระบุ'}"`
-        })
-        warnings.push(`แถวที่ ${rowNumber}: สินค้า "${productData.product_name}" (หน่วย: ${productData.unit || 'ไม่ระบุ'}) ซ้ำกับแถวที่ ${existingInCsv.row}`)
-      } else {
-        // Same product name but different unit is allowed (no warning needed)
-        csvProductMap.set(productKey, { product: productData, row: rowNumber })
-      }
-    }
-    
-    if (errors.length === 0) {
-      validRows.push(productData)
+      transformedProducts.push({ product: productData, row: rowNumber, originalRow: row })
     } else {
       invalidRows.push({
         row: rowNumber,
@@ -238,9 +191,155 @@ export function createImportPreview(csvData: CSVRow[], existingProducts: any[] =
     }
   })
 
+  // Group products by name for duplicate checking
+  const productGroups = new Map<string, { product: ProductImportData, row: number, originalRow: CSVRow }[]>()
+  
+  transformedProducts.forEach(({ product, row, originalRow }) => {
+    const productName = product.product_name.toLowerCase()
+    if (!productGroups.has(productName)) {
+      productGroups.set(productName, [])
+    }
+    productGroups.get(productName)!.push({ product, row, originalRow })
+  })
+
+  // Process each product group according to the new logic
+  productGroups.forEach((products, productName) => {
+    const errors: ValidationError[] = []
+    
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`🔍 Processing product group: "${productName}" with ${products.length} variants`)
+    }
+    
+    // Flow 1: Check if product name exists in database
+    const existingProduct = existingProducts.find(existing => 
+      existing.product_name.toLowerCase() === productName
+    )
+
+    if (process.env.NODE_ENV === 'development') {
+      if (existingProduct) {
+        console.log(`⚠️ Product "${productName}" exists in database`)
+      } else {
+        console.log(`✅ Product "${productName}" is new`)
+      }
+    }
+
+    // Group products by unit for all cases
+    const unitGroups = new Map<string, { product: ProductImportData, row: number, originalRow: CSVRow }[]>()
+    
+    products.forEach(({ product, row, originalRow }) => {
+      const unit = (product.unit || '').toLowerCase()
+      if (!unitGroups.has(unit)) {
+        unitGroups.set(unit, [])
+      }
+      unitGroups.get(unit)!.push({ product, row, originalRow })
+    })
+
+    if (existingProduct) {
+      // Product exists in database - check unit duplicates with existing database
+      unitGroups.forEach((unitProducts, unit) => {
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`  📦 Unit "${unit}": ${unitProducts.length} products`)
+        }
+        const existingWithSameUnit = existingProduct.unit?.toLowerCase() === unit
+        if (existingWithSameUnit) {
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`    ❌ Unit "${unit}" conflicts with existing database product`)
+          }
+          unitProducts.forEach(({ product, row, originalRow }) => {
+            errors.push({
+              row: row,
+              field: 'unit',
+              value: product.unit,
+              message: `สินค้า "${product.product_name}" หน่วย "${unit}" ซ้ำกับที่มีอยู่แล้วในฐานข้อมูล`
+            })
+          })
+        } else {
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`    ✅ Unit "${unit}" is allowed`)
+          }
+        }
+      })
+    }
+
+    // Check pack_size requirements for the entire product group (across all units)
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`  📦 Checking pack_size requirements for all units of "${productName}"`)
+    }
+    
+    // Collect all pack sizes from all units
+    const allPackSizes = new Map<string, { product: ProductImportData, row: number, originalRow: CSVRow }[]>()
+    
+    products.forEach(({ product, row, originalRow }) => {
+      const packSize = product.pack_size || "1"
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`    Row ${row}: unit="${product.unit}", pack_size="${packSize}" (original: "${originalRow['ขนาดบรรจุ']}")`)
+      }
+      if (!allPackSizes.has(packSize)) {
+        allPackSizes.set(packSize, [])
+      }
+      allPackSizes.get(packSize)!.push({ product, row, originalRow })
+    })
+
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`    📏 All pack sizes: ${Array.from(allPackSizes.keys()).join(', ')}`)
+    }
+    
+    // Check if at least one has pack_size = 1 across all units
+    const hasPackSizeOne = allPackSizes.has("1")
+    
+    if (!hasPackSizeOne) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`    ❌ No pack_size = 1 found for any unit of "${productName}"`)
+      }
+      products.forEach(({ product, row, originalRow }) => {
+        errors.push({
+          row: row,
+          field: 'pack_size',
+          value: product.pack_size,
+          message: `สินค้า "${product.product_name}" ต้องมีขนาดบรรจุ 1 อย่างน้อย 1 รายการเป็นค่าเริ่มต้น (รวมทุกหน่วยนับ)`
+        })
+      })
+    } else {
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`    ✅ Pack_size = 1 found for "${productName}"`)
+      }
+    }
+
+    // Add products to valid or invalid rows based on errors
+    products.forEach(({ product, row, originalRow }) => {
+      const productErrors = errors.filter(error => error.row === row)
+      
+      if (productErrors.length === 0) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`    ✅ Row ${row}: "${product.product_name}" (${product.unit}) - VALID`)
+        }
+        validRows.push(product)
+      } else {
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`    ❌ Row ${row}: "${product.product_name}" (${product.unit}) - INVALID`)
+          console.log(`       Errors:`, productErrors.map(e => e.message))
+        }
+        invalidRows.push({
+          row: row,
+          data: originalRow,
+          errors: productErrors
+        })
+      }
+    })
+  })
+
   // Count unique products by name (regardless of unit)
   const uniqueProductNames = new Set(validRows.map(product => product.product_name.toLowerCase()))
   const uniqueProductCount = uniqueProductNames.size
+
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`📊 Import Summary:`)
+    console.log(`  Total rows: ${csvData.length}`)
+    console.log(`  Valid rows: ${validRows.length}`)
+    console.log(`  Invalid rows: ${invalidRows.length}`)
+    console.log(`  Unique products: ${uniqueProductCount}`)
+    console.log(`  Warnings: ${warnings.length}`)
+  }
 
   return {
     totalRows: csvData.length,
@@ -317,7 +416,8 @@ function transformCSVRowToProduct(row: CSVRow, rowNumber: number, errors: Valida
 
   // String fields
   product.unit = getFieldValue(row, 'หน่วยนับ') || undefined
-  product.pack_size = getFieldValue(row, 'ขนาดบรรจุ') || "1" // Default pack size is 1
+  const packSizeValue = getFieldValue(row, 'ขนาดบรรจุ')
+  product.pack_size = packSizeValue || "1" // Default pack size is 1
   product.sku = getFieldValue(row, 'SKU') || undefined
   
   // Clean barcode (remove quotes and equals sign)
