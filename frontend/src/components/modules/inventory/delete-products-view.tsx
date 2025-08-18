@@ -1,13 +1,15 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Trash2, Search, AlertTriangle, Package } from "lucide-react"
+import { Trash2, Search, AlertTriangle, Package, Loader2 } from "lucide-react"
+import { GraphQLAPI } from "@/clients/graphql"
+import { logger } from "@/lib/logger"
 
 interface DeleteProductsViewProps {
   onBack: () => void
@@ -16,23 +18,18 @@ interface DeleteProductsViewProps {
 
 export default function DeleteProductsView({ onBack, onDelete }: DeleteProductsViewProps) {
   const [searchQuery, setSearchQuery] = useState("")
-  const [selectedProducts, setSelectedProducts] = useState<number[]>([])
+  const [selectedProducts, setSelectedProducts] = useState<string[]>([])
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleteReason, setDeleteReason] = useState("")
-
-  // Mock products data
-  const products = [
-    { id: 1, name: "3M Futuro Ankle Size M", variant: "BX", stock: 4, price: 290 },
-    { id: 2, name: "Gaviscon Suspension รสเปปเปอร์มินต์", variant: "ซอง", stock: 8, price: 29 },
-    { id: 3, name: "ชาร่า ยาเม็ดบรรเทาปวด ลดไข้", variant: "แผง", stock: 10, price: 9 },
-    { id: 4, name: "ยาแก้อักเสบ อีตัว XXXX", variant: "แผง", stock: 0, price: 18 },
-  ]
+  const [products, setProducts] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [deleting, setDeleting] = useState(false)
 
   const filteredProducts = products.filter(product => 
-    product.name.toLowerCase().includes(searchQuery.toLowerCase())
+    product.product_name.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
-  const handleProductSelect = (productId: number) => {
+  const handleProductSelect = (productId: string) => {
     setSelectedProducts(prev => 
       prev.includes(productId) 
         ? prev.filter(id => id !== productId)
@@ -48,16 +45,68 @@ export default function DeleteProductsView({ onBack, onDelete }: DeleteProductsV
     }
   }
 
-  const handleDelete = () => {
+  // Load products from backend
+  useEffect(() => {
+    const loadProducts = async () => {
+      try {
+        setLoading(true)
+        const response = await GraphQLAPI.getAllProducts()
+        setProducts(response.products.products || [])
+        if (process.env.NODE_ENV === 'development') {
+          logger.info('Products loaded successfully', { count: response.products.products?.length }, 'INVENTORY')
+        }
+      } catch (error) {
+        if (process.env.NODE_ENV === 'development') {
+          logger.error('Failed to load products', error, 'INVENTORY')
+        }
+        setProducts([])
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadProducts()
+  }, [])
+
+  const handleDelete = async () => {
     if (selectedProducts.length > 0 && confirmDelete) {
-      onDelete({
-        productIds: selectedProducts,
-        reason: deleteReason
-      })
+      try {
+        setDeleting(true)
+        
+        // Delete products one by one
+        const deletePromises = selectedProducts.map(productId => 
+          GraphQLAPI.deleteProduct(productId)
+        )
+        
+        await Promise.all(deletePromises)
+        
+        if (process.env.NODE_ENV === 'development') {
+          logger.info('Products deleted successfully', { count: selectedProducts.length }, 'INVENTORY')
+        }
+        
+        // Call parent callback
+        onDelete({
+          productIds: selectedProducts,
+          reason: deleteReason
+        })
+        
+        // Clear selection
+        setSelectedProducts([])
+        setConfirmDelete(false)
+        setDeleteReason("")
+        
+      } catch (error) {
+        if (process.env.NODE_ENV === 'development') {
+          logger.error('Failed to delete products', error, 'INVENTORY')
+        }
+        // You might want to show an error message to the user here
+      } finally {
+        setDeleting(false)
+      }
     }
   }
 
-  const canDelete = selectedProducts.length > 0 && confirmDelete && deleteReason.trim()
+  const canDelete = selectedProducts.length > 0 && confirmDelete && deleteReason.trim() && !deleting
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
@@ -105,40 +154,49 @@ export default function DeleteProductsView({ onBack, onDelete }: DeleteProductsV
 
               {/* Product List */}
               <div className="space-y-2 max-h-96 overflow-y-auto">
-                {filteredProducts.map((product) => (
-                  <div
-                    key={product.id}
-                    className={`p-3 border rounded-lg transition-colors ${
-                      selectedProducts.includes(product.id)
-                        ? 'border-red-200 bg-red-50'
-                        : 'border-gray-200 hover:border-gray-300'
-                    }`}
-                  >
-                    <div className="flex items-center space-x-3">
-                      <Checkbox
-                        id={`product-${product.id}`}
-                        checked={selectedProducts.includes(product.id)}
-                        onCheckedChange={() => handleProductSelect(product.id)}
-                      />
-                      <div className="flex-1">
-                        <div className="font-medium text-gray-900">{product.name}</div>
-                        <div className="text-sm text-gray-500">
-                          {product.variant} • สต็อก: {product.stock} • ฿{product.price}
+                {loading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+                    <span className="ml-2 text-gray-500">กำลังโหลดสินค้า...</span>
+                  </div>
+                ) : (
+                  <>
+                    {filteredProducts.map((product) => (
+                      <div
+                        key={product.id}
+                        className={`p-3 border rounded-lg transition-colors ${
+                          selectedProducts.includes(product.id)
+                            ? 'border-red-200 bg-red-50'
+                            : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                      >
+                        <div className="flex items-center space-x-3">
+                          <Checkbox
+                            id={`product-${product.id}`}
+                            checked={selectedProducts.includes(product.id)}
+                            onCheckedChange={() => handleProductSelect(product.id)}
+                          />
+                          <div className="flex-1">
+                            <div className="font-medium text-gray-900">{product.product_name}</div>
+                            <div className="text-sm text-gray-500">
+                              {product.pack_size || product.unit} • สต็อก: {product.stock_quantity} • ฿{product.sale_price}
+                            </div>
+                          </div>
+                          {product.stock_quantity > 0 && (
+                            <div className="text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded">
+                              มีสต็อก
+                            </div>
+                          )}
                         </div>
                       </div>
-                      {product.stock > 0 && (
-                        <div className="text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded">
-                          มีสต็อก
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                    ))}
 
-                {filteredProducts.length === 0 && (
-                  <div className="text-center py-8 text-gray-500">
-                    ไม่พบสินค้าที่ตรงกับการค้นหา
-                  </div>
+                    {filteredProducts.length === 0 && (
+                      <div className="text-center py-8 text-gray-500">
+                        {searchQuery ? 'ไม่พบสินค้าที่ตรงกับการค้นหา' : 'ไม่มีสินค้าในระบบ'}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </CardContent>
@@ -214,15 +272,15 @@ export default function DeleteProductsView({ onBack, onDelete }: DeleteProductsV
                   การดำเนินการนี้จะลบสินค้าออกจากระบบอย่างถาวร
                 </div>
               </div>
-              <div className="text-right">
-                <div className="text-sm text-gray-500">รวมสต็อกที่จะลบ</div>
-                <div className="font-bold text-red-600">
-                  {selectedProducts.reduce((sum, id) => {
-                    const product = products.find(p => p.id === id)
-                    return sum + (product?.stock || 0)
-                  }, 0)} หน่วย
+                              <div className="text-right">
+                  <div className="text-sm text-gray-500">รวมสต็อกที่จะลบ</div>
+                  <div className="font-bold text-red-600">
+                    {selectedProducts.reduce((sum, id) => {
+                      const product = products.find(p => p.id === id)
+                      return sum + (product?.stock_quantity || 0)
+                    }, 0)} หน่วย
+                  </div>
                 </div>
-              </div>
             </div>
           </CardContent>
         </Card>
@@ -238,8 +296,12 @@ export default function DeleteProductsView({ onBack, onDelete }: DeleteProductsV
           disabled={!canDelete}
           variant="destructive"
         >
-          <Trash2 className="h-4 w-4 mr-2" />
-          ลบสินค้า ({selectedProducts.length})
+          {deleting ? (
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+          ) : (
+            <Trash2 className="h-4 w-4 mr-2" />
+          )}
+          {deleting ? 'กำลังลบ...' : `ลบสินค้า (${selectedProducts.length})`}
         </Button>
       </div>
     </div>

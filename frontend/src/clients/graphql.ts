@@ -357,7 +357,7 @@ export const GraphQLQueries = {
     }
   `,
 
-  // Product queries
+  // Product queries - minimal data for listing
   ALL_PRODUCTS: `
     query Products($filter: ProductFilterInput, $pagination: PaginationInput) {
       products(filter: $filter, pagination: $pagination) {
@@ -366,47 +366,15 @@ export const GraphQLQueries = {
           id
           product_name
           product_type
-          generic_name
           short_name
           status
-          vat_percent
-          expiration_warning_date
           sale_price
           unit
           pack_size
-          reorder_point
-          cost
+          stock_quantity
           sku
           barcode
-          stock_quantity
-          volume
-          volume_unit
-          shelf_code
-          shelf_row
-          category {
-            id
-            name
-            description
-            code
-          }
           categoryId
-          symptom_category
-          license_number
-          dosage_unit
-          dosage
-          times_per_day
-          interval_hours
-          before_meal
-          after_meal
-          after_meal_immediate
-          morning
-          noon
-          evening
-          before_bed
-          properties
-          usage_instruction
-          sale_note
-          purchase_note
           created_at
           updated_at
         }
@@ -704,6 +672,12 @@ export const GraphQLMutations = {
     }
   `,
 
+  DELETE_PRODUCT: `
+    mutation DeleteProduct($id: String!) {
+      deleteProduct(id: $id)
+    }
+  `,
+
   // Category mutations
   CREATE_CATEGORY: `
     mutation CreateCategory($input: CreateCategoryInput!) {
@@ -818,6 +792,12 @@ export const GraphQLAPI = {
   updateProduct: (id: string, input: any): Promise<{ updateProduct: any }> =>
     graphqlClient.mutation(GraphQLMutations.UPDATE_PRODUCT, {
       variables: { id, input }
+    }),
+
+  // Delete product
+  deleteProduct: (id: string): Promise<{ deleteProduct: boolean }> =>
+    graphqlClient.mutation(GraphQLMutations.DELETE_PRODUCT, {
+      variables: { id }
     }),
 
   // Category operations
