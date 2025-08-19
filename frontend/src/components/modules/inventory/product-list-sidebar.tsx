@@ -11,6 +11,7 @@ interface Product {
   stock: number
   status: string
   price: number
+  allProducts?: any[] // Add this for grouped products
 }
 
 interface ProductListSidebarProps {
@@ -106,8 +107,14 @@ export default function ProductListSidebar({
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex-1">
-                        <div className="font-medium text-gray-900 text-sm">{product.name}</div>
-                        <div className="text-xs text-gray-500 mt-1">{product.variant}</div>
+                        <div className="font-medium text-gray-900 text-sm">
+                          {product.name}
+                          {product.variant && product.variant !== 'หน่วย' && (
+                            <span className="text-gray-500 font-normal ml-1">
+                              {product.variant}
+                            </span>
+                          )}
+                        </div>
                         <div className="text-xs text-gray-400 mt-1">{product.status}</div>
                       </div>
                       <div className="text-right">

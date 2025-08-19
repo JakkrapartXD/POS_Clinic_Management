@@ -18,6 +18,7 @@ interface ProductDetailViewProps {
   productId: string
   onBack: () => void
   onEditingChange?: (isEditing: boolean) => void
+  productVariants?: any[] // Add this for grouped products
 }
 
 interface ProductData {
@@ -63,13 +64,14 @@ interface ProductData {
   updated_at: string
 }
 
-export default function ProductDetailView({ productId, onBack, onEditingChange }: ProductDetailViewProps) {
+export default function ProductDetailView({ productId, onBack, onEditingChange, productVariants }: ProductDetailViewProps) {
   const [product, setProduct] = useState<ProductData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [activeTab, setActiveTab] = useState("general")
   const [showUnitEditDialog, setShowUnitEditDialog] = useState(false)
+  const [hasMultipleVariants, setHasMultipleVariants] = useState(false)
   const [unitFormData, setUnitFormData] = useState({
     unit_name: '',
     pack_size: '',
@@ -454,6 +456,47 @@ export default function ProductDetailView({ productId, onBack, onEditingChange }
                 </div>
               </CardContent>
             </Card>
+
+            {/* Show all product variants if available */}
+            {productVariants && productVariants.length > 1 && (
+              <Card>
+                <CardContent className="p-6">
+                  <h3 className="text-lg font-semibold mb-4">หน่วยนับทั้งหมด</h3>
+                  <div className="space-y-3">
+                    {productVariants.map((variant, index) => (
+                      <div key={variant.id} className="border border-gray-200 rounded-lg p-4">
+                        <div className="grid grid-cols-3 gap-4 text-sm">
+                          <div>
+                            <label className="text-xs font-medium text-gray-600">หน่วยนับ</label>
+                            <div className="mt-1 text-gray-900">{variant.unit || 'หน่วย'}</div>
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-gray-600">ขนาดบรรจุ</label>
+                            <div className="mt-1 text-gray-900">{variant.pack_size || '1'}</div>
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-gray-600">ราคาขาย</label>
+                            <div className="mt-1 text-gray-900">฿{variant.sale_price || 0}</div>
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-gray-600">จำนวนในสต๊อก</label>
+                            <div className="mt-1 text-gray-900">{variant.stock_quantity || 0}</div>
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-gray-600">SKU</label>
+                            <div className="mt-1 text-gray-900">{variant.sku || '-'}</div>
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-gray-600">บาร์โค้ด</label>
+                            <div className="mt-1 text-gray-900">{variant.barcode || '-'}</div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             <Card>
               <CardContent className="p-6">

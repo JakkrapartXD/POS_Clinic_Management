@@ -18,6 +18,17 @@ import { useAuth } from "@/components/providers/auth-provider"
 type AlphabetMode = 'english' | 'thai' | 'numbers'
 type ViewMode = 'list' | 'add-product' | 'product-detail' | 'import-products' | 'export-products' | 'delete-products' | 'print-barcode' | 'print-price-tag' | 'print-medicine-label' | 'product-report'
 
+interface TransformedProduct {
+  id: string
+  letter: string
+  name: string
+  variant: string
+  stock: number
+  status: string
+  price: number
+  allProducts?: Product[]
+}
+
 interface Product {
   id: string
   product_name: string
@@ -30,6 +41,7 @@ interface Product {
   barcode?: string
   category?: string
   status?: string
+  pack_size?: string
 }
 
 export default function InventoryPage() {
@@ -41,6 +53,7 @@ export default function InventoryPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('list')
   const [submitTrigger, setSubmitTrigger] = useState(0)
   const [products, setProducts] = useState<Product[]>([])
+  const [transformedProducts, setTransformedProducts] = useState<TransformedProduct[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null)
@@ -108,11 +121,22 @@ export default function InventoryPage() {
     loadProducts()
   }, [])
 
-  // Transform products for display - extract first letter for grouping
-  const transformedProducts = useMemo(() => {
-    return products.map(product => {
+  // Transform products for display - group by product name and combine units
+  useEffect(() => {
+    // Group products by name first
+    const productGroups = products.reduce((acc, product) => {
+      const name = product.product_name
+      if (!acc[name]) {
+        acc[name] = []
+      }
+      acc[name].push(product)
+      return acc
+    }, {} as Record<string, typeof products>)
+
+    // Transform grouped products
+    const transformed = Object.entries(productGroups).map(([productName, productList]) => {
       // Get first letter/character for grouping
-      const firstChar = product.product_name.charAt(0).toUpperCase()
+      const firstChar = productName.charAt(0).toUpperCase()
       
       // Determine if it's Thai, English, or Number
       let letter = firstChar
@@ -125,17 +149,30 @@ export default function InventoryPage() {
       } else {
         letter = '#' // Special characters
       }
+
+      // Get unique units for this product
+      const uniqueUnits = [...new Set(productList.map(p => p.unit || 'หน่วย'))]
+      const unitsDisplay = uniqueUnits.join(', ')
+      
+      // Calculate total stock across all variants
+      const totalStock = productList.reduce((sum, p) => sum + (p.stock_quantity || 0), 0)
+      
+      // Use the first product's ID as representative ID
+      const representativeId = productList[0].id
       
       return {
-        id: product.id,
+        id: representativeId,
         letter,
-        name: product.product_name,
-        variant: product.unit || 'หน่วย',
-        stock: product.stock_quantity,
-        status: `${product.stock_quantity} ${product.unit || 'หน่วย'}`,
-        price: product.sale_price
+        name: productName,
+        variant: unitsDisplay,
+        stock: totalStock,
+        status: `${totalStock} ${uniqueUnits.length > 1 ? 'หน่วย' : uniqueUnits[0] || 'หน่วย'}`,
+        price: productList[0].sale_price, // Use first product's price as representative
+        allProducts: productList // Keep all products for detail view
       }
     })
+    
+    setTransformedProducts(transformed)
   }, [products])
 
   // Group products by first letter
@@ -152,7 +189,7 @@ export default function InventoryPage() {
       }
       acc[letter].push(product)
       return acc
-    }, {} as Record<string, typeof transformedProducts>)
+    }, {} as Record<string, TransformedProduct[]>)
     
     return grouped
   }, [transformedProducts, searchQuery, selectedLetter])
@@ -199,8 +236,17 @@ export default function InventoryPage() {
 
   // Product detail handler
   const handleProductClick = (productId: string) => {
-    setSelectedProductId(productId)
-    setViewMode('product-detail')
+    // Find the product with all its variants
+    const product = transformedProducts.find(p => p.id === productId)
+    if (product && product.allProducts) {
+      // Store all product variants for detail view
+      setSelectedProductId(productId)
+      setViewMode('product-detail')
+    } else {
+      // Fallback to single product
+      setSelectedProductId(productId)
+      setViewMode('product-detail')
+    }
   }
 
   // Submit handlers
@@ -380,6 +426,10 @@ export default function InventoryPage() {
               productId={selectedProductId}
               onBack={handleBackToList}
               onEditingChange={setIsProductEditing}
+              productVariants={(() => {
+                const product = transformedProducts.find(p => p.id === selectedProductId)
+                return product?.allProducts || undefined
+              })()}
             />
           )}
 
