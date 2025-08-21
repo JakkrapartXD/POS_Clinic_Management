@@ -714,6 +714,10 @@ export const GraphQLMutations = {
 
 // Typed GraphQL API functions
 export const GraphQLAPI = {
+  // Authentication error handler
+  setAuthErrorHandler: (handler: (error: any) => void) => 
+    graphqlClient.setAuthErrorHandler(handler),
+
   // User operations
   getCurrentUser: (): Promise<{ me: User }> => 
     graphqlClient.query(GraphQLQueries.ME),

@@ -28,7 +28,12 @@ interface ProductData {
   generic_name: string
   short_name: string
   status: string
-  category: string
+  category: {
+    id: string
+    name: string
+    description?: string
+    code?: string
+  } | null
   vat_percent: number
   expiration_warning_date: number
   sale_price: number
@@ -181,7 +186,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
         stock_quantity: parseInt(productData.stock_quantity) || 0,
         shelf_code: productData.shelf_code || '',
         shelf_row: productData.shelf_row || '',
-        category: productData.category || '',
+        categoryId: productData.categoryId || (typeof productData.category === 'object' && productData.category?.id) || '',
         // symptom_category should be JSON string if array is not empty, null if empty
         symptom_category: Array.isArray(productData.symptom_category) && productData.symptom_category.length > 0 
           ? JSON.stringify(productData.symptom_category) 
@@ -246,14 +251,24 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
     return types[type] || type
   }
 
-  const getCategoryLabel = (category: string) => {
-    const categories: Record<string, string> = {
-      'medicine': 'ยา',
-      'supplement': 'อาหารเสริม',
-      'cosmetics': 'เครื่องสำอาง',
-      'medical-device': 'อุปกรณ์การแพทย์'
+  const getCategoryLabel = (category: { id: string; name: string; description?: string; code?: string } | string | null) => {
+    // If category is an object, return its name
+    if (category && typeof category === 'object' && 'name' in category) {
+      return category.name || 'ไม่ระบุ'
     }
-    return categories[category] || category || 'ไม่ระบุ'
+    
+    // If category is a string, use the mapping
+    if (typeof category === 'string') {
+      const categories: Record<string, string> = {
+        'medicine': 'ยา',
+        'supplement': 'อาหารเสริม',
+        'cosmetics': 'เครื่องสำอาง',
+        'medical-device': 'อุปกรณ์การแพทย์'
+      }
+      return categories[category] || category
+    }
+    
+    return 'ไม่ระบุ'
   }
 
   const getSymptomCategoryLabels = (categories: string[] | string | null | undefined) => {
