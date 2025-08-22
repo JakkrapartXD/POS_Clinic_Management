@@ -81,6 +81,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
     unit_name: '',
     pack_size: '',
     cost: '',
+    sale_price: '',
     reorder_point: '',
     volume: '',
     volume_unit: '',
@@ -136,30 +137,86 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
   }
 
   // Unit edit dialog handlers
-  const openUnitEditDialog = () => {
-    if (product) {
+  const openUnitEditDialog = (unitData?: any) => {
+    // If no unitData provided, it's for adding a new unit
+    if (!unitData) {
       setUnitFormData({
-        unit_name: product.unit || '',
-        pack_size: product.pack_size || '',
-        cost: product.cost?.toString() || '',
-        reorder_point: product.reorder_point?.toString() || '',
-        volume: product.volume?.toString() || '',
-        volume_unit: product.volume_unit || 'mg',
-        shelf_code: product.shelf_code || '',
-        shelf_row: product.shelf_row || '',
-        sku: product.sku || '',
-        barcode: product.barcode || '',
-        display_pos: product.status === 'active'
+        unit_name: '',
+        pack_size: '',
+        cost: '',
+        sale_price: '',
+        reorder_point: '',
+        volume: '',
+        volume_unit: 'mg',
+        shelf_code: '',
+        shelf_row: '',
+        sku: '',
+        barcode: '',
+        display_pos: true
       })
-      setShowUnitEditDialog(true)
+    } else {
+      // Editing existing unit
+      setUnitFormData({
+        unit_name: unitData.unit || '',
+        pack_size: unitData.pack_size || '',
+        cost: unitData.cost?.toString() || '',
+        sale_price: unitData.sale_price?.toString() || '',
+        reorder_point: unitData.reorder_point?.toString() || '',
+        volume: unitData.volume?.toString() || '',
+        volume_unit: unitData.volume_unit || 'mg',
+        shelf_code: unitData.shelf_code || '',
+        shelf_row: unitData.shelf_row || '',
+        sku: unitData.sku || '',
+        barcode: unitData.barcode || '',
+        display_pos: unitData.status === 'active'
+      })
+    }
+    setShowUnitEditDialog(true)
+  }
+
+  // Handle delete unit
+  const handleDeleteUnit = async (unitId: string) => {
+    if (confirm('คุณต้องการลบหน่วยนับนี้หรือไม่?')) {
+      try {
+        // TODO: เรียก API ลบหน่วยนับ
+        console.log('Deleting unit:', unitId)
+        alert('ลบหน่วยนับเรียบร้อยแล้ว (Mockup)')
+        // Refresh data here
+      } catch (error) {
+        console.error('Error deleting unit:', error)
+        alert('เกิดข้อผิดพลาดในการลบหน่วยนับ')
+      }
     }
   }
 
-  const handleUnitSave = () => {
-    // TODO: Implement unit update API call
-    console.log('Saving unit data:', unitFormData)
-    setShowUnitEditDialog(false)
-    // You can add API call here to update unit information
+  const handleUnitSave = async () => {
+    try {
+      // TODO: Implement unit create/update API call
+      console.log('Saving unit data:', unitFormData)
+      
+      // Validate required fields
+      if (!unitFormData.unit_name) {
+        alert('กรุณาระบุชื่อหน่วยนับ')
+        return
+      }
+      
+      // Check if this is adding a new unit or editing existing
+      const isNewUnit = !unitFormData.sku || unitFormData.sku === ''
+      
+      if (isNewUnit) {
+        // TODO: Call API to create new unit
+        alert('เพิ่มหน่วยนับใหม่เรียบร้อยแล้ว (Mockup)')
+      } else {
+        // TODO: Call API to update existing unit
+        alert('แก้ไขหน่วยนับเรียบร้อยแล้ว (Mockup)')
+      }
+      
+      setShowUnitEditDialog(false)
+      // Refresh data here
+    } catch (error) {
+      console.error('Error saving unit:', error)
+      alert('เกิดข้อผิดพลาดในการบันทึกข้อมูล')
+    }
   }
 
   const handleEditSubmit = async (productData: any) => {
@@ -472,46 +529,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
               </CardContent>
             </Card>
 
-            {/* Show all product variants if available */}
-            {productVariants && productVariants.length > 1 && (
-              <Card>
-                <CardContent className="p-6">
-                  <h3 className="text-lg font-semibold mb-4">หน่วยนับทั้งหมด</h3>
-                  <div className="space-y-3">
-                    {productVariants.map((variant, index) => (
-                      <div key={variant.id} className="border border-gray-200 rounded-lg p-4">
-                        <div className="grid grid-cols-3 gap-4 text-sm">
-                          <div>
-                            <label className="text-xs font-medium text-gray-600">หน่วยนับ</label>
-                            <div className="mt-1 text-gray-900">{variant.unit || 'หน่วย'}</div>
-                          </div>
-                          <div>
-                            <label className="text-xs font-medium text-gray-600">ขนาดบรรจุ</label>
-                            <div className="mt-1 text-gray-900">{variant.pack_size || '1'}</div>
-                          </div>
-                          <div>
-                            <label className="text-xs font-medium text-gray-600">ราคาขาย</label>
-                            <div className="mt-1 text-gray-900">฿{variant.sale_price || 0}</div>
-                          </div>
-                          <div>
-                            <label className="text-xs font-medium text-gray-600">จำนวนในสต๊อก</label>
-                            <div className="mt-1 text-gray-900">{variant.stock_quantity || 0}</div>
-                          </div>
-                          <div>
-                            <label className="text-xs font-medium text-gray-600">SKU</label>
-                            <div className="mt-1 text-gray-900">{variant.sku || '-'}</div>
-                          </div>
-                          <div>
-                            <label className="text-xs font-medium text-gray-600">บาร์โค้ด</label>
-                            <div className="mt-1 text-gray-900">{variant.barcode || '-'}</div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+
 
             <Card>
               <CardContent className="p-6">
@@ -564,8 +582,13 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
             <Card>
               <CardContent className="p-6">
                 <div className="flex justify-between items-center mb-6">
-                  <h3 className="text-lg font-semibold">ข้อมูลหน่วยนับ</h3>
-                  <p className="text-sm text-gray-500">โปรดระบุข้อมูลหน่วยนับของสินค้า</p>
+                  <h3 className="text-lg font-semibold">ข้อมูลหน่วยนับทั้งหมด</h3>
+                  <Button 
+                    onClick={() => setShowUnitEditDialog(true)}
+                    className="bg-green-500 hover:bg-green-600 text-white"
+                  >
+                    + เพิ่มหน่วยนับใหม่
+                  </Button>
                 </div>
                 
                 {/* Units Table */}
@@ -576,8 +599,9 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                         <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">ชื่อหน่วยนับ</th>
                         <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">ขนาดบรรจุ</th>
                         <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">ต้นทุน</th>
-                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">จุดสั่งซื้อ</th>
-                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">ปริมาณ</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">ราคาขาย</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">สต๊อก</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">รหัสสินค้า</th>
                         <th className="px-4 py-3 text-center text-sm font-medium text-gray-600">จัดการ</th>
                       </tr>
                     </thead>
@@ -586,45 +610,119 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                       <tr className="hover:bg-gray-50">
                         <td className="px-4 py-4">
                           <div className="flex items-center space-x-2">
-                            <span className="font-medium text-purple-600">{product.unit}</span>
-                            <Badge variant="outline" className="text-xs">แพ็ก</Badge>
+                            <span className="font-medium text-purple-600">{product.unit || 'หน่วย'}</span>
+                            <Badge variant="default" className="text-xs">หลัก</Badge>
                           </div>
                           <div className="text-sm text-gray-500">
-                            SKU: {product.sku || 'ไม่มี'}
-                          </div>
-                          <div className="text-sm text-gray-500">
-                            บาร์โค้ด: {product.barcode || 'ไม่มี'}
+                            ปริมาณ: {product.volume || '500'}{product.volume_unit || 'mg'}
                           </div>
                         </td>
                         <td className="px-4 py-4">
                           <span className="text-gray-900">{product.pack_size || '1'}</span>
-                          <div className="text-sm text-gray-500">
-                            {product.pack_size ? `${product.pack_size} แผง : 1 กล่อง` : ''}
-                          </div>
                         </td>
                         <td className="px-4 py-4">
-                          <span className="text-gray-900">{product.cost ? `${Number(product.cost).toLocaleString()}` : '-'}</span>
+                          <span className="text-gray-900">฿{product.cost ? Number(product.cost).toLocaleString() : '-'}</span>
                         </td>
                         <td className="px-4 py-4">
-                          <span className="text-gray-900">{product.reorder_point || '-'}</span>
+                          <span className="text-gray-900 font-medium">฿{product.sale_price ? Number(product.sale_price).toLocaleString() : '-'}</span>
                         </td>
                         <td className="px-4 py-4">
-                          <span className="text-gray-900">{product.volume || '500'}mg</span>
-                          <div className="text-sm text-gray-500">
-                            x{product.pack_size || '20'} แผง
+                          <span className="text-gray-900">{product.stock_quantity || 0}</span>
+                          {(product.stock_quantity || 0) <= (product.reorder_point || 0) && (
+                            <Badge variant="destructive" className="ml-2 text-xs">สต๊อกต่ำ</Badge>
+                          )}
+                        </td>
+                        <td className="px-4 py-4">
+                          <div className="text-sm text-gray-900">
+                            <div>SKU: {product.sku || 'ไม่มี'}</div>
+                            <div>บาร์โค้ด: {product.barcode || 'ไม่มี'}</div>
                           </div>
                         </td>
                         <td className="px-4 py-4 text-center">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={openUnitEditDialog}
-                            className="text-purple-600 border-purple-200 hover:bg-purple-50"
-                          >
-                            แก้ไข
-                          </Button>
+                          <div className="flex justify-center space-x-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => openUnitEditDialog(product)}
+                              className="text-purple-600 border-purple-200 hover:bg-purple-50"
+                            >
+                              แก้ไข
+                            </Button>
+                          </div>
                         </td>
                       </tr>
+                      
+                      {/* Additional Product Variants */}
+                      {productVariants && productVariants.length > 1 && productVariants
+                        .filter(variant => variant.id !== product.id)
+                        .map((variant, index) => (
+                          <tr key={variant.id || index} className="hover:bg-gray-50">
+                            <td className="px-4 py-4">
+                              <div className="flex items-center space-x-2">
+                                <span className="font-medium text-blue-600">{variant.unit || 'หน่วย'}</span>
+                                <Badge variant="outline" className="text-xs">รอง</Badge>
+                              </div>
+                              <div className="text-sm text-gray-500">
+                                ปริมาณ: {variant.volume || '500'}{variant.volume_unit || 'mg'}
+                              </div>
+                            </td>
+                            <td className="px-4 py-4">
+                              <span className="text-gray-900">{variant.pack_size || '1'}</span>
+                            </td>
+                            <td className="px-4 py-4">
+                              <span className="text-gray-900">฿{variant.cost ? Number(variant.cost).toLocaleString() : '-'}</span>
+                            </td>
+                            <td className="px-4 py-4">
+                              <span className="text-gray-900 font-medium">฿{variant.sale_price ? Number(variant.sale_price).toLocaleString() : '-'}</span>
+                            </td>
+                            <td className="px-4 py-4">
+                              <span className="text-gray-900">{variant.stock_quantity || 0}</span>
+                              {(variant.stock_quantity || 0) <= (variant.reorder_point || 0) && (
+                                <Badge variant="destructive" className="ml-2 text-xs">สต๊อกต่ำ</Badge>
+                              )}
+                            </td>
+                            <td className="px-4 py-4">
+                              <div className="text-sm text-gray-900">
+                                <div>SKU: {variant.sku || 'ไม่มี'}</div>
+                                <div>บาร์โค้ด: {variant.barcode || 'ไม่มี'}</div>
+                              </div>
+                            </td>
+                            <td className="px-4 py-4 text-center">
+                              <div className="flex justify-center space-x-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => openUnitEditDialog(variant)}
+                                  className="text-purple-600 border-purple-200 hover:bg-purple-50"
+                                >
+                                  แก้ไข
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleDeleteUnit(variant.id)}
+                                  className="text-red-600 border-red-200 hover:bg-red-50"
+                                >
+                                  ลบ
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      }
+                      
+                      {/* Empty state if no variants */}
+                      {(!productVariants || productVariants.length <= 1) && (
+                        <tr>
+                          <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
+                            <div className="flex flex-col items-center space-y-2">
+                              <div className="text-2xl">📦</div>
+                              <div>ยังไม่มีหน่วยนับเพิ่มเติม</div>
+                              <div className="text-sm">คลิกปุ่ม "เพิ่มหน่วยนับใหม่" เพื่อเพิ่มหน่วยนับรอง</div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -817,15 +915,10 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                 >
                   ปิด
                 </Button>
-                <DialogTitle className="text-lg font-semibold">แก้ไขหน่วยนับ</DialogTitle>
+                <DialogTitle className="text-lg font-semibold">
+                  {(!unitFormData.sku || unitFormData.sku === '') ? 'เพิ่มหน่วยนับใหม่' : 'แก้ไขหน่วยนับ'}
+                </DialogTitle>
               </div>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="text-purple-600 border-purple-200 hover:bg-purple-50"
-              >
-                แก้ไข
-              </Button>
             </div>
             <p className="text-sm text-gray-500 mt-2">โปรดระบุข้อมูลหน่วยนับของสินค้า</p>
           </DialogHeader>
@@ -871,20 +964,32 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
               </div>
             </div>
 
-            {/* ต้นทุนต่อหน่วย และจำนวนแถว */}
-            <div className="grid grid-cols-2 gap-4">
+            {/* ต้นทุนต่อหน่วย, ราคาขาย และจุดสั่งซื้อ */}
+            <div className="grid grid-cols-3 gap-4">
               <div>
                 <Label className="text-sm font-medium text-gray-700">ต้นทุนต่อหน่วย</Label>
                 <Input
+                  type="number"
                   value={unitFormData.cost}
                   onChange={(e) => setUnitFormData(prev => ({ ...prev, cost: e.target.value }))}
                   className="mt-2"
-                  placeholder="หลังร้าน"
+                  placeholder="0"
                 />
               </div>
               <div>
-                <Label className="text-sm font-medium text-gray-700">จำนวนแถว</Label>
+                <Label className="text-sm font-medium text-gray-700">ราคาขายต่อหน่วย</Label>
                 <Input
+                  type="number"
+                  value={unitFormData.sale_price}
+                  onChange={(e) => setUnitFormData(prev => ({ ...prev, sale_price: e.target.value }))}
+                  className="mt-2"
+                  placeholder="0"
+                />
+              </div>
+              <div>
+                <Label className="text-sm font-medium text-gray-700">จุดสั่งซื้อ</Label>
+                <Input
+                  type="number"
                   value={unitFormData.reorder_point}
                   onChange={(e) => setUnitFormData(prev => ({ ...prev, reorder_point: e.target.value }))}
                   className="mt-2"
@@ -929,18 +1034,37 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
           </div>
 
           <DialogFooter className="pt-4 border-t">
-            <Button 
-              variant="outline" 
-              onClick={() => setShowUnitEditDialog(false)}
-            >
-              ยกเลิก
-            </Button>
-            <Button 
-              onClick={handleUnitSave}
-              className="bg-red-500 hover:bg-red-600 text-white"
-            >
-              ลบหน่วยนับ
-            </Button>
+            <div className="flex justify-between w-full">
+              <div>
+                {/* Show delete button only for existing units */}
+                {unitFormData.sku && unitFormData.sku !== '' && (
+                  <Button 
+                    variant="outline"
+                    onClick={() => {
+                      setShowUnitEditDialog(false)
+                      handleDeleteUnit(unitFormData.sku)
+                    }}
+                    className="bg-red-500 hover:bg-red-600 text-white border-red-500"
+                  >
+                    ลบหน่วยนับ
+                  </Button>
+                )}
+              </div>
+              <div className="flex space-x-2">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setShowUnitEditDialog(false)}
+                >
+                  ยกเลิก
+                </Button>
+                <Button 
+                  onClick={handleUnitSave}
+                  className="bg-purple-500 hover:bg-purple-600 text-white"
+                >
+                  {(!unitFormData.sku || unitFormData.sku === '') ? 'เพิ่มหน่วยนับ' : 'บันทึกการแก้ไข'}
+                </Button>
+              </div>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
