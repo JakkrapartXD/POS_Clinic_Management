@@ -295,7 +295,7 @@ export default function UserManagementPage() {
                 เพิ่มผู้ใช้ใหม่
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="sm:max-w-md bg-white">
               <DialogHeader>
                 <DialogTitle>เพิ่มผู้ใช้ใหม่</DialogTitle>
               </DialogHeader>
@@ -531,7 +531,7 @@ export default function UserManagementPage() {
                                   <Trash2 className="w-4 h-4" />
                                 </Button>
                               </AlertDialogTrigger>
-                              <AlertDialogContent>
+                              <AlertDialogContent className="bg-white">
                                 <AlertDialogHeader>
                                   <AlertDialogTitle>ยืนยันการลบผู้ใช้งาน</AlertDialogTitle>
                                   <AlertDialogDescription>
@@ -564,7 +564,7 @@ export default function UserManagementPage() {
 
         {/* Edit User Modal */}
         <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-          <DialogContent className="sm:max-w-md">
+          <DialogContent className="sm:max-w-md bg-white">
             <DialogHeader>
               <DialogTitle>แก้ไขผู้ใช้งาน</DialogTitle>
             </DialogHeader>

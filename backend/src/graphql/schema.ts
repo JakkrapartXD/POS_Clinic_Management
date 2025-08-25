@@ -627,6 +627,7 @@ export const typeDefs = /* GraphQL */ `
     product(id: String!): Product
     searchProducts(query: String!): [Product!]!
     lowStockProducts: [Product!]!
+    checkSkuExists(sku: String!): Boolean!
 
     # Order Queries
     orders(filter: OrderFilterInput, pagination: PaginationInput): OrdersResponse!

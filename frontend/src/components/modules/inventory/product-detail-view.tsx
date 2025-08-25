@@ -19,6 +19,8 @@ interface ProductDetailViewProps {
   onBack: () => void
   onEditingChange?: (isEditing: boolean) => void
   productVariants?: any[] // Add this for grouped products
+  onProductDeleted?: () => void
+  onProductUpdated?: () => void
 }
 
 interface ProductData {
@@ -69,7 +71,7 @@ interface ProductData {
   updated_at: string
 }
 
-export default function ProductDetailView({ productId, onBack, onEditingChange, productVariants }: ProductDetailViewProps) {
+export default function ProductDetailView({ productId, onBack, onEditingChange, productVariants: initialProductVariants, onProductDeleted, onProductUpdated }: ProductDetailViewProps) {
   const [product, setProduct] = useState<ProductData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -77,6 +79,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
   const [activeTab, setActiveTab] = useState("general")
   const [showUnitEditDialog, setShowUnitEditDialog] = useState(false)
   const [hasMultipleVariants, setHasMultipleVariants] = useState(false)
+  const [productVariants, setProductVariants] = useState<any[]>(initialProductVariants || [])
   const [unitFormData, setUnitFormData] = useState({
     unit_name: '',
     pack_size: '',
@@ -91,6 +94,38 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
     barcode: '',
     display_pos: true
   })
+  const [isCreatingNewUnit, setIsCreatingNewUnit] = useState(false)
+
+  // Helper function to determine if pack_size is main product (pack_size = 1)
+  const isMainProduct = (packSize: string | number) => {
+    const packSizeNum = typeof packSize === 'string' ? parseInt(packSize) : packSize
+    return packSizeNum === 1
+  }
+
+  // Function to refresh product data without page reload
+  const refreshProductData = async () => {
+    try {
+      setLoading(true)
+      const response = await GraphQLAPI.getProduct(productId)
+      
+      if (response.product) {
+        setProduct(response.product)
+        logger.info('Product data refreshed successfully', { 
+          productId,
+          productName: response.product.product_name 
+        }, 'INVENTORY')
+      }
+          } catch (err) {
+        logger.error('Failed to refresh product data', err, 'INVENTORY')
+      } finally {
+      setLoading(false)
+    }
+  }
+
+  // Function to update product variants state
+  const updateProductVariants = (updatedVariants: any[]) => {
+    setProductVariants(updatedVariants)
+  }
 
   useEffect(() => {
     const loadProduct = async () => {
@@ -104,6 +139,15 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
         
         if (response.product) {
           setProduct(response.product)
+          
+          // If we have initial product variants, use them, otherwise create a single variant from the main product
+          if (initialProductVariants && initialProductVariants.length > 0) {
+            setProductVariants(initialProductVariants)
+          } else {
+            // Create a single variant from the main product
+            setProductVariants([response.product])
+          }
+          
           logger.info('Product loaded successfully', { 
             productId,
             productName: response.product.product_name 
@@ -125,13 +169,13 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
   }, [productId])
 
   const handleEditClick = () => {
-    console.log('ProductDetailView: Switching to edit mode')
+    logger.debug('ProductDetailView: Switching to edit mode', {}, 'INVENTORY')
     setIsEditing(true)
     onEditingChange?.(true)
   }
 
   const handleEditBack = () => {
-    console.log('ProductDetailView: handleEditBack called, returning to detail view')
+    logger.debug('ProductDetailView: handleEditBack called, returning to detail view', {}, 'INVENTORY')
     setIsEditing(false)
     onEditingChange?.(false)
   }
@@ -140,20 +184,24 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
   const openUnitEditDialog = (unitData?: any) => {
     // If no unitData provided, it's for adding a new unit
     if (!unitData) {
+      // Find the main product (pack_size = 1) to use as default values
+      const mainProduct = productVariants?.find(v => parseInt(v.pack_size || '1') === 1) || product
+      
       setUnitFormData({
         unit_name: '',
         pack_size: '',
-        cost: '',
-        sale_price: '',
-        reorder_point: '',
-        volume: '',
-        volume_unit: 'mg',
-        shelf_code: '',
-        shelf_row: '',
+        cost: mainProduct?.cost?.toString() || '',
+        sale_price: mainProduct?.sale_price?.toString() || '',
+        reorder_point: mainProduct?.reorder_point?.toString() || '',
+        volume: mainProduct?.volume?.toString() || '',
+        volume_unit: mainProduct?.volume_unit || 'mg',
+        shelf_code: mainProduct?.shelf_code || '',
+        shelf_row: mainProduct?.shelf_row || '',
         sku: '',
         barcode: '',
         display_pos: true
       })
+      setIsCreatingNewUnit(true)
     } else {
       // Editing existing unit
       setUnitFormData({
@@ -170,20 +218,65 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
         barcode: unitData.barcode || '',
         display_pos: unitData.status === 'active'
       })
+      setIsCreatingNewUnit(false)
     }
     setShowUnitEditDialog(true)
   }
 
+
+
+  // Check if unit name already exists
+  const isUnitNameExists = (unitName: string, excludeId?: string) => {
+    if (!unitName) return false
+    
+    const allVariants = productVariants || [product]
+    return allVariants.some(variant => {
+      // Skip the current unit being edited
+      if (excludeId && variant.id === excludeId) return false
+      
+      return variant.unit?.toLowerCase() === unitName.toLowerCase()
+    })
+  }
+
+  // Check if pack size already exists
+  const isPackSizeExists = (packSize: string, excludeId?: string) => {
+    if (!packSize) return false
+    
+    const allVariants = productVariants || [product]
+    return allVariants.some(variant => {
+      // Skip the current unit being edited
+      if (excludeId && variant.id === excludeId) return false
+      
+      return variant.pack_size === packSize
+    })
+  }
+
   // Handle delete unit
-  const handleDeleteUnit = async (unitId: string) => {
+  const handleDeleteUnit = async (unitId: string, packSize?: string | number) => {
+    // Check if this is the main product (pack_size = 1) - cannot delete
+    if (isMainProduct(packSize || 1)) {
+      alert('ไม่สามารถลบขนาดบรรจุ 1 ได้ เนื่องจากเป็นสินค้าหลัก')
+      return
+    }
+    
     if (confirm('คุณต้องการลบหน่วยนับนี้หรือไม่?')) {
       try {
         // TODO: เรียก API ลบหน่วยนับ
-        console.log('Deleting unit:', unitId)
+        logger.debug('Deleting unit', { unitId, packSize }, 'INVENTORY')
+        
+        // Remove the variant from the list
+        setProductVariants(prev => prev.filter(variant => variant.id !== unitId))
+        
         alert('ลบหน่วยนับเรียบร้อยแล้ว (Mockup)')
-        // Refresh data here
+        // Refresh product data to ensure consistency
+        await refreshProductData()
+        
+        // Notify parent component that a product was deleted
+        if (onProductDeleted) {
+          onProductDeleted()
+        }
       } catch (error) {
-        console.error('Error deleting unit:', error)
+        logger.error('Error deleting unit', error, 'INVENTORY')
         alert('เกิดข้อผิดพลาดในการลบหน่วยนับ')
       }
     }
@@ -191,31 +284,267 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
 
   const handleUnitSave = async () => {
     try {
-      // TODO: Implement unit create/update API call
-      console.log('Saving unit data:', unitFormData)
+      logger.debug('Saving unit data', { unitFormData }, 'INVENTORY')
       
-      // Validate required fields
-      if (!unitFormData.unit_name) {
-        alert('กรุณาระบุชื่อหน่วยนับ')
-        return
+      // Validate required fields for new unit creation
+      if (isCreatingNewUnit) {
+        const missingFields = []
+        
+        if (!unitFormData.unit_name || unitFormData.unit_name.trim() === '') {
+          missingFields.push('ชื่อหน่วยนับ')
+        }
+        
+        if (!unitFormData.pack_size || unitFormData.pack_size.trim() === '') {
+          missingFields.push('ขนาดบรรจุ')
+        }
+        
+        if (!unitFormData.cost || unitFormData.cost.trim() === '') {
+          missingFields.push('ต้นทุนต่อหน่วย')
+        }
+        
+        if (!unitFormData.sale_price || unitFormData.sale_price.trim() === '') {
+          missingFields.push('ราคาขายต่อหน่วย')
+        }
+        
+        if (!unitFormData.reorder_point || unitFormData.reorder_point.trim() === '') {
+          missingFields.push('จุดสั่งซื้อ')
+        }
+        
+        if (!unitFormData.volume || unitFormData.volume.trim() === '') {
+          missingFields.push('ปริมาณ')
+        }
+        
+        if (!unitFormData.volume_unit || unitFormData.volume_unit.trim() === '') {
+          missingFields.push('หน่วยปริมาณ')
+        }
+        
+        if (!unitFormData.shelf_code || unitFormData.shelf_code.trim() === '') {
+          missingFields.push('รหัสชั้นวาง')
+        }
+        
+        if (!unitFormData.shelf_row || unitFormData.shelf_row.trim() === '') {
+          missingFields.push('แถวชั้นวาง')
+        }
+        
+        if (!unitFormData.sku || unitFormData.sku.trim() === '') {
+          missingFields.push('รหัสสินค้า SKU')
+        }
+        
+        if (!unitFormData.barcode || unitFormData.barcode.trim() === '') {
+          missingFields.push('บาร์โค้ด')
+        }
+        
+        if (missingFields.length > 0) {
+          alert(`กรุณากรอกข้อมูลให้ครบถ้วน:\n${missingFields.join('\n')}`)
+          return
+        }
+      } else {
+        // For editing existing unit, only validate essential fields
+        if (!unitFormData.unit_name || unitFormData.unit_name.trim() === '') {
+          alert('กรุณาระบุชื่อหน่วยนับ')
+          return
+        }
+        
+        if (!unitFormData.pack_size || unitFormData.pack_size.trim() === '') {
+          alert('กรุณาระบุขนาดบรรจุ')
+          return
+        }
       }
       
       // Check if this is adding a new unit or editing existing
-      const isNewUnit = !unitFormData.sku || unitFormData.sku === ''
+      // Use the state to determine if we're creating new or editing existing
+      const isNewUnit = isCreatingNewUnit
+      const existingVariant = isNewUnit ? null : productVariants?.find(v => v.sku === unitFormData.sku)
+      const variantId = existingVariant?.id
       
-      if (isNewUnit) {
-        // TODO: Call API to create new unit
-        alert('เพิ่มหน่วยนับใหม่เรียบร้อยแล้ว (Mockup)')
-      } else {
-        // TODO: Call API to update existing unit
-        alert('แก้ไขหน่วยนับเรียบร้อยแล้ว (Mockup)')
+      // Check for duplicate unit name
+      if (isUnitNameExists(unitFormData.unit_name, isNewUnit ? undefined : variantId)) {
+        alert('หน่วยนับซ้ำไม่สามารถสร้างได้ กรุณาใช้ชื่อหน่วยนับอื่น')
+        return
       }
       
-      setShowUnitEditDialog(false)
-      // Refresh data here
+      // Check for duplicate pack size
+      if (isPackSizeExists(unitFormData.pack_size, isNewUnit ? undefined : variantId)) {
+        alert('ขนาดบรรจุซ้ำไม่สามารถสร้างได้ กรุณาใช้ขนาดบรรจุอื่น')
+        return
+      }
+
+      // Check for duplicate SKU (only for new units)
+      if (isNewUnit && unitFormData.sku && unitFormData.sku.trim() !== '') {
+        try {
+          const skuCheckResponse = await GraphQLAPI.checkSkuExists(unitFormData.sku.trim())
+          if (skuCheckResponse.checkSkuExists) {
+            alert('SKU ซ้ำไม่สามารถสร้างได้ กรุณาใช้ SKU อื่น')
+            return
+          }
+        } catch (error) {
+          logger.error('Error checking SKU', error, 'INVENTORY')
+          // Continue with creation if SKU check fails
+        }
+      }
+      
+      if (isNewUnit) {
+        // Create new product variant using GraphQL mutation
+        const productInput: any = {
+          product_name: product?.product_name || '',
+          product_type: product?.product_type || 'medicine',
+          generic_name: product?.generic_name || '',
+          short_name: product?.short_name || '',
+          status: unitFormData.display_pos ? 'active' : 'inactive',
+          vat_percent: product?.vat_percent || 0,
+          expiration_warning_date: product?.expiration_warning_date || 90,
+          sale_price: parseFloat(unitFormData.sale_price) || 0,
+          unit: unitFormData.unit_name,
+          pack_size: unitFormData.pack_size,
+          reorder_point: parseInt(unitFormData.reorder_point) || 0,
+          cost: parseFloat(unitFormData.cost) || 0,
+          sku: unitFormData.sku || '',
+          barcode: unitFormData.barcode || '',
+          stock_quantity: 0, // New variant starts with 0 stock
+          volume: parseFloat(unitFormData.volume) || 0,
+          volume_unit: unitFormData.volume_unit || 'mg',
+          shelf_code: unitFormData.shelf_code || '',
+          shelf_row: unitFormData.shelf_row || '',
+          symptom_category: product?.symptom_category || null,
+          license_number: product?.license_number || '',
+          dosage_unit: product?.dosage_unit || '',
+          dosage: product?.dosage || '',
+          times_per_day: product?.times_per_day || null,
+          interval_hours: product?.interval_hours || null,
+          before_meal: product?.before_meal || false,
+          after_meal: product?.after_meal || false,
+          after_meal_immediate: product?.after_meal_immediate || false,
+          morning: product?.morning || '',
+          noon: product?.noon || '',
+          evening: product?.evening || '',
+          before_bed: product?.before_bed || '',
+          properties: product?.properties || '',
+          usage_instruction: product?.usage_instruction || '',
+          sale_note: product?.sale_note || '',
+          purchase_note: product?.purchase_note || ''
+        }
+
+        // Only include categoryId if it exists and is not empty
+        if (product?.category?.id && product.category.id.trim() !== '') {
+          productInput.categoryId = product.category.id
+        }
+
+        logger.info('Creating new product variant', { 
+          productName: productInput.product_name,
+          unit: productInput.unit,
+          packSize: productInput.pack_size 
+        }, 'INVENTORY')
+
+        const response = await GraphQLAPI.createProduct(productInput)
+        
+        if (response.createProduct) {
+          logger.info('Product variant created successfully', { 
+            productId: response.createProduct.id,
+            productName: response.createProduct.product_name 
+          }, 'INVENTORY')
+          
+          alert('เพิ่มหน่วยนับใหม่เรียบร้อยแล้ว')
+          setShowUnitEditDialog(false)
+          
+          // Add new variant to the list and refresh product data
+          const newVariant = response.createProduct
+          setProductVariants(prev => [...prev, newVariant])
+          await refreshProductData()
+          
+          // Notify parent component that product was updated
+          if (onProductUpdated) {
+            onProductUpdated()
+          }
+        }
+      } else {
+        // Update existing unit using GraphQL mutation
+        const productInput: any = {
+          product_name: product?.product_name || '',
+          product_type: product?.product_type || 'medicine',
+          generic_name: product?.generic_name || '',
+          short_name: product?.short_name || '',
+          status: unitFormData.display_pos ? 'active' : 'inactive',
+          vat_percent: product?.vat_percent || 0,
+          expiration_warning_date: product?.expiration_warning_date || 90,
+          sale_price: parseFloat(unitFormData.sale_price) || 0,
+          unit: unitFormData.unit_name,
+          pack_size: unitFormData.pack_size,
+          reorder_point: parseInt(unitFormData.reorder_point) || 0,
+          cost: parseFloat(unitFormData.cost) || 0,
+          sku: unitFormData.sku || '',
+          barcode: unitFormData.barcode || '',
+          stock_quantity: 0, // Keep existing stock quantity
+          volume: parseFloat(unitFormData.volume) || 0,
+          volume_unit: unitFormData.volume_unit || 'mg',
+          shelf_code: unitFormData.shelf_code || '',
+          shelf_row: unitFormData.shelf_row || '',
+          symptom_category: product?.symptom_category || null,
+          license_number: product?.license_number || '',
+          dosage_unit: product?.dosage_unit || '',
+          dosage: product?.dosage || '',
+          times_per_day: product?.times_per_day || null,
+          interval_hours: product?.interval_hours || null,
+          before_meal: product?.before_meal || false,
+          after_meal: product?.after_meal || false,
+          after_meal_immediate: product?.after_meal_immediate || false,
+          morning: product?.morning || '',
+          noon: product?.noon || '',
+          evening: product?.evening || '',
+          before_bed: product?.before_bed || '',
+          properties: product?.properties || '',
+          usage_instruction: product?.usage_instruction || '',
+          sale_note: product?.sale_note || '',
+          purchase_note: product?.purchase_note || ''
+        }
+
+        // Only include categoryId if it exists and is not empty
+        if (product?.category?.id && product.category.id.trim() !== '') {
+          productInput.categoryId = product.category.id
+        }
+
+        // Find the product variant to get its ID
+        const variantToUpdate = existingVariant
+        if (!variantToUpdate?.id) {
+          alert('ไม่พบข้อมูลหน่วยนับที่ต้องการแก้ไข')
+          return
+        }
+
+        logger.info('Updating product variant', { 
+          productId: variantToUpdate.id,
+          unit: productInput.unit,
+          packSize: productInput.pack_size 
+        }, 'INVENTORY')
+
+        const response = await GraphQLAPI.updateProduct(variantToUpdate.id, productInput)
+        
+        if (response.updateProduct) {
+          logger.info('Product variant updated successfully', { 
+            productId: response.updateProduct.id,
+            productName: response.updateProduct.product_name 
+          }, 'INVENTORY')
+          
+          alert('แก้ไขหน่วยนับเรียบร้อยแล้ว')
+          setShowUnitEditDialog(false)
+          
+          // Update the variant in the list and refresh product data
+          setProductVariants(prev => 
+            prev.map(variant => 
+              variant.id === response.updateProduct.id ? response.updateProduct : variant
+            )
+          )
+          await refreshProductData()
+          
+          // Notify parent component that product was updated
+          if (onProductUpdated) {
+            onProductUpdated()
+          }
+        }
+      }
     } catch (error) {
-      console.error('Error saving unit:', error)
-      alert('เกิดข้อผิดพลาดในการบันทึกข้อมูล')
+      logger.error('Failed to save unit', error, 'INVENTORY')
+      
+      const errorMessage = error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการบันทึกข้อมูล'
+      alert(`ไม่สามารถบันทึกข้อมูลได้: ${errorMessage}`)
     }
   }
 
@@ -224,7 +553,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
       logger.info('Updating product', { productId, productData }, 'INVENTORY')
       
       // Prepare input data for GraphQL mutation
-      const input = {
+      const input: any = {
         product_name: productData.product_name || '',
         product_type: productData.product_type || 'medicine',
         generic_name: productData.generic_name || '',
@@ -238,12 +567,10 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
         pack_size: productData.pack_size || '',
         reorder_point: parseInt(productData.reorder_point) || 0,
         cost: parseFloat(productData.cost) || 0,
-        sku: productData.sku || '',
-        barcode: productData.barcode || '',
+        // Don't include SKU and barcode to avoid conflicts with other products
         stock_quantity: parseInt(productData.stock_quantity) || 0,
         shelf_code: productData.shelf_code || '',
         shelf_row: productData.shelf_row || '',
-        categoryId: productData.categoryId || (typeof productData.category === 'object' && productData.category?.id) || '',
         // symptom_category should be JSON string if array is not empty, null if empty
         symptom_category: Array.isArray(productData.symptom_category) && productData.symptom_category.length > 0 
           ? JSON.stringify(productData.symptom_category) 
@@ -267,21 +594,126 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
         purchase_note: productData.purchase_note || ''
       }
 
+      // Only include categoryId if it exists and is not empty
+      const categoryId = productData.categoryId || (typeof productData.category === 'object' && productData.category?.id)
+      if (categoryId && categoryId.trim() !== '') {
+        input.categoryId = categoryId
+      }
+
       // Debug: Log the prepared input
-      console.log('Prepared input for GraphQL:', input)
+      logger.debug('Prepared input for GraphQL', { input, sku: input.sku, barcode: input.barcode }, 'INVENTORY')
 
       const response = await GraphQLAPI.updateProduct(productId, input)
       
       if (response.updateProduct) {
         // Update local product state with new data
         setProduct(response.updateProduct)
-        logger.info('Product updated successfully', { 
+        
+        // Update all variants with the new product data (except unit-specific fields)
+        setProductVariants(prev => 
+          prev.map(variant => {
+            // Keep unit-specific fields unchanged
+            const updatedVariant = {
+              ...response.updateProduct,
+              // Preserve unit-specific fields
+              unit: variant.unit,
+              pack_size: variant.pack_size,
+              sku: variant.sku,
+              barcode: variant.barcode,
+              cost: variant.cost,
+              sale_price: variant.sale_price,
+              reorder_point: variant.reorder_point,
+              volume: variant.volume,
+              volume_unit: variant.volume_unit,
+              shelf_code: variant.shelf_code,
+              shelf_row: variant.shelf_row,
+              stock_quantity: variant.stock_quantity
+            }
+            return updatedVariant
+          })
+        )
+
+        // Update all other variants in the database (except the main product)
+        const variantsToUpdate = productVariants.filter(variant => variant.id !== productId)
+        if (variantsToUpdate.length > 0) {
+          try {
+            // Update each variant with the new product data (except unit-specific fields)
+            const updatePromises = variantsToUpdate.map(async (variant) => {
+              const variantInput = {
+                product_name: response.updateProduct.product_name,
+                product_type: response.updateProduct.product_type,
+                generic_name: response.updateProduct.generic_name,
+                short_name: response.updateProduct.short_name,
+                status: response.updateProduct.status,
+                vat_percent: response.updateProduct.vat_percent,
+                expiration_warning_date: response.updateProduct.expiration_warning_date,
+                // Keep unit-specific fields unchanged (but exclude SKU and barcode to avoid conflicts)
+                unit: variant.unit,
+                pack_size: variant.pack_size,
+                cost: variant.cost,
+                sale_price: variant.sale_price,
+                reorder_point: variant.reorder_point,
+                stock_quantity: variant.stock_quantity,
+                volume: variant.volume,
+                volume_unit: variant.volume_unit,
+                shelf_code: variant.shelf_code,
+                shelf_row: variant.shelf_row,
+                categoryId: response.updateProduct.categoryId,
+                symptom_category: response.updateProduct.symptom_category,
+                license_number: response.updateProduct.license_number,
+                dosage_unit: response.updateProduct.dosage_unit,
+                dosage: response.updateProduct.dosage,
+                times_per_day: response.updateProduct.times_per_day,
+                interval_hours: response.updateProduct.interval_hours,
+                before_meal: response.updateProduct.before_meal,
+                after_meal: response.updateProduct.after_meal,
+                after_meal_immediate: response.updateProduct.after_meal_immediate,
+                morning: response.updateProduct.morning,
+                noon: response.updateProduct.noon,
+                evening: response.updateProduct.evening,
+                before_bed: response.updateProduct.before_bed,
+                properties: response.updateProduct.properties,
+                usage_instruction: response.updateProduct.usage_instruction,
+                sale_note: response.updateProduct.sale_note,
+                purchase_note: response.updateProduct.purchase_note
+              }
+
+              // Only include categoryId if it exists
+              if (!response.updateProduct.categoryId) {
+                delete variantInput.categoryId
+              }
+
+              return await GraphQLAPI.updateProduct(variant.id, variantInput)
+            })
+
+            await Promise.all(updatePromises)
+            logger.info('All variants updated in database successfully', { 
+              variantsUpdated: variantsToUpdate.length 
+            }, 'INVENTORY')
+          } catch (error) {
+            logger.error('Failed to update some variants in database', error, 'INVENTORY')
+            // Don't show error to user as main product was updated successfully
+          }
+        }
+        
+        logger.info('Product and all variants updated successfully', { 
           productId,
-          productName: response.updateProduct.product_name 
+          productName: response.updateProduct.product_name,
+          variantsCount: productVariants.length
         }, 'INVENTORY')
         
-        // Success feedback
-        alert('บันทึกข้อมูลสินค้าเรียบร้อยแล้ว')
+        // Success feedback with variant count
+        const variantCount = productVariants.length
+        if (variantCount > 1) {
+          alert(`บันทึกข้อมูลสินค้าและอัพเดตทุกหน่วยนับเรียบร้อยแล้ว (รวม ${variantCount} หน่วยนับ)`)
+        } else {
+          alert('บันทึกข้อมูลสินค้าเรียบร้อยแล้ว')
+        }
+        
+        // Notify parent component that product was updated
+        if (onProductUpdated) {
+          onProductUpdated()
+        }
       }
       
       setIsEditing(false)
@@ -392,32 +824,32 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
     )
   }
 
-  if (error) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <div className="text-red-500 mb-4">⚠️</div>
-          <div className="text-red-600 mb-2">เกิดข้อผิดพลาด</div>
-          <div className="text-gray-500 text-sm mb-4">{error}</div>
-          <div className="space-x-2">
-            <Button 
-              onClick={onBack} 
-              variant="outline"
-              className="text-gray-600 border-gray-200"
-            >
-              ย้อนกลับ
-            </Button>
-            <Button 
-              onClick={() => window.location.reload()} 
-              variant="outline"
-              className="text-purple-600 border-purple-200"
-            >
-              ลองใหม่
-            </Button>
+      if (error) {
+      return (
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <div className="text-red-500 mb-4">⚠️</div>
+            <div className="text-red-600 mb-2">เกิดข้อผิดพลาด</div>
+            <div className="text-gray-500 text-sm mb-4">{error}</div>
+            <div className="space-x-2">
+              <Button 
+                onClick={onBack} 
+                variant="outline"
+                className="text-gray-600 border-gray-200"
+              >
+                ย้อนกลับ
+              </Button>
+              <Button 
+                onClick={() => window.location.reload()} 
+                variant="outline"
+                className="text-purple-600 border-purple-200"
+              >
+                ลองใหม่
+              </Button>
+            </div>
           </div>
         </div>
-      </div>
-    )
+      )
   }
 
   if (!product) {
@@ -472,7 +904,13 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                 <Badge variant="outline">
                   {getProductTypeLabel(product.product_type)}
                 </Badge>
+                {productVariants.length > 1 && (
+                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                    {productVariants.length} หน่วยนับ
+                  </Badge>
+                )}
               </div>
+
             </div>
           </div>
           <Button onClick={handleEditClick} className="bg-purple-500 hover:bg-purple-600">
@@ -584,11 +1022,33 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                 <div className="flex justify-between items-center mb-6">
                   <h3 className="text-lg font-semibold">ข้อมูลหน่วยนับทั้งหมด</h3>
                   <Button 
-                    onClick={() => setShowUnitEditDialog(true)}
+                    onClick={() => openUnitEditDialog()}
                     className="bg-green-500 hover:bg-green-600 text-white"
                   >
-                    + เพิ่มหน่วยนับใหม่
+                    + เพิ่มหน่วยนับ
                   </Button>
+                </div>
+                
+                {/* Information about deletion rules */}
+                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="text-sm text-blue-800">
+                    <strong>กฎการลบหน่วยนับ:</strong>
+                    <ul className="mt-1 ml-4 list-disc">
+                      <li>สินค้าหลัก (ขนาดบรรจุ 1) ไม่สามารถลบได้</li>
+                      <li>สามารถลบหน่วยนับได้เฉพาะอันที่มากกว่า 1 เท่านั้น</li>
+                    </ul>
+                  </div>
+                </div>
+                
+                {/* Information about creating new units */}
+                <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+                  <div className="text-sm text-green-800">
+                    <strong>การสร้างหน่วยนับใหม่:</strong>
+                    <ul className="mt-1 ml-4 list-disc">
+                      <li>+ เพิ่มหน่วยนับ: สร้างหน่วยนับใหม่จากข้อมูลว่าง</li>
+                      <li>ระบบจะตรวจสอบชื่อหน่วยนับและขนาดบรรจุซ้ำอัตโนมัติ</li>
+                    </ul>
+                  </div>
                 </div>
                 
                 {/* Units Table */}
@@ -606,61 +1066,32 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
-                      {/* Primary Unit Row */}
-                      <tr className="hover:bg-gray-50">
-                        <td className="px-4 py-4">
-                          <div className="flex items-center space-x-2">
-                            <span className="font-medium text-purple-600">{product.unit || 'หน่วย'}</span>
-                            <Badge variant="default" className="text-xs">หลัก</Badge>
-                          </div>
-                          <div className="text-sm text-gray-500">
-                            ปริมาณ: {product.volume || '500'}{product.volume_unit || 'mg'}
-                          </div>
-                        </td>
-                        <td className="px-4 py-4">
-                          <span className="text-gray-900">{product.pack_size || '1'}</span>
-                        </td>
-                        <td className="px-4 py-4">
-                          <span className="text-gray-900">฿{product.cost ? Number(product.cost).toLocaleString() : '-'}</span>
-                        </td>
-                        <td className="px-4 py-4">
-                          <span className="text-gray-900 font-medium">฿{product.sale_price ? Number(product.sale_price).toLocaleString() : '-'}</span>
-                        </td>
-                        <td className="px-4 py-4">
-                          <span className="text-gray-900">{product.stock_quantity || 0}</span>
-                          {(product.stock_quantity || 0) <= (product.reorder_point || 0) && (
-                            <Badge variant="destructive" className="ml-2 text-xs">สต๊อกต่ำ</Badge>
-                          )}
-                        </td>
-                        <td className="px-4 py-4">
-                          <div className="text-sm text-gray-900">
-                            <div>SKU: {product.sku || 'ไม่มี'}</div>
-                            <div>บาร์โค้ด: {product.barcode || 'ไม่มี'}</div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-4 text-center">
-                          <div className="flex justify-center space-x-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => openUnitEditDialog(product)}
-                              className="text-purple-600 border-purple-200 hover:bg-purple-50"
-                            >
-                              แก้ไข
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
+
                       
-                      {/* Additional Product Variants */}
-                      {productVariants && productVariants.length > 1 && productVariants
-                        .filter(variant => variant.id !== product.id)
-                        .map((variant, index) => (
-                          <tr key={variant.id || index} className="hover:bg-gray-50">
+                      {/* All Product Variants including main product */}
+                      {productVariants && productVariants.length > 0 && productVariants
+                        .sort((a, b) => {
+                          // Sort by pack_size, main product (pack_size = 1) first
+                          const aSize = parseInt(a.pack_size || '1')
+                          const bSize = parseInt(b.pack_size || '1')
+                          if (aSize === 1) return -1
+                          if (bSize === 1) return 1
+                          return aSize - bSize
+                        })
+                        .map((variant, index) => {
+                          const packSizeNum = parseInt(variant.pack_size || '1')
+                          const canDelete = packSizeNum > 1
+                          const isMain = packSizeNum === 1
+                          return (
+                          <tr key={variant.id || index} className={`hover:bg-gray-50 ${isMain ? 'bg-purple-50' : ''}`}>
                             <td className="px-4 py-4">
                               <div className="flex items-center space-x-2">
-                                <span className="font-medium text-blue-600">{variant.unit || 'หน่วย'}</span>
-                                <Badge variant="outline" className="text-xs">รอง</Badge>
+                                <span className={`font-medium ${isMain ? 'text-purple-600' : canDelete ? 'text-blue-600' : 'text-gray-600'}`}>
+                                  {variant.unit || 'หน่วย'}
+                                </span>
+                                <Badge variant={isMain ? 'default' : 'outline'} className={`text-xs ${isMain ? 'bg-purple-600' : 'border-gray-200 text-gray-700'}`}>
+                                  {isMain ? 'หลัก' : 'รอง'}
+                                </Badge>
                               </div>
                               <div className="text-sm text-gray-500">
                                 ปริมาณ: {variant.volume || '500'}{variant.volume_unit || 'mg'}
@@ -668,6 +1099,10 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                             </td>
                             <td className="px-4 py-4">
                               <span className="text-gray-900">{variant.pack_size || '1'}</span>
+                              {isMain && (
+                                <div className="text-xs text-gray-500">(สินค้าหลัก)</div>
+                              )}
+                              
                             </td>
                             <td className="px-4 py-4">
                               <span className="text-gray-900">฿{variant.cost ? Number(variant.cost).toLocaleString() : '-'}</span>
@@ -697,28 +1132,36 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                                 >
                                   แก้ไข
                                 </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleDeleteUnit(variant.id)}
-                                  className="text-red-600 border-red-200 hover:bg-red-50"
-                                >
-                                  ลบ
-                                </Button>
+                                {!isMain && packSizeNum > 1 && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleDeleteUnit(variant.id, variant.pack_size)}
+                                    className="text-red-600 border-red-200 hover:bg-red-50"
+                                  >
+                                    ลบ
+                                  </Button>
+                                )}
+                                {isMain && (
+                                  <div className="text-xs text-gray-400 px-2 py-1 bg-gray-100 rounded">
+                                    ไม่สามารถลบได้
+                                  </div>
+                                )}
                               </div>
                             </td>
                           </tr>
-                        ))
+                        )
+                      })
                       }
                       
                       {/* Empty state if no variants */}
-                      {(!productVariants || productVariants.length <= 1) && (
+                      {(!productVariants || productVariants.length === 0) && (
                         <tr>
                           <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
                             <div className="flex flex-col items-center space-y-2">
                               <div className="text-2xl">📦</div>
-                              <div>ยังไม่มีหน่วยนับเพิ่มเติม</div>
-                              <div className="text-sm">คลิกปุ่ม "เพิ่มหน่วยนับใหม่" เพื่อเพิ่มหน่วยนับรอง</div>
+                              <div>ยังไม่มีข้อมูลหน่วยนับ</div>
+                              <div className="text-sm">คลิกปุ่ม "เพิ่มหน่วยนับ" เพื่อเพิ่มหน่วยนับ</div>
                             </div>
                           </td>
                         </tr>
@@ -902,151 +1345,255 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
       </div>
 
       {/* Unit Edit Dialog */}
-      <Dialog open={showUnitEditDialog} onOpenChange={setShowUnitEditDialog}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
+      <Dialog open={showUnitEditDialog} onOpenChange={(open) => {
+        setShowUnitEditDialog(open)
+        if (!open) {
+          // Reset state when dialog closes
+          setIsCreatingNewUnit(false)
+          setUnitFormData({
+            unit_name: '',
+            pack_size: '',
+            cost: '',
+            sale_price: '',
+            reorder_point: '',
+            volume: '',
+            volume_unit: '',
+            shelf_code: '',
+            shelf_row: '',
+            sku: '',
+            barcode: '',
+            display_pos: true
+          })
+        }
+      }}>
+        <DialogContent className="max-w-2xl bg-white">
+          <DialogHeader className="bg-white">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <Button 
                   variant="ghost" 
                   size="sm" 
                   onClick={() => setShowUnitEditDialog(false)}
-                  className="p-2"
+                  className="p-2 text-gray-700 hover:bg-gray-100"
                 >
                   ปิด
                 </Button>
-                <DialogTitle className="text-lg font-semibold">
-                  {(!unitFormData.sku || unitFormData.sku === '') ? 'เพิ่มหน่วยนับใหม่' : 'แก้ไขหน่วยนับ'}
+                <DialogTitle className="text-lg font-semibold text-gray-900">
+                  {isCreatingNewUnit ? 'เพิ่มหน่วยนับ' : 'แก้ไขหน่วยนับ'}
                 </DialogTitle>
               </div>
             </div>
-            <p className="text-sm text-gray-500 mt-2">โปรดระบุข้อมูลหน่วยนับของสินค้า</p>
+            <p className="text-sm text-gray-600 mt-2">
+              โปรดระบุข้อมูลหน่วยนับของสินค้า
+              {isCreatingNewUnit && (
+                <span className="text-red-500 ml-1">
+                  * ช่องที่จำเป็นต้องกรอก
+                </span>
+              )}
+            </p>
           </DialogHeader>
           
-          <div className="space-y-6 py-4">
-            {/* ชื่อหน่วยนับ ภาษาไทย, อังกฤษ และตัวเลข */}
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <Label className="text-sm font-medium text-gray-700">
-                  ชื่อหน่วยนับ <span className="text-gray-400">ภาษาไทย, อังกฤษ และตัวเลข</span>
-                </Label>
-                <Input
-                  value={unitFormData.unit_name}
-                  onChange={(e) => setUnitFormData(prev => ({ ...prev, unit_name: e.target.value }))}
-                  className="mt-2"
-                  placeholder="แผง"
-                />
-              </div>
-              <div>
-                <Label className="text-sm font-medium text-gray-700">ขนาดบรรจุ</Label>
-                <Input
-                  value={unitFormData.pack_size}
-                  onChange={(e) => setUnitFormData(prev => ({ ...prev, pack_size: e.target.value }))}
-                  className="mt-2"
-                  placeholder="10"
-                />
-              </div>
-              <div>
-                <Label className="text-sm font-medium text-gray-700">
-                  ปริมาณ <span className="text-gray-400">หรือ น้ำหนัก</span>
-                </Label>
-                <div className="flex space-x-2 mt-2">
-                  <Input
-                    value={unitFormData.volume}
-                    onChange={(e) => setUnitFormData(prev => ({ ...prev, volume: e.target.value }))}
-                    className="flex-1"
-                    placeholder="500"
-                  />
-                  <div className="bg-purple-100 text-purple-600 px-3 py-2 rounded-md text-sm font-medium min-w-[50px] flex items-center justify-center">
-                    mg
+          <div className="space-y-6 py-4 bg-white">
+            {/* Form content */}
+            {(() => {
+              const variantToUpdate = isCreatingNewUnit ? null : productVariants?.find(v => v.sku === unitFormData.sku)
+              return (
+                <>
+                  {/* ชื่อหน่วยนับ ภาษาไทย, อังกฤษ และตัวเลข */}
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <Label className="text-sm font-medium text-gray-900">
+                        ชื่อหน่วยนับ <span className="text-gray-500">ภาษาไทย, อังกฤษ และตัวเลข</span>
+                        {isCreatingNewUnit && <span className="text-red-500 ml-1">*</span>}
+                      </Label>
+                      <Input
+                        value={unitFormData.unit_name}
+                        onChange={(e) => setUnitFormData(prev => ({ ...prev, unit_name: e.target.value }))}
+                        className={`mt-2 bg-white border-gray-300 text-gray-900 placeholder-gray-500 ${
+                          unitFormData.unit_name && isUnitNameExists(unitFormData.unit_name, variantToUpdate?.id) 
+                            ? 'border-red-500 focus:border-red-500' 
+                            : ''
+                        }`}
+                        placeholder="แผง"
+                      />
+                      {unitFormData.unit_name && isUnitNameExists(unitFormData.unit_name, variantToUpdate?.id) && (
+                        <div className="text-xs text-red-600 mt-1">
+                          ⚠️ ชื่อหน่วยนับนี้มีอยู่แล้ว กรุณาใช้ชื่ออื่น
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-900">
+                        ขนาดบรรจุ
+                        {isCreatingNewUnit && <span className="text-red-500 ml-1">*</span>}
+                      </Label>
+                      <Input
+                        value={unitFormData.pack_size}
+                        onChange={(e) => setUnitFormData(prev => ({ ...prev, pack_size: e.target.value }))}
+                        className={`mt-2 bg-white border-gray-300 text-gray-900 placeholder-gray-500 ${
+                          unitFormData.pack_size && isPackSizeExists(unitFormData.pack_size, variantToUpdate?.id) 
+                            ? 'border-red-500 focus:border-red-500' 
+                            : ''
+                        }`}
+                        placeholder="10"
+                      />
+                      {unitFormData.pack_size && isPackSizeExists(unitFormData.pack_size, variantToUpdate?.id) && (
+                        <div className="text-xs text-red-600 mt-1">
+                          ⚠️ ขนาดบรรจุนี้มีอยู่แล้ว กรุณาใช้ขนาดอื่น
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-900">
+                        ปริมาณ <span className="text-gray-500">หรือ น้ำหนัก</span>
+                        {isCreatingNewUnit && <span className="text-red-500 ml-1">*</span>}
+                      </Label>
+                      <div className="flex space-x-2 mt-2">
+                        <Input
+                          value={unitFormData.volume}
+                          onChange={(e) => setUnitFormData(prev => ({ ...prev, volume: e.target.value }))}
+                          className="flex-1 bg-white border-gray-300 text-gray-900 placeholder-gray-500"
+                          placeholder="500"
+                        />
+                        <div className="bg-purple-100 text-purple-600 px-3 py-2 rounded-md text-sm font-medium min-w-[50px] flex items-center justify-center">
+                          mg
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
-            </div>
 
-            {/* ต้นทุนต่อหน่วย, ราคาขาย และจุดสั่งซื้อ */}
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <Label className="text-sm font-medium text-gray-700">ต้นทุนต่อหน่วย</Label>
-                <Input
-                  type="number"
-                  value={unitFormData.cost}
-                  onChange={(e) => setUnitFormData(prev => ({ ...prev, cost: e.target.value }))}
-                  className="mt-2"
-                  placeholder="0"
-                />
-              </div>
-              <div>
-                <Label className="text-sm font-medium text-gray-700">ราคาขายต่อหน่วย</Label>
-                <Input
-                  type="number"
-                  value={unitFormData.sale_price}
-                  onChange={(e) => setUnitFormData(prev => ({ ...prev, sale_price: e.target.value }))}
-                  className="mt-2"
-                  placeholder="0"
-                />
-              </div>
-              <div>
-                <Label className="text-sm font-medium text-gray-700">จุดสั่งซื้อ</Label>
-                <Input
-                  type="number"
-                  value={unitFormData.reorder_point}
-                  onChange={(e) => setUnitFormData(prev => ({ ...prev, reorder_point: e.target.value }))}
-                  className="mt-2"
-                  placeholder="10"
-                />
-              </div>
-            </div>
+                  {/* ต้นทุนต่อหน่วย, ราคาขาย และจุดสั่งซื้อ */}
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <Label className="text-sm font-medium text-gray-900">
+                        ต้นทุนต่อหน่วย
+                        {isCreatingNewUnit && <span className="text-red-500 ml-1">*</span>}
+                      </Label>
+                      <Input
+                        type="number"
+                        value={unitFormData.cost}
+                        onChange={(e) => setUnitFormData(prev => ({ ...prev, cost: e.target.value }))}
+                        className="mt-2 bg-white border-gray-300 text-gray-900 placeholder-gray-500"
+                        placeholder="0"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-900">
+                        ราคาขายต่อหน่วย
+                        {isCreatingNewUnit && <span className="text-red-500 ml-1">*</span>}
+                      </Label>
+                      <Input
+                        type="number"
+                        value={unitFormData.sale_price}
+                        onChange={(e) => setUnitFormData(prev => ({ ...prev, sale_price: e.target.value }))}
+                        className="mt-2 bg-white border-gray-300 text-gray-900 placeholder-gray-500"
+                        placeholder="0"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-900">
+                        จุดสั่งซื้อ
+                        {isCreatingNewUnit && <span className="text-red-500 ml-1">*</span>}
+                      </Label>
+                      <Input
+                        type="number"
+                        value={unitFormData.reorder_point}
+                        onChange={(e) => setUnitFormData(prev => ({ ...prev, reorder_point: e.target.value }))}
+                        className="mt-2 bg-white border-gray-300 text-gray-900 placeholder-gray-500"
+                        placeholder="10"
+                      />
+                    </div>
+                  </div>
 
-            {/* บาร์โค้ด และ รหัสสินค้า */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label className="text-sm font-medium text-gray-700">บาร์โค้ด</Label>
-                <Input
-                  value={unitFormData.barcode}
-                  onChange={(e) => setUnitFormData(prev => ({ ...prev, barcode: e.target.value }))}
-                  className="mt-2"
-                  placeholder="8851473004000"
-                />
-              </div>
-              <div>
-                <Label className="text-sm font-medium text-gray-700">รหัสสินค้า SKU</Label>
-                <Input
-                  value={unitFormData.sku}
-                  onChange={(e) => setUnitFormData(prev => ({ ...prev, sku: e.target.value }))}
-                  className="mt-2"
-                  placeholder="SKU0011204"
-                />
-              </div>
-            </div>
+                  {/* บาร์โค้ด และ รหัสสินค้า */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-sm font-medium text-gray-900">
+                        บาร์โค้ด
+                        {isCreatingNewUnit && <span className="text-red-500 ml-1">*</span>}
+                      </Label>
+                      <Input
+                        value={unitFormData.barcode}
+                        onChange={(e) => setUnitFormData(prev => ({ ...prev, barcode: e.target.value }))}
+                        className="mt-2 bg-white border-gray-300 text-gray-900 placeholder-gray-500"
+                        placeholder="8851473004000"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-900">
+                        รหัสสินค้า SKU
+                        {isCreatingNewUnit && <span className="text-red-500 ml-1">*</span>}
+                      </Label>
+                      <Input
+                        value={unitFormData.sku}
+                        onChange={(e) => setUnitFormData(prev => ({ ...prev, sku: e.target.value }))}
+                        className="mt-2 bg-white border-gray-300 text-gray-900 placeholder-gray-500"
+                        placeholder="SKU0011204"
+                      />
+                    </div>
+                  </div>
 
-            {/* สวิตช์แสดงหน่วยนับหน้าร้าน POS */}
-            <div className="flex items-center justify-between p-4 border rounded-lg">
-              <div>
-                <div className="font-medium text-gray-900">แสดงหน่วยนับหน้าร้าน POS</div>
-              </div>
-              <Switch
-                checked={unitFormData.display_pos}
-                onCheckedChange={(checked) => setUnitFormData(prev => ({ ...prev, display_pos: checked }))}
-                className="data-[state=checked]:bg-purple-500"
-              />
-            </div>
+                  {/* ชั้นวางและแถวชั้นวาง */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-sm font-medium text-gray-900">
+                        รหัสชั้นวาง
+                        {isCreatingNewUnit && <span className="text-red-500 ml-1">*</span>}
+                      </Label>
+                      <Input
+                        value={unitFormData.shelf_code}
+                        onChange={(e) => setUnitFormData(prev => ({ ...prev, shelf_code: e.target.value }))}
+                        className="mt-2 bg-white border-gray-300 text-gray-900 placeholder-gray-500"
+                        placeholder="A1"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-900">
+                        แถวชั้นวาง
+                        {isCreatingNewUnit && <span className="text-red-500 ml-1">*</span>}
+                      </Label>
+                      <Input
+                        value={unitFormData.shelf_row}
+                        onChange={(e) => setUnitFormData(prev => ({ ...prev, shelf_row: e.target.value }))}
+                        className="mt-2 bg-white border-gray-300 text-gray-900 placeholder-gray-500"
+                        placeholder="1"
+                      />
+                    </div>
+                  </div>
+
+                  {/* สวิตช์แสดงหน่วยนับหน้าร้าน POS */}
+                  <div className="flex items-center justify-between p-4 border rounded-lg bg-gray-50">
+                    <div>
+                      <div className="font-medium text-gray-900">แสดงหน่วยนับหน้าร้าน POS</div>
+                    </div>
+                    <Switch
+                      checked={unitFormData.display_pos}
+                      onCheckedChange={(checked) => setUnitFormData(prev => ({ ...prev, display_pos: checked }))}
+                      className="data-[state=checked]:bg-purple-500"
+                    />
+                  </div>
+                </>
+              )
+            })()}
           </div>
 
-          <DialogFooter className="pt-4 border-t">
+          <DialogFooter className="pt-4 border-t bg-white">
             <div className="flex justify-between w-full">
               <div>
-                {/* Show delete button only for existing units */}
-                {unitFormData.sku && unitFormData.sku !== '' && (
+                {/* Show delete button only for existing units with pack_size > 1 */}
+                {!isCreatingNewUnit && parseInt(unitFormData.pack_size || '1') > 1 && (
                   <Button 
                     variant="outline"
                     onClick={() => {
                       setShowUnitEditDialog(false)
-                      handleDeleteUnit(unitFormData.sku)
+                      const existingVariant = productVariants?.find(v => v.sku === unitFormData.sku)
+                      if (existingVariant) {
+                        handleDeleteUnit(existingVariant.id, unitFormData.pack_size)
+                      }
                     }}
                     className="bg-red-500 hover:bg-red-600 text-white border-red-500"
                   >
-                    ลบหน่วยนับ
+                    ลบ
                   </Button>
                 )}
               </div>
@@ -1054,6 +1601,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                 <Button 
                   variant="outline" 
                   onClick={() => setShowUnitEditDialog(false)}
+                  className="border-gray-300 text-gray-700 hover:bg-gray-50"
                 >
                   ยกเลิก
                 </Button>
@@ -1061,7 +1609,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                   onClick={handleUnitSave}
                   className="bg-purple-500 hover:bg-purple-600 text-white"
                 >
-                  {(!unitFormData.sku || unitFormData.sku === '') ? 'เพิ่มหน่วยนับ' : 'บันทึกการแก้ไข'}
+                  {isCreatingNewUnit ? 'เพิ่มหน่วยนับ' : 'บันทึก'}
                 </Button>
               </div>
             </div>

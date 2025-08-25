@@ -1,16 +1,54 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
-import { Bell, ShoppingCart, Pill, Tag, LayoutGrid, Package, BarChart3, Settings, Users, FileText, Shield } from "lucide-react"
+import { Bell, ShoppingCart, Pill, Tag, LayoutGrid, Package, BarChart3, Settings, Users, FileText, Shield, Receipt } from "lucide-react"
 import { useUser } from "@/hooks/use-user"
 import { getMenuItemsForRole } from "@/config/role-permissions"
 import { logger } from "@/lib/logger"
+import { GraphQLAPI } from "@/clients/graphql"
 
 export default function Sidebar() {
   const [activeItem, setActiveItem] = useState<string>("notifications")
+  const [todayReceiptsCount, setTodayReceiptsCount] = useState<number>(0)
   const { user, loading } = useUser()
+
+  // ดึงจำนวนใบเสร็จรับเงินวันนี้
+  const fetchTodayReceiptsCount = async () => {
+    try {
+      const today = new Date()
+      const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+      const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59)
+
+      const response = await GraphQLAPI.getTodayOrders({
+        date_from: startOfDay.toISOString(),
+        date_to: endOfDay.toISOString()
+      })
+
+      if (response.orders?.total) {
+        setTodayReceiptsCount(response.orders.total)
+      }
+    } catch (error) {
+      logger.error('Failed to fetch today receipts count', error, 'SIDEBAR')
+    }
+  }
+
+  useEffect(() => {
+    fetchTodayReceiptsCount()
+    
+    // รับ event เมื่อมีการชำระเงินใหม่
+    const handleReceiptsUpdated = () => {
+      fetchTodayReceiptsCount()
+    }
+    
+    window.addEventListener('receiptsUpdated', handleReceiptsUpdated)
+    
+    // Cleanup event listener
+    return () => {
+      window.removeEventListener('receiptsUpdated', handleReceiptsUpdated)
+    }
+  }, [])
 
   const allMenuItems = [
     { id: "notifications", icon: Bell, href: "/dashboard/notifications", label: "แจ้งเตือน" },
@@ -19,7 +57,7 @@ export default function Sidebar() {
     { id: "discounts", icon: Tag, href: "/dashboard/discounts", label: "ส่วนลด" },
     { id: "documents", icon: LayoutGrid, href: "/dashboard/documents", label: "เอกสาร" },
     { id: "users", icon: Users, href: "/dashboard/users", label: "ผู้ใช้งาน" },
-    { id: "orders", icon: Package, href: "/dashboard/orders", label: "คำสั่งซื้อ" },
+    { id: "orders", icon: Receipt, href: "/dashboard/orders", label: "ใบเสร็จรับเงินวันนี้" },
     { id: "reports", icon: BarChart3, href: "/dashboard/reports", label: "รายงาน" },
     { id: "settings", icon: Settings, href: "/dashboard/settings", label: "ตั้งค่า" },
     { id: "admin/users", icon: Shield, href: "/dashboard/admin/users", label: "จัดการผู้ใช้" },
@@ -93,6 +131,14 @@ export default function Sidebar() {
             title={item.label}
           >
             <item.icon size={24} />
+            
+            {/* Badge สำหรับจำนวนใบเสร็จรับเงินวันนี้ */}
+            {item.id === "orders" && todayReceiptsCount > 0 && (
+              <div className="absolute -top-1 -right-1 w-5 h-5 bg-green-500 text-white text-xs rounded-full flex items-center justify-center font-medium">
+                {todayReceiptsCount > 99 ? '99+' : todayReceiptsCount}
+              </div>
+            )}
+            
             {/* Tooltip */}
             <div className="absolute left-full ml-2 px-2 py-1 text-xs bg-gray-800 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50">
               {item.label}

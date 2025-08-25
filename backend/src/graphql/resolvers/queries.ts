@@ -270,6 +270,23 @@ export const queries = {
     return products;
   },
 
+  async checkSkuExists(parent: any, args: any, context: any) {
+    const { sku } = args;
+    context.security.requireStaff(context);
+    
+    await context.security.checkRateLimit(context.userId, 'query', context.redisClient);
+    
+    if (!sku || sku.trim().length === 0) {
+      return false;
+    }
+    
+    const existingProduct = await context.prisma.product.findFirst({
+      where: { sku: sku.trim() }
+    });
+    
+    return !!existingProduct;
+  },
+
   // Order Queries
   async orders(parent: any, args: any, context: any) {
     const { filter, pagination } = args;

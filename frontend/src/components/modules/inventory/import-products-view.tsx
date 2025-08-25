@@ -204,7 +204,22 @@ export default function ImportProductsView({ onBack, onImport }: ImportProductsV
       if (product.product_type) transformedProduct.product_type = product.product_type
       if (product.generic_name) transformedProduct.generic_name = product.generic_name
       if (product.short_name) transformedProduct.short_name = product.short_name
-      if (product.status) transformedProduct.status = product.status
+      
+      // Handle status mapping - convert Thai status to English
+      if (product.status) {
+        const statusMapping: Record<string, string> = {
+          'แสดงหน้าร้าน': 'active',
+          'ไม่แสดงหน้าร้าน': 'inactive',
+          'active': 'active',
+          'inactive': 'inactive'
+        }
+        const originalStatus = product.status
+        const mappedStatus = statusMapping[product.status] || product.status
+        transformedProduct.status = mappedStatus
+        
+        // Debug logging for status mapping
+        console.log(`🔍 Status mapping: "${originalStatus}" -> "${mappedStatus}"`)
+      }
       if (product.vat_percent !== undefined && !isNaN(product.vat_percent)) transformedProduct.vat_percent = product.vat_percent
       if (product.expiration_warning_date !== undefined && !isNaN(product.expiration_warning_date)) transformedProduct.expiration_warning_date = product.expiration_warning_date
       if (product.unit) transformedProduct.unit = product.unit
@@ -775,7 +790,7 @@ export default function ImportProductsView({ onBack, onImport }: ImportProductsV
               )}
             </Button>
           </AlertDialogTrigger>
-          <AlertDialogContent>
+          <AlertDialogContent className="bg-white">
             <AlertDialogHeader>
               <AlertDialogTitle>ยืนยันการนำเข้าข้อมูล</AlertDialogTitle>
               <AlertDialogDescription>

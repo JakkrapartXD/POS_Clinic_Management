@@ -375,6 +375,12 @@ export const GraphQLQueries = {
           sku
           barcode
           categoryId
+          category {
+            id
+            name
+            description
+            code
+          }
           created_at
           updated_at
         }
@@ -487,6 +493,142 @@ export const GraphQLQueries = {
           status
           stock_quantity
         }
+      }
+    }
+  `,
+
+  CHECK_SKU_EXISTS: `
+    query CheckSkuExists($sku: String!) {
+      checkSkuExists(sku: $sku)
+    }
+  `,
+
+  // Order Queries
+  ALL_ORDERS: `
+    query GetAllOrders($filter: OrderFilterInput, $pagination: PaginationInput) {
+      orders(filter: $filter, pagination: $pagination) {
+        orders {
+          id
+          order_date
+          status
+          total_amount
+          is_walkin
+          created_at
+          updated_at
+          patient {
+            id
+            first_name
+            last_name
+          }
+          user {
+            id
+            username
+          }
+          orderItems {
+            id
+            quantity
+            unit_price
+            total_price
+            product {
+              id
+              product_name
+              sku
+            }
+          }
+          payments {
+            id
+            payment_type
+            amount
+            payment_date
+            details
+          }
+        }
+        total
+      }
+    }
+  `,
+
+  TODAY_ORDERS: `
+    query GetTodayOrders($date_from: DateTime, $date_to: DateTime) {
+      orders(filter: { date_from: $date_from, date_to: $date_to }, pagination: { skip: 0, take: 100 }) {
+        orders {
+          id
+          order_date
+          status
+          total_amount
+          is_walkin
+          created_at
+          updated_at
+          patient {
+            id
+            first_name
+            last_name
+          }
+          user {
+            id
+            username
+          }
+          orderItems {
+            id
+            quantity
+            unit_price
+            total_price
+            product {
+              id
+              product_name
+              sku
+            }
+          }
+          payments {
+            id
+            payment_type
+            amount
+            payment_date
+            details
+          }
+        }
+        total
+      }
+    }
+  `,
+
+  GET_ORDER: `
+    query GetOrder($id: String!) {
+      order(id: $id) {
+        id
+        order_date
+          status
+          total_amount
+          is_walkin
+          created_at
+          updated_at
+          patient {
+            id
+            first_name
+            last_name
+          }
+          user {
+            id
+            username
+          }
+          orderItems {
+            id
+            quantity
+            unit_price
+            total_price
+            product {
+              id
+              product_name
+              sku
+            }
+          }
+          payments {
+            id
+            payment_type
+            amount
+            payment_date
+            details
+          }
       }
     }
   `,
@@ -619,6 +761,59 @@ export const GraphQLMutations = {
   `,
 
   // Product mutations
+  CREATE_PRODUCT: `
+    mutation CreateProduct($input: CreateProductInput!) {
+      createProduct(input: $input) {
+        id
+        product_name
+        product_type
+        generic_name
+        short_name
+        status
+        vat_percent
+        expiration_warning_date
+        sale_price
+        unit
+        pack_size
+        reorder_point
+        cost
+        sku
+        barcode
+        stock_quantity
+        volume
+        volume_unit
+        shelf_code
+        shelf_row
+        category {
+          id
+          name
+          description
+          code
+        }
+        categoryId
+        symptom_category
+        license_number
+        dosage_unit
+        dosage
+        times_per_day
+        interval_hours
+        before_meal
+        after_meal
+        after_meal_immediate
+        morning
+        noon
+        evening
+        before_bed
+        properties
+        usage_instruction
+        sale_note
+        purchase_note
+        created_at
+        updated_at
+      }
+    }
+  `,
+
   UPDATE_PRODUCT: `
     mutation UpdateProduct($id: String!, $input: UpdateProductInput!) {
       updateProduct(id: $id, input: $input) {
@@ -710,6 +905,67 @@ export const GraphQLMutations = {
       deleteCategory(id: $id)
     }
   `,
+
+  // Order mutations
+  CREATE_ORDER: `
+    mutation CreateOrder($input: CreateOrderInput!) {
+      createOrder(input: $input) {
+        id
+        order_date
+        status
+        total_amount
+        is_walkin
+        created_at
+        updated_at
+        orderItems {
+          id
+          quantity
+          unit_price
+          total_price
+          product {
+            id
+            product_name
+            sku
+          }
+        }
+      }
+    }
+  `,
+
+  // Payment mutations
+  PROCESS_PAYMENT: `
+    mutation ProcessPayment($input: CreatePaymentInput!) {
+      processPayment(input: $input) {
+        id
+        payment_type
+        amount
+        payment_date
+        details
+        order {
+          id
+          total_amount
+        }
+      }
+    }
+  `,
+
+  // Stock adjustment mutations
+  ADJUST_STOCK: `
+    mutation AdjustStock($productId: String!, $quantity: Int!, $note: String) {
+      adjustStock(productId: $productId, quantity: $quantity, note: $note) {
+        id
+        movement_type
+        quantity
+        note
+        created_at
+        product {
+          id
+          product_name
+          stock_quantity
+        }
+      }
+    }
+  `,
 };
 
 // Typed GraphQL API functions
@@ -792,6 +1048,18 @@ export const GraphQLAPI = {
       variables: { id }
     }),
 
+  // Check if SKU exists in the system
+  checkSkuExists: (sku: string): Promise<{ checkSkuExists: boolean }> =>
+    graphqlClient.query(GraphQLQueries.CHECK_SKU_EXISTS, {
+      variables: { sku }
+    }),
+
+  // Create product
+  createProduct: (input: any): Promise<{ createProduct: any }> =>
+    graphqlClient.mutation(GraphQLMutations.CREATE_PRODUCT, {
+      variables: { input }
+    }),
+
   // Update product
   updateProduct: (id: string, input: any): Promise<{ updateProduct: any }> =>
     graphqlClient.mutation(GraphQLMutations.UPDATE_PRODUCT, {
@@ -802,6 +1070,35 @@ export const GraphQLAPI = {
   deleteProduct: (id: string): Promise<{ deleteProduct: boolean }> =>
     graphqlClient.mutation(GraphQLMutations.DELETE_PRODUCT, {
       variables: { id }
+    }),
+
+  // Order Operations
+  getAllOrders: (variables?: { filter?: any; pagination?: PaginationInput }): Promise<{ orders: any }> =>
+    graphqlClient.query(GraphQLQueries.ALL_ORDERS, { variables }),
+
+  getTodayOrders: (variables?: { date_from?: string; date_to?: string }): Promise<{ orders: any }> =>
+    graphqlClient.query(GraphQLQueries.TODAY_ORDERS, { variables }),
+
+  getOrder: (id: string): Promise<{ order: any }> =>
+    graphqlClient.query(GraphQLQueries.GET_ORDER, {
+      variables: { id }
+    }),
+
+  createOrder: (input: any): Promise<{ createOrder: any }> =>
+    graphqlClient.mutation(GraphQLMutations.CREATE_ORDER, {
+      variables: { input }
+    }),
+
+  // Payment Operations
+  processPayment: (input: any): Promise<{ processPayment: any }> =>
+    graphqlClient.mutation(GraphQLMutations.PROCESS_PAYMENT, {
+      variables: { input }
+    }),
+
+  // Stock Operations
+  adjustStock: (productId: string, quantity: number, note?: string): Promise<{ adjustStock: any }> =>
+    graphqlClient.mutation(GraphQLMutations.ADJUST_STOCK, {
+      variables: { productId, quantity, note }
     }),
 
   // Category operations

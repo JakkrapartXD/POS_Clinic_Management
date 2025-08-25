@@ -31,19 +31,7 @@ interface ProductFormData {
   status: string
   
   // Pricing and Units
-  sale_price: string
-  cost: string
-  unit: string
-  pack_size: string
   vat_percent: string
-  
-  // Inventory
-  stock_quantity: string
-  reorder_point: string
-  sku: string
-  barcode: string
-  shelf_code: string
-  shelf_row: string
   
   // Expiry
   expiration_warning_days: string
@@ -123,17 +111,7 @@ export default function EditProductForm({ onBack, onSubmit, initialData }: EditP
     category: initialData?.category || "",
     categoryId: initialData?.categoryId || initialData?.category?.id || "",
     status: initialData?.status || "active",
-    sale_price: initialData?.sale_price?.toString() || "",
-    cost: initialData?.cost?.toString() || "",
-    unit: initialData?.unit || "",
-    pack_size: initialData?.pack_size || "",
     vat_percent: initialData?.vat_percent?.toString() || "0",
-    stock_quantity: initialData?.stock_quantity?.toString() || "0",
-    reorder_point: initialData?.reorder_point?.toString() || "",
-    sku: initialData?.sku || "",
-    barcode: initialData?.barcode || "",
-    shelf_code: initialData?.shelf_code || "",
-    shelf_row: initialData?.shelf_row || "",
     expiration_warning_days: initialData?.expiration_warning_date?.toString() || "90",
     symptom_category: parseSymptomCategory(initialData?.symptom_category),
     license_number: initialData?.license_number || "",
@@ -184,7 +162,7 @@ export default function EditProductForm({ onBack, onSubmit, initialData }: EditP
 
   const handleSubmit = async () => {
     // Validate required fields
-    if (!formData.product_name || !formData.sale_price) {
+    if (!formData.product_name) {
       alert('กรุณากรอกข้อมูลที่จำเป็น')
       return
     }
@@ -261,17 +239,7 @@ export default function EditProductForm({ onBack, onSubmit, initialData }: EditP
         category: initialData.category || "",
         categoryId: initialData.categoryId || initialData.category?.id || "",
         status: initialData.status || "active",
-        sale_price: initialData.sale_price?.toString() || "",
-        cost: initialData.cost?.toString() || "",
-        unit: initialData.unit || "",
-        pack_size: initialData.pack_size || "",
         vat_percent: initialData.vat_percent?.toString() || "0",
-        stock_quantity: initialData.stock_quantity?.toString() || "0",
-        reorder_point: initialData.reorder_point?.toString() || "",
-        sku: initialData.sku || "",
-        barcode: initialData.barcode || "",
-        shelf_code: initialData.shelf_code || "",
-        shelf_row: initialData.shelf_row || "",
         expiration_warning_days: initialData.expiration_warning_date?.toString() || "90",
         symptom_category: parseSymptomCategory(initialData.symptom_category),
         license_number: initialData.license_number || "",
@@ -531,78 +499,7 @@ export default function EditProductForm({ onBack, onSubmit, initialData }: EditP
           </CardContent>
         </Card>
 
-        {/* Unit and Sales Information */}
-        <Card>
-          <CardContent className="p-6">
-            <h2 className="text-lg font-semibold text-gray-700 mb-4">ข้อมูลหน่วยนับ และการขาย</h2>
-            
-            <div className="grid grid-cols-2 gap-4 mb-4">
-              <div>
-                <Label className="text-sm font-medium text-gray-700">ชื่อหน่วยนับ ภาษาไทย, อังกฤษ และตัวเลข</Label>
-                <Input
-                  value={formData.unit}
-                  onChange={(e) => handleInputChange('unit', e.target.value)}
-                  className="mt-2 h-12 px-4 rounded-xl border-2 border-gray-200 bg-gray-50 focus:bg-white focus:border-purple-300 focus:ring-2 focus:ring-purple-100 transition-all duration-200 shadow-sm"
-                  placeholder="โปรดระบุหน่วยนับ"
-                />
-              </div>
-              <div>
-                <Label className="text-sm font-medium text-gray-700">ขนาดแพ็ค</Label>
-                <Input
-                  value={formData.pack_size}
-                  onChange={(e) => handleInputChange('pack_size', e.target.value)}
-                  className="mt-2 h-12 px-4 rounded-xl border-2 border-gray-200 bg-gray-50 focus:bg-white focus:border-purple-300 focus:ring-2 focus:ring-purple-100 transition-all duration-200 shadow-sm"
-                  placeholder="ขนาดแพ็ค"
-                />
-              </div>
-            </div>
 
-            <div className="grid grid-cols-2 gap-4 mb-4">
-              <div>
-                <Label className="text-sm font-medium text-gray-700">ราคาขายต่อหน่วย ค่าเริ่มต้น</Label>
-                <Input
-                  type="number"
-                  value={formData.sale_price}
-                  onChange={(e) => handleInputChange('sale_price', e.target.value)}
-                  className="mt-2 h-12 px-4 rounded-xl border-2 border-gray-200 bg-gray-50 focus:bg-white focus:border-purple-300 focus:ring-2 focus:ring-purple-100 transition-all duration-200 shadow-sm"
-                  placeholder="0.00"
-                  required
-                />
-              </div>
-              <div>
-                <Label className="text-sm font-medium text-gray-700">ต้นทุนต่อหน่วย ค่าเริ่มต้น</Label>
-                <Input
-                  type="number"
-                  value={formData.cost}
-                  onChange={(e) => handleInputChange('cost', e.target.value)}
-                  className="mt-2 h-12 px-4 rounded-xl border-2 border-gray-200 bg-gray-50 focus:bg-white focus:border-purple-300 focus:ring-2 focus:ring-purple-100 transition-all duration-200 shadow-sm"
-                  placeholder="0.00"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label className="text-sm font-medium text-gray-700">บาร์โค้ด ผูกกับหน่วยนับ</Label>
-                <Input
-                  value={formData.barcode}
-                  onChange={(e) => handleInputChange('barcode', e.target.value)}
-                  className="mt-2 h-12 px-4 rounded-xl border-2 border-gray-200 bg-gray-50 focus:bg-white focus:border-purple-300 focus:ring-2 focus:ring-purple-100 transition-all duration-200 shadow-sm"
-                  placeholder="บาร์โค้ด"
-                />
-              </div>
-              <div>
-                <Label className="text-sm font-medium text-gray-700">SKU รหัสสินค้า</Label>
-                <Input
-                  value={formData.sku}
-                  onChange={(e) => handleInputChange('sku', e.target.value)}
-                  className="mt-2 h-12 px-4 rounded-xl border-2 border-gray-200 bg-gray-50 focus:bg-white focus:border-purple-300 focus:ring-2 focus:ring-purple-100 transition-all duration-200 shadow-sm"
-                  placeholder="SKU"
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
 
         {/* Registration Reports */}
         <Card>
@@ -929,7 +826,7 @@ export default function EditProductForm({ onBack, onSubmit, initialData }: EditP
 
       {/* Exit Warning Dialog */}
       <AlertDialog open={showExitWarning} onOpenChange={setShowExitWarning}>
-        <AlertDialogContent>
+        <AlertDialogContent className="bg-white">
           <AlertDialogHeader>
             <AlertDialogTitle>ยืนยันการออกจากหน้า</AlertDialogTitle>
             <AlertDialogDescription>

@@ -390,7 +390,24 @@ function transformCSVRowToProduct(row: CSVRow, rowNumber: number, errors: Valida
   product.product_type = getFieldValue(row, 'ประเภทสินค้า') || undefined
   product.generic_name = getFieldValue(row, 'ชื่อสามัญทางยา') || undefined
   product.short_name = getFieldValue(row, 'ชื่อย่อ') || undefined
-  product.status = getFieldValue(row, 'สถานะสินค้า') || 'active'
+  // Handle status mapping - convert Thai status to English
+  const statusValue = getFieldValue(row, 'สถานะสินค้า')
+  if (statusValue) {
+    const statusMapping: Record<string, string> = {
+      'แสดงหน้าร้าน': 'active',
+      'ไม่แสดงหน้าร้าน': 'inactive',
+      'active': 'active',
+      'inactive': 'inactive'
+    }
+    const originalStatus = statusValue
+    const mappedStatus = statusMapping[statusValue] || statusValue
+    product.status = mappedStatus
+    
+    // Debug logging for status mapping
+    console.log(`🔍 CSV Status mapping: "${originalStatus}" -> "${mappedStatus}"`)
+  } else {
+    product.status = 'active' // Default to active if no status provided
+  }
   
   // Numeric fields with proper validation
   const vatPercent = parseFloat(getFieldValue(row, 'ภาษีมูลค่าเพิ่ม') || '0')

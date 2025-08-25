@@ -76,48 +76,48 @@ export default function InventoryPage() {
   const currentSections = getCurrentSections()
 
   // Load products from GraphQL
-  useEffect(() => {
-    const loadProducts = async () => {
-      try {
-        setLoading(true)
-        setError(null)
-        
-        logger.info('Loading products from GraphQL', {}, 'INVENTORY')
-        
-        const response = await GraphQLAPI.getAllProducts({
-          pagination: { skip: 0, take: 100 } // Load first 100 products
-        })
-        
-        if (response.products && response.products.products) {
-          setProducts(response.products.products)
-          logger.info('Products loaded successfully', { 
-            count: response.products.products.length 
-          }, 'INVENTORY')
-        } else {
-          setProducts([])
-        }
-      } catch (err) {
-        logger.error('Failed to load products', err, 'INVENTORY')
-        
-        // Check if it's an authentication error
-        if (err instanceof Error && (
-          err.message.includes('Authentication required') ||
-          err.message.includes('Unauthorized') ||
-          err.message.includes('Not authenticated') ||
-          err.message.includes('Invalid token') ||
-          err.message.includes('Token expired')
-        )) {
-          handleAuthError(err)
-          return
-        }
-        
-        setError(err instanceof Error ? err.message : 'Failed to load products')
-        setProducts([]) // Fallback to empty array
-      } finally {
-        setLoading(false)
+  const loadProducts = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      
+      logger.info('Loading products from GraphQL', {}, 'INVENTORY')
+      
+      const response = await GraphQLAPI.getAllProducts({
+        pagination: { skip: 0, take: 100 } // Load first 100 products
+      })
+      
+      if (response.products && response.products.products) {
+        setProducts(response.products.products)
+        logger.info('Products loaded successfully', { 
+          count: response.products.products.length 
+        }, 'INVENTORY')
+      } else {
+        setProducts([])
       }
+    } catch (err) {
+      logger.error('Failed to load products', err, 'INVENTORY')
+      
+      // Check if it's an authentication error
+      if (err instanceof Error && (
+        err.message.includes('Authentication required') ||
+        err.message.includes('Unauthorized') ||
+        err.message.includes('Not authenticated') ||
+        err.message.includes('Invalid token') ||
+        err.message.includes('Token expired')
+      )) {
+        handleAuthError(err)
+        return
+      }
+      
+      setError(err instanceof Error ? err.message : 'Failed to load products')
+      setProducts([]) // Fallback to empty array
+    } finally {
+      setLoading(false)
     }
+  }
 
+  useEffect(() => {
     loadProducts()
   }, [])
 
@@ -249,9 +249,23 @@ export default function InventoryPage() {
     }
   }
 
+  // Handle product deletion callback
+  const handleProductDeleted = () => {
+    logger.info('Product deleted, refreshing inventory data', {}, 'INVENTORY')
+    loadProducts() // Reload products after deletion
+  }
+
+  // Handle product update callback
+  const handleProductUpdated = () => {
+    logger.info('Product updated, refreshing inventory data', {}, 'INVENTORY')
+    loadProducts() // Reload products after update
+  }
+
   // Submit handlers
   const handleSubmitProduct = (productData: any) => {
     console.log("New product data:", productData)
+    logger.info('Product added, refreshing inventory data', {}, 'INVENTORY')
+    loadProducts() // Reload products after adding new product
     setViewMode('list')
   }
 
@@ -288,6 +302,8 @@ export default function InventoryPage() {
 
   const handleDeleteSubmit = (deleteData: any) => {
     console.log("Delete data:", deleteData)
+    logger.info('Products deleted from delete view, refreshing inventory data', {}, 'INVENTORY')
+    loadProducts() // Reload products after bulk deletion
     setViewMode('list')
   }
 
@@ -430,6 +446,8 @@ export default function InventoryPage() {
                 const product = transformedProducts.find(p => p.id === selectedProductId)
                 return product?.allProducts || undefined
               })()}
+              onProductDeleted={handleProductDeleted}
+              onProductUpdated={handleProductUpdated}
             />
           )}
 

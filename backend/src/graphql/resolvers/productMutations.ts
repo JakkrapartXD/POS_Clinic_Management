@@ -249,6 +249,40 @@ export const productMutations = {
       throw new GraphQLError('Product not found');
     }
     
+    // Check for duplicate SKU or barcode if provided and different from existing
+    logger.debug('UpdateProduct - Checking SKU/barcode', {
+      inputSku: input.sku,
+      inputBarcode: input.barcode,
+      existingSku: existingProduct.sku,
+      existingBarcode: existingProduct.barcode
+    }, 'GRAPHQL')
+    
+    if (input.sku || input.barcode) {
+      const whereConditions: any[] = []
+      
+      if (input.sku && input.sku !== existingProduct.sku) {
+        whereConditions.push({ sku: input.sku })
+      }
+      
+      if (input.barcode && input.barcode !== existingProduct.barcode) {
+        whereConditions.push({ barcode: input.barcode })
+      }
+      
+              if (whereConditions.length > 0) {
+          logger.debug('UpdateProduct - Checking for duplicates', { whereConditions }, 'GRAPHQL')
+          const duplicate = await context.prisma.product.findFirst({
+            where: {
+              OR: whereConditions
+            }
+          });
+          
+          if (duplicate) {
+            logger.info('UpdateProduct - Found duplicate SKU/barcode', { duplicate, whereConditions }, 'GRAPHQL')
+            throw new GraphQLError('Product with this SKU or barcode already exists');
+          }
+        }
+    }
+    
     // Sanitize input
     const sanitizedInput = {
       ...input,
@@ -324,6 +358,15 @@ export const productMutations = {
     context.security.requireStaff(context);
     context.security.validateId(productId);
     
+    // Log the incoming request
+    logger.info('AdjustStock called', {
+      productId,
+      quantity,
+      note,
+      userId: context.userId,
+      timestamp: new Date().toISOString()
+    }, 'GRAPHQL');
+    
     await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
     
     // Check if product exists
@@ -335,31 +378,42 @@ export const productMutations = {
       throw new GraphQLError('Product not found');
     }
     
+    // Validate stock adjustment
+    if (quantity < 0 && Math.abs(quantity) > product.stock_quantity) {
+      throw new GraphQLError(`Insufficient stock. Available: ${product.stock_quantity}, Requested: ${Math.abs(quantity)}`);
+    }
+    
     try {
-      // Update product stock
-      const updatedProduct = await context.prisma.product.update({
-        where: { id: productId },
-        data: {
-          stock_quantity: {
-            increment: quantity
-          },
-          updated_at: new Date()
-        }
+      // Use transaction to ensure data consistency
+      const result = await context.prisma.$transaction(async (tx: any) => {
+        // Update product stock
+        const updatedProduct = await tx.product.update({
+          where: { id: productId },
+          data: {
+            stock_quantity: {
+              increment: quantity
+            },
+            updated_at: new Date()
+          }
+        });
+        
+        // Create stock movement record
+        const stockMovement = await tx.stockMovement.create({
+          data: {
+            productId,
+            movement_type: quantity > 0 ? 'IN' : 'OUT',
+            quantity: Math.abs(quantity),
+            note: note || 'Manual adjustment',
+            createdByUserId: context.userId,
+            created_by_username: context.user?.username || 'Unknown',
+            created_at: new Date()
+          }
+        });
+        
+        return { updatedProduct, stockMovement };
       });
       
-      // Create stock movement record
-      const stockMovement = await context.prisma.stockMovement.create({
-        data: {
-          productId,
-          movement_type: quantity > 0 ? 'IN' : 'OUT',
-          quantity: Math.abs(quantity),
-          note: note || 'Manual adjustment',
-          createdByUserId: context.userId,
-          created_by_username: context.user?.username || 'Unknown',
-          created_at: new Date()
-        }
-      });
-      
+      // Log the operation
       await context.security.logSensitiveOperation(
         context.userId,
         'ADJUST_STOCK',
@@ -368,16 +422,31 @@ export const productMutations = {
         { 
           product_name: product.product_name,
           old_quantity: product.stock_quantity,
-          new_quantity: updatedProduct.stock_quantity,
+          new_quantity: result.updatedProduct.stock_quantity,
           adjustment: quantity,
-          note
+          note,
+          stock_movement_id: result.stockMovement.id
         },
         context.redisClient
       );
       
-      return stockMovement;
+      logger.info('Stock adjusted successfully', {
+        productId,
+        productName: product.product_name,
+        oldQuantity: product.stock_quantity,
+        newQuantity: result.updatedProduct.stock_quantity,
+        adjustment: quantity,
+        stockMovementId: result.stockMovement.id
+      }, 'GRAPHQL');
+      
+      return result.stockMovement;
     } catch (error) {
-      logger.error('Failed to adjust stock', error, 'GRAPHQL');
+      logger.error('Failed to adjust stock', { 
+        productId, 
+        quantity, 
+        note, 
+        error: error instanceof Error ? error.message : error 
+      }, 'GRAPHQL');
       throw new GraphQLError('Failed to adjust stock');
     }
   }
