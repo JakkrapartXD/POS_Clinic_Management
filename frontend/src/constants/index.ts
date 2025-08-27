@@ -23,7 +23,6 @@ export const APP_CONSTANTS = {
     INVENTORY: '/dashboard/inventory',
     POS: '/dashboard/pos',
     DOCUMENTS: '/dashboard/documents',
-    PROFILE: '/dashboard/profile',
     SETTINGS: '/dashboard/settings',
   },
   
