@@ -558,6 +558,36 @@ export const typeDefs = /* GraphQL */ `
     created_by_username: String
   }
 
+  # Report Generation Results
+  type SalesReportGenerationResult {
+    success: Boolean!
+    message: String!
+    reports: [SalesReport!]!
+    count: Int!
+  }
+
+  type StockAlertGenerationResult {
+    success: Boolean!
+    message: String!
+    alerts: [StockAlert!]!
+    count: Int!
+  }
+
+  type ComprehensiveDailyReport {
+    dailyReport: DailyReport!
+    salesReports: [SalesReport!]!
+    stockAlerts: [StockAlert!]!
+    summary: ReportSummary!
+  }
+
+  type ReportSummary {
+    total_sales: Float!
+    total_orders: Int!
+    total_patients: Int!
+    products_sold: Int!
+    new_alerts: Int!
+  }
+
   # Pagination & Filtering
   input PaginationInput {
     skip: Int = 0
@@ -719,5 +749,10 @@ export const typeDefs = /* GraphQL */ `
     # Stock Management
     acknowledgeStockAlert(id: String!): StockAlert!
     generateDailyReport(date: DateTime!): DailyReport!
+    
+    # Report Generation
+    generateSalesReports(date: DateTime!): SalesReportGenerationResult!
+    generateStockAlerts: StockAlertGenerationResult!
+    generateComprehensiveDailyReport(date: DateTime!): ComprehensiveDailyReport!
   }
 `; 

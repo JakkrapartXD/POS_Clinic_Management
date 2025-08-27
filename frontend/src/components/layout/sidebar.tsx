@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
-import { Bell, ShoppingCart, Pill, Tag, LayoutGrid, Package, BarChart3, Settings, Users, FileText, Shield, Receipt } from "lucide-react"
+import { Bell, ShoppingCart, Pill, Tag, LayoutGrid, Package, BarChart3, Settings, Users, FileText, Shield, Receipt, ChevronDown, ChevronRight, TrendingUp } from "lucide-react"
 import { useUser } from "@/hooks/use-user"
 import { getMenuItemsForRole } from "@/config/role-permissions"
 import { logger } from "@/lib/logger"
@@ -12,6 +12,7 @@ import { GraphQLAPI } from "@/clients/graphql"
 export default function Sidebar() {
   const [activeItem, setActiveItem] = useState<string>("notifications")
   const [todayReceiptsCount, setTodayReceiptsCount] = useState<number>(0)
+  const [expandedItems, setExpandedItems] = useState<string[]>(["reports"])
   const { user, loading } = useUser()
 
   // ดึงจำนวนใบเสร็จรับเงินวันนี้
@@ -58,7 +59,16 @@ export default function Sidebar() {
     { id: "documents", icon: LayoutGrid, href: "/dashboard/documents", label: "เอกสาร" },
     { id: "users", icon: Users, href: "/dashboard/users", label: "ผู้ใช้งาน" },
     { id: "orders", icon: Receipt, href: "/dashboard/orders", label: "ใบเสร็จรับเงินวันนี้" },
-    { id: "reports", icon: BarChart3, href: "/dashboard/reports", label: "รายงาน" },
+    { 
+      id: "reports", 
+      icon: BarChart3, 
+      href: "/dashboard/reports", 
+      label: "รายงาน",
+      submenu: [
+        { id: "reports/basic", href: "/dashboard/reports", label: "รายงานพื้นฐาน" },
+        { id: "reports/advanced", href: "/dashboard/reports/advanced", label: "รายงานขั้นสูง", icon: TrendingUp }
+      ]
+    },
     { id: "settings", icon: Settings, href: "/dashboard/settings", label: "ตั้งค่า" },
     { id: "admin/users", icon: Shield, href: "/dashboard/admin/users", label: "จัดการผู้ใช้" },
   ]
@@ -118,32 +128,62 @@ export default function Sidebar() {
       </div>
       <nav className="flex flex-col items-center space-y-4 flex-1">
         {visibleMenuItems.map((item) => (
-          <Link
-            key={item.id}
-            href={item.href}
-            onClick={() => setActiveItem(item.id)}
-            className={cn(
-              "w-12 h-12 flex items-center justify-center rounded-lg transition-colors group relative",
-              activeItem === item.id
-                ? "bg-purple-100 text-purple-600"
-                : "text-gray-400 hover:text-gray-600 hover:bg-gray-100",
-            )}
-            title={item.label}
-          >
-            <item.icon size={24} />
+          <div key={item.id} className="relative group">
+            <Link
+              href={item.href}
+              onClick={() => setActiveItem(item.id)}
+              className={cn(
+                "w-12 h-12 flex items-center justify-center rounded-lg transition-colors relative",
+                activeItem === item.id || (item.submenu && item.submenu.some((sub: any) => activeItem === sub.id))
+                  ? "bg-purple-100 text-purple-600"
+                  : "text-gray-400 hover:text-gray-600 hover:bg-gray-100",
+              )}
+              title={item.label}
+            >
+              <item.icon size={24} />
+              
+              {/* Badge สำหรับจำนวนใบเสร็จรับเงินวันนี้ */}
+              {item.id === "orders" && todayReceiptsCount > 0 && (
+                <div className="absolute -top-1 -right-1 w-5 h-5 bg-green-500 text-white text-xs rounded-full flex items-center justify-center font-medium">
+                  {todayReceiptsCount > 99 ? '99+' : todayReceiptsCount}
+                </div>
+              )}
+            </Link>
             
-            {/* Badge สำหรับจำนวนใบเสร็จรับเงินวันนี้ */}
-            {item.id === "orders" && todayReceiptsCount > 0 && (
-              <div className="absolute -top-1 -right-1 w-5 h-5 bg-green-500 text-white text-xs rounded-full flex items-center justify-center font-medium">
-                {todayReceiptsCount > 99 ? '99+' : todayReceiptsCount}
+            {/* Submenu for items with submenu */}
+            {item.submenu && (
+              <div className="absolute left-full top-0 ml-2 bg-white border rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-50 min-w-[180px]">
+                <div className="p-2">
+                  <div className="text-xs font-medium text-gray-500 px-2 py-1 border-b">
+                    {item.label}
+                  </div>
+                  {item.submenu.map((subItem: any) => (
+                    <Link
+                      key={subItem.id}
+                      href={subItem.href}
+                      onClick={() => setActiveItem(subItem.id)}
+                      className={cn(
+                        "flex items-center px-2 py-2 text-sm rounded-md transition-colors",
+                        activeItem === subItem.id
+                          ? "bg-purple-100 text-purple-600"
+                          : "text-gray-700 hover:bg-gray-100"
+                      )}
+                    >
+                      {subItem.icon && <subItem.icon size={16} className="mr-2" />}
+                      {subItem.label}
+                    </Link>
+                  ))}
+                </div>
               </div>
             )}
             
-            {/* Tooltip */}
-            <div className="absolute left-full ml-2 px-2 py-1 text-xs bg-gray-800 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50">
-              {item.label}
-            </div>
-          </Link>
+            {/* Tooltip for items without submenu */}
+            {!item.submenu && (
+              <div className="absolute left-full ml-2 px-2 py-1 text-xs bg-gray-800 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50">
+                {item.label}
+              </div>
+            )}
+          </div>
         ))}
       </nav>
       <div className="mt-auto text-xs text-gray-400">

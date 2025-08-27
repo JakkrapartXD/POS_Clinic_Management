@@ -23,6 +23,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
       'users',
       'orders',
       'reports',
+      'reports/advanced',
       'settings',
       'profile',
       'admin/users'
@@ -88,6 +89,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
       'notifications',
       'orders',
       'reports',
+      'reports/advanced',
       'profile'
     ],
     menuItems: [

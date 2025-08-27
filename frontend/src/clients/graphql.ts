@@ -632,6 +632,98 @@ export const GraphQLQueries = {
       }
     }
   `,
+
+  // Report Queries
+  DAILY_REPORTS: `
+    query DailyReports($date_from: DateTime, $date_to: DateTime) {
+      dailyReports(date_from: $date_from, date_to: $date_to) {
+        id
+        report_date
+        total_sales
+        total_orders
+        total_patients
+        created_at
+        createdByUserId
+        created_by_username
+      }
+    }
+  `,
+
+  SALES_REPORTS: `
+    query SalesReports($date_from: DateTime, $date_to: DateTime, $productId: String) {
+      salesReports(date_from: $date_from, date_to: $date_to, productId: $productId) {
+        id
+        report_date
+        quantity_sold
+        total_sales
+        created_at
+        createdByUserId
+        created_by_username
+        product {
+          id
+          product_name
+          unit
+        }
+      }
+    }
+  `,
+
+  STOCK_MOVEMENTS: `
+    query StockMovements($productId: String, $pagination: PaginationInput) {
+      stockMovements(productId: $productId, pagination: $pagination) {
+        id
+        movement_type
+        quantity
+        reference_table
+        reference_id
+        note
+        created_at
+        createdByUserId
+        created_by_username
+        product {
+          id
+          product_name
+          unit
+        }
+      }
+    }
+  `,
+
+  STOCK_ALERTS: `
+    query StockAlerts($acknowledged: Boolean, $pagination: PaginationInput) {
+      stockAlerts(acknowledged: $acknowledged, pagination: $pagination) {
+        id
+        alert_type
+        alert_message
+        created_at
+        createdByUserId
+        created_by_username
+        acknowledged
+        acknowledged_at
+        product {
+          id
+          product_name
+          stock_quantity
+          reorder_point
+        }
+      }
+    }
+  `,
+
+  LOW_STOCK_PRODUCTS: `
+    query LowStockProducts {
+      lowStockProducts {
+        id
+        product_name
+        stock_quantity
+        reorder_point
+        unit
+        category {
+          name
+        }
+      }
+    }
+  `,
 };
 
 export const GraphQLMutations = {
@@ -966,6 +1058,32 @@ export const GraphQLMutations = {
       }
     }
   `,
+
+  // Report Mutations
+  GENERATE_DAILY_REPORT: `
+    mutation GenerateDailyReport($date: DateTime!) {
+      generateDailyReport(date: $date) {
+        id
+        report_date
+        total_sales
+        total_orders
+        total_patients
+        created_at
+        createdByUserId
+        created_by_username
+      }
+    }
+  `,
+
+  ACKNOWLEDGE_STOCK_ALERT: `
+    mutation AcknowledgeStockAlert($id: String!) {
+      acknowledgeStockAlert(id: $id) {
+        id
+        acknowledged
+        acknowledged_at
+      }
+    }
+  `,
 };
 
 // Typed GraphQL API functions
@@ -1169,5 +1287,31 @@ export const GraphQLAPI = {
           settings 
         } 
       }
+    }),
+
+  // Report Operations
+  getDailyReports: (variables?: { date_from?: string; date_to?: string }): Promise<{ dailyReports: any[] }> =>
+    graphqlClient.query(GraphQLQueries.DAILY_REPORTS, { variables }),
+
+  getSalesReports: (variables?: { date_from?: string; date_to?: string; productId?: string }): Promise<{ salesReports: any[] }> =>
+    graphqlClient.query(GraphQLQueries.SALES_REPORTS, { variables }),
+
+  getStockMovements: (variables?: { productId?: string; pagination?: any }): Promise<{ stockMovements: any[] }> =>
+    graphqlClient.query(GraphQLQueries.STOCK_MOVEMENTS, { variables }),
+
+  getStockAlerts: (variables?: { acknowledged?: boolean; pagination?: any }): Promise<{ stockAlerts: any[] }> =>
+    graphqlClient.query(GraphQLQueries.STOCK_ALERTS, { variables }),
+
+  getLowStockProducts: (): Promise<{ lowStockProducts: any[] }> =>
+    graphqlClient.query(GraphQLQueries.LOW_STOCK_PRODUCTS),
+
+  generateDailyReport: (date: string): Promise<{ generateDailyReport: any }> =>
+    graphqlClient.mutation(GraphQLMutations.GENERATE_DAILY_REPORT, {
+      variables: { date }
+    }),
+
+  acknowledgeStockAlert: (id: string): Promise<{ acknowledgeStockAlert: any }> =>
+    graphqlClient.mutation(GraphQLMutations.ACKNOWLEDGE_STOCK_ALERT, {
+      variables: { id }
     }),
 }; 
