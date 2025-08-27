@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
-import { Edit2, ArrowLeft } from "lucide-react"
+import { Edit2, ArrowLeft, Upload } from "lucide-react"
 import { GraphQLAPI } from "@/clients/graphql"
 import { logger } from "@/lib/logger"
 import EditProductForm from "@/components/forms/EditProductForm"
@@ -80,7 +80,21 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
   const [showUnitEditDialog, setShowUnitEditDialog] = useState(false)
   const [hasMultipleVariants, setHasMultipleVariants] = useState(false)
   const [productVariants, setProductVariants] = useState<any[]>(initialProductVariants || [])
-  const [unitFormData, setUnitFormData] = useState({
+  const [unitFormData, setUnitFormData] = useState<{
+    unit_name: string
+    pack_size: string
+    cost: string
+    sale_price: string
+    reorder_point: string
+    volume: string
+    volume_unit: string
+    shelf_code: string
+    shelf_row: string
+    sku: string
+    barcode: string
+    display_pos: boolean
+    image: File | null
+  }>({
     unit_name: '',
     pack_size: '',
     cost: '',
@@ -92,9 +106,18 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
     shelf_row: '',
     sku: '',
     barcode: '',
-    display_pos: true
+    display_pos: true,
+    image: null
   })
   const [isCreatingNewUnit, setIsCreatingNewUnit] = useState(false)
+
+  // Image upload handler for unit edit
+  const handleUnitImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      setUnitFormData(prev => ({ ...prev, image: file }))
+    }
+  }
 
   // Helper function to determine if pack_size is main product (pack_size = 1)
   const isMainProduct = (packSize: string | number) => {
@@ -199,7 +222,8 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
         shelf_row: mainProduct?.shelf_row || '',
         sku: '',
         barcode: '',
-        display_pos: true
+        display_pos: true,
+        image: null
       })
       setIsCreatingNewUnit(true)
     } else {
@@ -216,7 +240,8 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
         shelf_row: unitData.shelf_row || '',
         sku: unitData.sku || '',
         barcode: unitData.barcode || '',
-        display_pos: unitData.status === 'active'
+        display_pos: unitData.status === 'active',
+        image: null
       })
       setIsCreatingNewUnit(false)
     }
@@ -1362,7 +1387,8 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
             shelf_row: '',
             sku: '',
             barcode: '',
-            display_pos: true
+            display_pos: true,
+            image: null
           })
         }
       }}>
@@ -1399,6 +1425,30 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
               const variantToUpdate = isCreatingNewUnit ? null : productVariants?.find(v => v.sku === unitFormData.sku)
               return (
                 <>
+                  {/* Product Image Upload */}
+                  <div className="mb-6">
+                    <Label className="text-sm font-medium text-gray-700">รูปภาพสินค้า</Label>
+                    <div className="mt-2 flex justify-start">
+                      <div className="w-48 h-48 border-2 border-gray-300 border-dashed rounded-lg flex items-center justify-center">
+                        <div className="space-y-1 text-center">
+                          <Upload className="mx-auto h-12 w-12 text-gray-400" />
+                          <div className="flex text-sm text-gray-600">
+                            <label className="relative cursor-pointer bg-white rounded-md font-medium text-purple-600 hover:text-purple-500">
+                              <span>อัพโหลดรูปภาพหรือลากแนบ</span>
+                              <input
+                                type="file"
+                                className="sr-only"
+                                accept="image/*"
+                                onChange={handleUnitImageUpload}
+                              />
+                            </label>
+                          </div>
+                          <p className="text-xs text-gray-500">ขนาดรูปภาพแนะนำ 160x160 หรือ 1:1 และขนาดไม่เกิน 2MB</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                   {/* ชื่อหน่วยนับ ภาษาไทย, อังกฤษ และตัวเลข */}
                   <div className="grid grid-cols-3 gap-4">
                     <div>

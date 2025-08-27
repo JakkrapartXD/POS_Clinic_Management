@@ -11,7 +11,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Switch } from "@/components/ui/switch"
 import { Card, CardContent } from "@/components/ui/card"
-import { Upload } from "lucide-react"
+
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 
 interface EditProductFormProps {
@@ -68,8 +68,7 @@ interface ProductFormData {
   auto_print_label: boolean
   show_dosage_table: boolean
   
-  // Image
-  image: File | null
+
 }
 
 export default function EditProductForm({ onBack, onSubmit, initialData }: EditProductFormProps) {
@@ -132,8 +131,7 @@ export default function EditProductForm({ onBack, onSubmit, initialData }: EditP
     sale_note: initialData?.sale_note || "",
     purchase_note: initialData?.purchase_note || "",
     auto_print_label: false,
-    show_dosage_table: false,
-    image: null
+    show_dosage_table: false
   })
 
   const handleInputChange = (field: keyof ProductFormData, value: any) => {
@@ -144,12 +142,7 @@ export default function EditProductForm({ onBack, onSubmit, initialData }: EditP
     }
   }
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      handleInputChange('image', file)
-    }
-  }
+
 
   const handleReportTypeChange = (reportType: string, checked: boolean) => {
     const currentReports = formData.report_type
@@ -260,8 +253,7 @@ export default function EditProductForm({ onBack, onSubmit, initialData }: EditP
         sale_note: initialData.sale_note || "",
         purchase_note: initialData.purchase_note || "",
         auto_print_label: false,
-        show_dosage_table: false,
-        image: null
+        show_dosage_table: false
       })
     }
   }, [initialData])
@@ -273,9 +265,6 @@ export default function EditProductForm({ onBack, onSubmit, initialData }: EditP
         <div className="flex justify-between items-center">
           <div className="flex items-center space-x-3">
             <h1 className="text-2xl font-semibold text-gray-700">รายละเอียดสินค้า</h1>
-            <Button variant="outline" size="sm" className="text-purple-600 border-purple-200 hover:bg-purple-50">
-              แก้ไข
-            </Button>
           </div>
           <div className="flex items-center space-x-3">
             <Button variant="outline" onClick={handleBack} disabled={isSubmitting}>
@@ -301,29 +290,7 @@ export default function EditProductForm({ onBack, onSubmit, initialData }: EditP
             <h2 className="text-lg font-semibold text-gray-700 mb-4">ข้อมูลทั่วไป</h2>
             <p className="text-sm text-gray-500 mb-6">โปรดระบุข้อมูลสินค้า</p>
 
-            {/* Product Image Upload */}
-            <div className="mb-6">
-              <Label className="text-sm font-medium text-gray-700">รูปภาพสินค้า</Label>
-              <div className="mt-2 flex justify-start">
-                <div className="w-48 h-48 border-2 border-gray-300 border-dashed rounded-lg flex items-center justify-center">
-                  <div className="space-y-1 text-center">
-                    <Upload className="mx-auto h-12 w-12 text-gray-400" />
-                    <div className="flex text-sm text-gray-600">
-                      <label className="relative cursor-pointer bg-white rounded-md font-medium text-purple-600 hover:text-purple-500">
-                        <span>อัพโหลดรูปภาพหรือลากแนบ</span>
-                        <input
-                          type="file"
-                          className="sr-only"
-                          accept="image/*"
-                          onChange={handleImageUpload}
-                        />
-                      </label>
-                    </div>
-                    <p className="text-xs text-gray-500">ขนาดรูปภาพแนะนำ 160x160 หรือ 1:1 และขนาดไม่เกิน 2MB</p>
-                  </div>
-                </div>
-              </div>
-            </div>
+
 
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div>
