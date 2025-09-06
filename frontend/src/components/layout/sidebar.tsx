@@ -9,6 +9,7 @@ import { getMenuItemsForRole } from "@/config/role-permissions"
 import { logger } from "@/lib/logger"
 import { GraphQLAPI } from "@/clients/graphql"
 import { useRouter } from "next/navigation"
+import { performLogout } from "@/utils/auth"
 
 export default function Sidebar() {
   const [activeItem, setActiveItem] = useState<string>("notifications")
@@ -55,16 +56,31 @@ export default function Sidebar() {
   }, [])
 
   // ฟังก์ชันออกจากระบบ
-  const handleLogout = () => {
-    // ลบ token จาก localStorage
-    localStorage.removeItem('token')
-    localStorage.removeItem('user')
-    
-    // ไปยังหน้า login
-    router.push('/login')
-    
-    // ปิด dialog
-    setShowLogoutDialog(false)
+  const handleLogout = async () => {
+    try {
+      console.log('🚪 Starting logout process...');
+      
+      // ใช้ฟังก์ชัน performLogout ที่รวมการเรียก API และ cleanup
+      const result = await performLogout();
+      
+      if (result.success) {
+        logger.info('User logged out successfully', 'AUTH');
+        console.log('✅ Logout process completed:', result.message);
+      } else {
+        logger.warn('Logout completed with warnings', 'AUTH');
+        console.warn('⚠️ Logout completed with warnings:', result.message);
+      }
+      
+    } catch (error) {
+      logger.error('Error during logout:', error, 'AUTH');
+      console.error('❌ Logout error:', error);
+    } finally {
+      // ไปยังหน้า login
+      router.push('/login');
+      
+      // ปิด dialog
+      setShowLogoutDialog(false);
+    }
   }
 
   const allMenuItems = [

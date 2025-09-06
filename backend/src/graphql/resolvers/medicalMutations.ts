@@ -39,13 +39,21 @@ export const medicalMutations = {
       
       // Create order items and update stock
       for (const item of input.orderItems) {
+        // Get product information for historical reference
+        const product = await tx.product.findUnique({
+          where: { id: item.productId },
+          select: { product_name: true, unit: true }
+        });
+        
         await tx.orderItem.create({
           data: {
             orderId: newOrder.id,
             productId: item.productId,
             quantity: item.quantity,
             unit_price: item.unit_price,
-            total_price: item.total_price
+            total_price: item.total_price,
+            product_name: product?.product_name || null,
+            product_unit: product?.unit || null
           }
         });
         
@@ -69,7 +77,9 @@ export const medicalMutations = {
             reference_id: newOrder.id,
             note: `Sale - Order ${newOrder.id}`,
             createdByUserId: context.userId,
-            created_by_username: context.user?.username
+            created_by_username: context.user?.username,
+            product_name: product?.product_name || null,
+            product_unit: product?.unit || null
           }
         });
       }

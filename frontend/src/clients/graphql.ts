@@ -529,10 +529,13 @@ export const GraphQLQueries = {
             quantity
             unit_price
             total_price
+            product_name
+            product_unit
             product {
               id
               product_name
               sku
+              unit
             }
           }
           payments {
@@ -573,10 +576,13 @@ export const GraphQLQueries = {
             quantity
             unit_price
             total_price
+            product_name
+            product_unit
             product {
               id
               product_name
               sku
+              unit
             }
           }
           payments {
@@ -616,10 +622,13 @@ export const GraphQLQueries = {
             quantity
             unit_price
             total_price
+            product_name
+            product_unit
             product {
               id
               product_name
               sku
+              unit
             }
           }
           payments {

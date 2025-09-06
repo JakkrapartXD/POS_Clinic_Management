@@ -97,7 +97,7 @@ model Product {
   purchase_note           String?
   created_at              DateTime        @default(now())
   updated_at              DateTime        @updatedAt
-  orderItems              OrderItem[]
+  orderItems               OrderItem[]
   purchaseItems           PurchaseItem[]
   prescriptions           Prescription[]
   stockMovements          StockMovement[]
@@ -126,11 +126,14 @@ model OrderItem {
   id          String  @id @default(cuid())
   order       Order   @relation(fields: [orderId], references: [id])
   orderId     String
-  product     Product @relation(fields: [productId], references: [id])
+  product     Product @relation(fields: [productId], references: [id], onDelete: Restrict)
   productId   String
   quantity    Int
   unit_price  Float
   total_price Float
+  // Store product name and unit for historical reference
+  product_name String?
+  product_unit String?
 }
 
 model Payment {
@@ -187,16 +190,19 @@ model PurchaseItem {
   id         String   @id @default(cuid())
   purchase   Purchase @relation(fields: [purchaseId], references: [id])
   purchaseId String
-  product    Product  @relation(fields: [productId], references: [id])
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
   productId  String
   quantity   Int
   unit_cost  Float
   total_cost Float
+  // Store product name and unit for historical reference
+  product_name String?
+  product_unit String?
 }
 
 model StockMovement {
   id              String   @id @default(cuid())
-  product         Product  @relation(fields: [productId], references: [id])
+  product         Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
   productId       String
   movement_type   String // in, out, adjustment
   quantity        Int
@@ -206,6 +212,9 @@ model StockMovement {
   created_at      DateTime @default(now())
   createdByUserId String?
   created_by_username String?
+  // Store product name and unit for historical reference
+  product_name String?
+  product_unit String?
 }
 
 model Appointment {
@@ -243,13 +252,16 @@ model Prescription {
   id              String        @id @default(cuid())
   medicalRecord   MedicalRecord @relation(fields: [medicalRecordId], references: [id])
   medicalRecordId String
-  product         Product       @relation(fields: [productId], references: [id])
+  product         Product       @relation(fields: [productId], references: [id], onDelete: Restrict)
   productId       String
   dosage          String?
   dosage_unit     String?
   times_per_day   Int?
   duration_days   Int?
   instructions    String?
+  // Store product name and unit for historical reference
+  product_name String?
+  product_unit String?
 }
 
 model TreatmentPlan {
@@ -278,7 +290,7 @@ model DailyReport {
 
 model StockAlert {
   id            String   @id @default(cuid())
-  product       Product  @relation(fields: [productId], references: [id])
+  product       Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
   productId     String
   alert_type    String?
   alert_message String?
@@ -287,18 +299,24 @@ model StockAlert {
   created_by_username String?
   acknowledged  Boolean  @default(false) // บันทึกว่ามีการรับทราบแล้วหรือไม่
   acknowledged_at DateTime?
+  // Store product name and unit for historical reference
+  product_name String?
+  product_unit String?
 }
 
 model SalesReport {
   id            String   @id @default(cuid())
   report_date   DateTime
-  product       Product  @relation(fields: [productId], references: [id])
+  product       Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
   productId     String
   quantity_sold Int?
   total_sales   Float?
   created_at    DateTime @default(now())
   createdByUserId String?
   created_by_username String?
+  // Store product name and unit for historical reference
+  product_name String?
+  product_unit String?
 }
 
 model Session {

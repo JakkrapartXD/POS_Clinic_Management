@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
@@ -12,6 +12,7 @@ import { Switch } from "@/components/ui/switch"
 import { ChevronDown, Search, X, Check } from "lucide-react"
 import { GraphQLAPI } from "@/clients/graphql"
 import { logger } from "@/lib/logger"
+import JsBarcode from 'jsbarcode'
 
 
 
@@ -61,6 +62,44 @@ export default function POSPage() {
   const [paymentMethod, setPaymentMethod] = useState("cash")
   const [isProcessingPayment, setIsProcessingPayment] = useState(false)
   const [showPromptPayScan, setShowPromptPayScan] = useState(false)
+  const [showPaymentSuccess, setShowPaymentSuccess] = useState(false)
+  const [completedOrder, setCompletedOrder] = useState<any>(null)
+  const barcodeRef = useRef<SVGSVGElement>(null)
+
+  // Handle keyboard input for numpad
+  useEffect(() => {
+    const handleKeyPress = (event: KeyboardEvent) => {
+      // ตรวจสอบว่า payment dialog เปิดอยู่หรือไม่
+      if (!showPaymentDialog) return
+      
+      const key = event.key
+      
+      // รองรับ numpad และ number keys
+      if (key >= '0' && key <= '9') {
+        event.preventDefault()
+        handleNumberInput(key)
+      } else if (key === '.' || key === 'Decimal') {
+        event.preventDefault()
+        handleNumberInput('.')
+      } else if (key === 'Backspace' || key === 'Delete') {
+        event.preventDefault()
+        handleNumberInput('X')
+      } else if (key === 'Enter') {
+        event.preventDefault()
+        if (paymentAmount >= calculateTotal() && !isProcessingPayment) {
+          handlePaymentConfirm()
+        }
+      }
+    }
+
+    // เพิ่ม event listener
+    document.addEventListener('keydown', handleKeyPress)
+    
+    // Cleanup
+    return () => {
+      document.removeEventListener('keydown', handleKeyPress)
+    }
+  }, [showPaymentDialog, paymentAmount, isProcessingPayment])
 
   // ดึงข้อมูลสินค้าจาก API
   const fetchProducts = async () => {
@@ -166,18 +205,6 @@ export default function POSPage() {
     return paymentAmount - calculateTotal()
   }
 
-  // สร้างเลขใบเสร็จรูปแบบ YYMMDD-เลขใบเสร็จ
-  const generateReceiptNumber = (orderId: string) => {
-    const now = new Date()
-    const year = now.getFullYear().toString().slice(-2) // ปีคศสองตัวท้าย
-    const month = (now.getMonth() + 1).toString().padStart(2, '0') // เดือน
-    const day = now.getDate().toString().padStart(2, '0') // วัน
-    
-    // ใช้ orderId 4 ตัวท้ายเป็นเลขใบเสร็จ
-    const receiptNumber = orderId.slice(-4)
-    
-    return `${year}${month}${day}-${receiptNumber}`
-  }
 
   const handleCheckout = () => {
     if (cartItems.length === 0) return
@@ -281,150 +308,44 @@ export default function POSPage() {
         paymentId: paymentResponse.processPayment.id 
       }, 'POS')
 
-      // ลดจำนวนสต๊อกสินค้า - ใช้ for loop แทน Promise.all เพื่อป้องกันการเรียกซ้ำ
-      console.log(`🔄 [${paymentSessionId}] เริ่มลดสต๊อก ${cartItems.length} รายการ`)
+      // สต๊อกถูกลดอัตโนมัติใน createOrder mutation แล้ว
+      console.log(`✅ [${paymentSessionId}] สต๊อกถูกลดอัตโนมัติใน createOrder แล้ว`)
       
-      logger.info('Starting stock adjustment process', {
+      logger.info('Stock automatically adjusted in createOrder', {
         sessionId: paymentSessionId,
         totalItems: cartItems.length,
-        items: cartItems.map(item => ({
-          productId: item.id,
-          productName: item.product_name,
-          quantity: item.quantity,
-          currentStock: item.stock_quantity
-        })),
         orderId: orderId
       }, 'POS')
       
-      // เก็บรายการสินค้าที่ลดสต๊อกแล้วเพื่อป้องกันการลดซ้ำ
-      const processedProducts = new Set()
-      const stockAdjustmentResults: Array<{
-        success: boolean
-        productId: string
-        productName: string
-        adjustment?: number
-        newStock?: number
-        error?: string
-      }> = []
-      
-      // ใช้ for loop แทน Promise.all เพื่อป้องกันการเรียกซ้ำ
-      for (const item of cartItems) {
-        // ตรวจสอบว่าได้ลดสต๊อกสินค้านี้แล้วหรือไม่
-        if (processedProducts.has(item.id)) {
-          console.log(`⚠️ [${paymentSessionId}] สินค้า ${item.product_name} ได้ลดสต๊อกแล้ว ข้ามไป`)
-          logger.warn('Product already processed, skipping', {
-            sessionId: paymentSessionId,
-            productId: item.id,
-            productName: item.product_name
-          }, 'POS')
-          stockAdjustmentResults.push({
-            success: false,
-            productId: item.id,
-            productName: item.product_name,
-            error: 'Product already processed'
-          })
-          continue
-        }
-        
-        processedProducts.add(item.id)
-        try {
-          const stockAdjustment = -item.quantity // ลดจำนวนสต๊อก
-          
-          // ตรวจสอบว่าจำนวนที่ขายไม่เกินสต๊อก
-          if (item.quantity > item.stock_quantity) {
-            throw new Error(`สินค้า ${item.product_name} มีสต๊อกไม่เพียงพอ (มี: ${item.stock_quantity}, ขาย: ${item.quantity})`)
-          }
-          
-          console.log(`📦 [${paymentSessionId}] ลดสต๊อก: ${item.product_name} (ขาย: ${item.quantity}, สต๊อกเก่า: ${item.stock_quantity})`)
-          
-          logger.info('Adjusting stock before', { 
-            sessionId: paymentSessionId,
-            productId: item.id,
-            productName: item.product_name,
-            soldQuantity: item.quantity,
-            adjustment: stockAdjustment,
-            currentStock: item.stock_quantity,
-            expectedNewStock: item.stock_quantity + stockAdjustment,
-            orderId: orderId
-          }, 'POS')
-          
-                    const response = await GraphQLAPI.adjustStock(item.id, stockAdjustment, `ขายผ่าน POS - Order ${orderId}`)
-          
-          // ดึงข้อมูลสินค้าที่อัพเดตแล้วเพื่อแสดงผลที่ถูกต้อง
-          const productResponse = await GraphQLAPI.getProduct(item.id)
-          const updatedProduct = productResponse.product
-          
-          console.log(`✅ [${paymentSessionId}] ลดสต๊อกสำเร็จ: ${item.product_name} (สต๊อกใหม่: ${updatedProduct.stock_quantity})`)
-          
-          logger.info('Stock adjusted after', { 
-            sessionId: paymentSessionId,
-            productId: item.id,
-            productName: item.product_name,
-            soldQuantity: item.quantity,
-            adjustment: stockAdjustment,
-            oldStock: item.stock_quantity,
-            actualNewStock: updatedProduct.stock_quantity,
-            expectedNewStock: item.stock_quantity + stockAdjustment,
-            stockMovementId: response.adjustStock?.id,
-            orderId: orderId
-          }, 'POS')
-          
-          stockAdjustmentResults.push({
-            success: true,
-            productId: item.id,
-            productName: item.product_name,
-            adjustment: stockAdjustment,
-            newStock: updatedProduct.stock_quantity
-          })
-        } catch (error) {
-          logger.error('Failed to adjust stock', { 
-            productId: item.id,
-            productName: item.product_name,
-            error 
-          }, 'POS')
-          
-          stockAdjustmentResults.push({
-            success: false,
-            productId: item.id,
-            productName: item.product_name,
-            error: error instanceof Error ? error.message : 'Unknown error'
-          })
-        }
-      }
-      
-      // Log สรุปผลการลดสต๊อก
-      const successfulAdjustments = stockAdjustmentResults.filter(result => result.success)
-      const failedAdjustments = stockAdjustmentResults.filter(result => !result.success)
-      
-      console.log(`🎯 [${paymentSessionId}] สรุปการลดสต๊อก: สำเร็จ ${successfulAdjustments.length}/${cartItems.length} รายการ`)
-      
-      logger.info('Stock adjustment summary', {
-        sessionId: paymentSessionId,
-        totalItems: cartItems.length,
-        successfulAdjustments: successfulAdjustments.length,
-        failedAdjustments: failedAdjustments.length,
-        orderId: orderId,
-        results: stockAdjustmentResults
-      }, 'POS')
-      
-      if (failedAdjustments.length > 0) {
-        logger.error('Some stock adjustments failed', {
-          failedAdjustments,
-          orderId: orderId
-        }, 'POS')
-      }
 
       // สร้างเลขใบเสร็จ
       const receiptNumber = generateReceiptNumber(orderId)
       
       console.log(`🎉 [${paymentSessionId}] ชำระเงินสำเร็จ! เลขใบเสร็จ: ${receiptNumber}`)
       
-      // แสดงหน้าสรุปการชำระเงิน
-      alert(`ชำระเรียบร้อยแล้ว!\nยอดรวม: ฿${calculateTotal().toFixed(2)}\nรับเงิน: ฿${paymentAmount.toFixed(2)}\nเงินทอน: ฿${change.toFixed(2)}\n\nเลขใบเสร็จ: ${receiptNumber}`)
+      // เตรียมข้อมูล order สำหรับแสดงผล
+      const orderData = {
+        id: orderId,
+        receiptNumber: receiptNumber,
+        total_amount: calculateTotal(),
+        payment_amount: paymentAmount,
+        change: change,
+        payment_method: paymentMethod,
+        orderItems: cartItems.map(item => ({
+          ...item,
+          total_price: item.sale_price * item.quantity
+        })),
+        created_at: new Date().toISOString(),
+        user: { username: 'เจ้าของร้าน' }
+      }
+      
+      // แสดงหน้าคอนเฟิร์มการชำระเงิน
+      setCompletedOrder(orderData)
+      setShowPaymentSuccess(true)
+      setShowPaymentDialog(false)
       
       // รีเซ็ตตะกร้า
       setCartItems([])
-      setShowPaymentDialog(false)
       setPaymentAmount(0)
       
       // ส่ง event เพื่ออัพเดตจำนวนใบเสร็จรับเงินวันนี้ใน sidebar
@@ -433,13 +354,11 @@ export default function POSPage() {
       // อัพเดตข้อมูลสินค้าในหน้าจอ (ไม่รีโหลดจาก API)
       setProducts(prevProducts => 
         prevProducts.map(product => {
-          const adjustedItem = stockAdjustmentResults.find(result => 
-            result.success && result.productId === product.id
-          )
-          if (adjustedItem && adjustedItem.newStock !== undefined) {
+          const cartItem = cartItems.find(item => item.id === product.id)
+          if (cartItem) {
             return {
               ...product,
-              stock_quantity: adjustedItem.newStock
+              stock_quantity: product.stock_quantity - cartItem.quantity
             }
           }
           return product
@@ -451,6 +370,56 @@ export default function POSPage() {
       alert(`เกิดข้อผิดพลาดในการชำระเงิน: ${error instanceof Error ? error.message : 'Unknown error'}`)
     } finally {
       setIsProcessingPayment(false)
+    }
+  }
+
+  const handleClosePaymentSuccess = () => {
+    setShowPaymentSuccess(false)
+    setCompletedOrder(null)
+  }
+
+  // สร้าง barcode เมื่อมี completedOrder
+  useEffect(() => {
+    if (completedOrder && barcodeRef.current) {
+      try {
+        JsBarcode(barcodeRef.current, completedOrder.receiptNumber, {
+          format: "CODE128",
+          width: 2,
+          height: 50,
+          displayValue: false,
+          margin: 0
+        })
+      } catch (error) {
+        console.error('Error generating barcode:', error)
+      }
+    }
+  }, [completedOrder])
+
+  const generateReceiptNumber = (orderId: string) => {
+    const now = new Date()
+    const year = now.getFullYear().toString().slice(-2)
+    const month = (now.getMonth() + 1).toString().padStart(2, '0')
+    const day = now.getDate().toString().padStart(2, '0')
+    const shortId = orderId.slice(-8).toUpperCase()
+    return `${year}${month}${day}-${shortId}`
+  }
+
+  const formatDateTime = (dateString: string) => {
+    const date = new Date(dateString)
+    const day = date.getDate()
+    const month = date.getMonth() + 1
+    const year = date.getFullYear().toString().slice(-2)
+    const hours = date.getHours().toString().padStart(2, '0')
+    const minutes = date.getMinutes().toString().padStart(2, '0')
+    return `${day}/${month}/${year}, ${hours}:${minutes}`
+  }
+
+  const getPaymentMethodThai = (method: string) => {
+    switch (method) {
+      case 'cash': return 'เงินสด'
+      case 'credit_card': return 'บัตรเครดิต'
+      case 'qr': return 'พร้อมเพย์'
+      default: return 'เงินสด'
     }
   }
 
@@ -721,6 +690,15 @@ export default function POSPage() {
 
             {/* Numeric Keypad */}
             <div className="space-y-4">
+              {/* Numpad Instructions */}
+              <div className="bg-gray-50 p-3 rounded-lg">
+                <div className="text-xs text-gray-600 text-center">
+                  💡 ใช้แป้นพิมพ์ Numpad หรือตัวเลขบนคีย์บอร์ดได้
+                  <br />
+                  <span className="text-gray-500">Enter = ยืนยัน, Backspace = ลบ</span>
+                </div>
+              </div>
+              
               <div className="grid grid-cols-3 gap-2">
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
                   <Button
@@ -764,6 +742,129 @@ export default function POSPage() {
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Payment Success Modal */}
+      <Dialog open={showPaymentSuccess} onOpenChange={setShowPaymentSuccess}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex justify-between items-center">
+              <span className="text-purple-600 font-medium">B พิมพ์ฉลากยา</span>
+              <div className="flex space-x-4 text-purple-600">
+                <button className="hover:underline text-sm">พิมพ์ใบเสร็จรับเงิน</button>
+                <button className="hover:underline text-sm">เปิดลิ้นชักเก็บเงิน</button>
+              </div>
+            </DialogTitle>
+          </DialogHeader>
+
+          {completedOrder && (
+            <div className="space-y-6">
+              {/* Success Icon */}
+              <div className="flex justify-center">
+                <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center">
+                  <Check className="w-10 h-10 text-white" />
+                </div>
+              </div>
+              
+              {/* Payment Confirmation */}
+              <div className="bg-gray-50 rounded-lg p-6 text-center">
+                <h2 className="text-xl font-bold text-gray-900 mb-2">
+                  รับชำระ ฿{completedOrder.payment_amount.toFixed(2)}
+                </h2>
+                <p className="text-gray-600">
+                  {completedOrder.change === 0 
+                    ? 'รับชำระพอดี ไม่มีเงินทอน' 
+                    : `เงินทอน ฿${completedOrder.change.toFixed(2)}`
+                  }
+                </p>
+              </div>
+
+              {/* Receipt */}
+              <div className="bg-white border rounded-lg overflow-hidden">
+                {/* Receipt Header */}
+                <div className="text-center p-4 border-b bg-gray-50">
+                  <h3 className="text-lg font-bold">ใบเสร็จรับเงิน / RECEIPT</h3>
+                  <p className="text-sm text-gray-600">SN clinic</p>
+                </div>
+
+                {/* Receipt Details */}
+                <div className="p-4 space-y-3">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">ชำระเมื่อ:</span>
+                    <span>{formatDateTime(completedOrder.created_at)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">ออกโดย:</span>
+                    <span>{completedOrder.user.username}</span>
+                  </div>
+                  
+                  {/* Barcode */}
+                  <div className="text-center py-4">
+                    <svg ref={barcodeRef} className="mx-auto"></svg>
+                    <p className="text-xs text-gray-600 mt-2">{completedOrder.receiptNumber}</p>
+                  </div>
+
+                  {/* Items */}
+                  <div className="space-y-2">
+                    {completedOrder.orderItems.map((item: any) => (
+                      <div key={item.id} className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <p className="text-sm font-medium">{item.product_name}</p>
+                          <p className="text-xs text-gray-600">
+                            ฿{item.sale_price.toFixed(2)} x{item.quantity} ({item.unit})
+                          </p>
+                        </div>
+                        <span className="text-sm font-medium">฿{item.total_price.toFixed(2)}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Summary */}
+                  <div className="border-t pt-3 space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span>สินค้า {completedOrder.orderItems.length} รายการ</span>
+                      <span>฿{completedOrder.total_amount.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span>ส่วนลด (%)</span>
+                      <span>-</span>
+                    </div>
+                    <div className="flex justify-between font-bold">
+                      <span>ยอดสุทธิ</span>
+                      <span>฿{completedOrder.total_amount.toFixed(2)}</span>
+                    </div>
+                  </div>
+
+                  {/* Payment Info */}
+                  <div className="border-t pt-3 space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span>ช่องทางการชำระ</span>
+                      <span>{getPaymentMethodThai(completedOrder.payment_method)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span>รับเงิน</span>
+                      <span>฿{completedOrder.payment_amount.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span>เงินทอน</span>
+                      <span>฿{completedOrder.change.toFixed(2)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Button */}
+              <div className="flex justify-center">
+                <Button
+                  onClick={handleClosePaymentSuccess}
+                  className="bg-purple-600 hover:bg-purple-700 text-white px-8 py-3"
+                >
+                  รับชำระ ฿{completedOrder.payment_amount.toFixed(2)} ({completedOrder.change === 0 ? 'ไม่มีเงินทอน' : `เงินทอน ฿${completedOrder.change.toFixed(2)}`})
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

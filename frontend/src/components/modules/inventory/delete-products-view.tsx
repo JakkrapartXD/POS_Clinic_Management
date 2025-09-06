@@ -24,6 +24,9 @@ export default function DeleteProductsView({ onBack, onDelete }: DeleteProductsV
   const [products, setProducts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [showAlternativeAction, setShowAlternativeAction] = useState(false)
+  const [failedProducts, setFailedProducts] = useState<any[]>([])
 
   const filteredProducts = products.filter(product => 
     product.product_name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -72,34 +75,178 @@ export default function DeleteProductsView({ onBack, onDelete }: DeleteProductsV
     if (selectedProducts.length > 0 && confirmDelete) {
       try {
         setDeleting(true)
+        setError(null)
         
-        // Delete products one by one
-        const deletePromises = selectedProducts.map(productId => 
-          GraphQLAPI.deleteProduct(productId)
+        // Delete products one by one and collect results
+        const results = []
+        const errors = []
+        
+        for (const productId of selectedProducts) {
+          try {
+            await GraphQLAPI.deleteProduct(productId)
+            results.push({ productId, success: true })
+          } catch (error: any) {
+            const product = products.find(p => p.id === productId)
+            const productName = product?.product_name || 'Unknown'
+            
+            // Log the full error for debugging
+            console.log('Delete product error:', error)
+            console.log('Error message:', error?.message)
+            console.log('Error extensions:', error?.extensions)
+            console.log('Error type:', typeof error)
+            console.log('Error keys:', Object.keys(error || {}))
+            
+            // Extract error message from various possible structures
+            let errorMessage = ''
+            
+            // Check for GraphQL error structure first
+            if (error?.extensions?.originalError?.message) {
+              errorMessage = error.extensions.originalError.message
+            } else if (error?.message) {
+              errorMessage = error.message
+            } else if (error?.extensions?.originalError?.stack) {
+              // Try to extract message from stack trace
+              const stack = error.extensions.originalError.stack
+              const match = stack.match(/Error: (.+?)\n/)
+              if (match) {
+                errorMessage = match[1]
+              }
+            } else if (typeof error === 'string') {
+              errorMessage = error
+            } else if (error?.toString) {
+              errorMessage = error.toString()
+            }
+            
+            console.log('Extracted error message:', errorMessage)
+            
+            // Check if it's the specific error about existing transactions
+            if (errorMessage.includes('existing transactions') || 
+                errorMessage.includes('Cannot delete product with existing transactions') ||
+                errorMessage.includes('Set status to inactive instead')) {
+              console.log('Detected transaction error for product:', productName)
+              errors.push({
+                productId,
+                productName,
+                error: 'สินค้านี้มีการทำธุรกรรมแล้ว ไม่สามารถลบได้ กรุณาเปลี่ยนสถานะเป็น "ไม่ใช้งาน" แทน'
+              })
+            } else {
+              // Show the actual error message for debugging
+              const displayError = errorMessage || 'เกิดข้อผิดพลาดไม่ทราบสาเหตุ'
+              console.log('Other error for product:', productName, 'Error:', displayError)
+              errors.push({
+                productId,
+                productName,
+                error: displayError
+              })
+            }
+          }
+        }
+        
+        console.log('Product deletion completed', { 
+          successful: results.length, 
+          failed: errors.length,
+          errors: errors
+        })
+        
+        // Show error message if there are any failures
+        if (errors.length > 0) {
+          console.log('Processing errors:', errors)
+          
+          const transactionErrors = errors.filter(e => 
+            e.error.includes('existing transactions') || 
+            e.error.includes('ไม่สามารถลบได้') ||
+            e.error.includes('มีการทำธุรกรรมแล้ว')
+          )
+          const otherErrors = errors.filter(e => 
+            !e.error.includes('existing transactions') && 
+            !e.error.includes('ไม่สามารถลบได้') &&
+            !e.error.includes('มีการทำธุรกรรมแล้ว')
+          )
+          
+          console.log('Transaction errors:', transactionErrors)
+          console.log('Other errors:', otherErrors)
+          
+          let errorMessage = ''
+          
+          if (transactionErrors.length > 0) {
+            errorMessage += `ไม่สามารถลบสินค้า ${transactionErrors.length} รายการได้ เนื่องจากมีการทำธุรกรรมแล้ว:\n${transactionErrors.map(e => `• ${e.productName}`).join('\n')}\n\n`
+            console.log('Setting failed products:', transactionErrors)
+            setFailedProducts(transactionErrors)
+            setShowAlternativeAction(true)
+          }
+          
+          if (otherErrors.length > 0) {
+            errorMessage += `เกิดข้อผิดพลาดในการลบสินค้า ${otherErrors.length} รายการ:\n${otherErrors.map(e => `• ${e.productName}: ${e.error}`).join('\n')}`
+          }
+          
+          console.log('Setting error message:', errorMessage)
+          setError(errorMessage)
+          
+          // If some products were deleted successfully, still call the callback
+          if (results.length > 0) {
+            onDelete({
+              productIds: results.map(r => r.productId),
+              reason: deleteReason,
+              errors: errors
+            })
+          }
+        } else {
+          // All products deleted successfully
+          console.log('All products deleted successfully')
+          onDelete({
+            productIds: selectedProducts,
+            reason: deleteReason
+          })
+          
+          // Clear selection
+          setSelectedProducts([])
+          setConfirmDelete(false)
+          setDeleteReason("")
+        }
+        
+      } catch (error) {
+        console.error('Failed to delete products', error)
+        setError('เกิดข้อผิดพลาดในการลบสินค้า กรุณาลองใหม่อีกครั้ง')
+      } finally {
+        setDeleting(false)
+      }
+    }
+  }
+
+  const handleSetInactive = async () => {
+    if (failedProducts.length > 0) {
+      try {
+        setDeleting(true)
+        setError(null)
+        
+        console.log('Setting products to inactive:', failedProducts)
+        
+        // Update products to inactive status
+        const updatePromises = failedProducts.map(product => 
+          GraphQLAPI.updateProduct(product.productId, { status: 'inactive' })
         )
         
-        await Promise.all(deletePromises)
+        await Promise.all(updatePromises)
         
-        if (process.env.NODE_ENV === 'development') {
-          logger.info('Products deleted successfully', { count: selectedProducts.length }, 'INVENTORY')
-        }
+        console.log('Products set to inactive', { count: failedProducts.length })
         
         // Call parent callback
         onDelete({
-          productIds: selectedProducts,
-          reason: deleteReason
+          productIds: failedProducts.map(p => p.productId),
+          reason: `เปลี่ยนสถานะเป็นไม่ใช้งาน: ${deleteReason}`,
+          action: 'set_inactive'
         })
         
-        // Clear selection
+        // Clear states
+        setFailedProducts([])
+        setShowAlternativeAction(false)
         setSelectedProducts([])
         setConfirmDelete(false)
         setDeleteReason("")
         
       } catch (error) {
-        if (process.env.NODE_ENV === 'development') {
-          logger.error('Failed to delete products', error, 'INVENTORY')
-        }
-        // You might want to show an error message to the user here
+        console.error('Failed to set products inactive', error)
+        setError('เกิดข้อผิดพลาดในการเปลี่ยนสถานะสินค้า กรุณาลองใหม่อีกครั้ง')
       } finally {
         setDeleting(false)
       }
@@ -114,6 +261,24 @@ export default function DeleteProductsView({ onBack, onDelete }: DeleteProductsV
       <div className="mb-6">
         <h2 className="text-2xl font-semibold text-gray-800 mb-2">ลบสินค้า</h2>
         <p className="text-gray-600">เลือกสินค้าที่ต้องการลบออกจากระบบ</p>
+        
+        {/* Error Message */}
+        {error && (
+          <Alert className="mt-4 border-red-200 bg-red-50">
+            <AlertTriangle className="h-4 w-4 text-red-600" />
+            <AlertDescription className="text-red-800 whitespace-pre-line">
+              {error}
+            </AlertDescription>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setError(null)}
+              className="mt-2 text-red-600 hover:text-red-800"
+            >
+              ปิด
+            </Button>
+          </Alert>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -291,6 +456,23 @@ export default function DeleteProductsView({ onBack, onDelete }: DeleteProductsV
         <Button variant="outline" onClick={onBack}>
           ยกเลิก
         </Button>
+        
+        {/* Alternative Action Button */}
+        {showAlternativeAction && (
+          <Button 
+            onClick={handleSetInactive}
+            disabled={deleting}
+            variant="secondary"
+          >
+            {deleting ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Package className="h-4 w-4 mr-2" />
+            )}
+            {deleting ? 'กำลังเปลี่ยนสถานะ...' : `เปลี่ยนสถานะเป็นไม่ใช้งาน (${failedProducts.length})`}
+          </Button>
+        )}
+        
         <Button 
           onClick={handleDelete}
           disabled={!canDelete}

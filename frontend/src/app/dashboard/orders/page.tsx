@@ -9,6 +9,8 @@ import { Search, CheckCircle, ArrowRight, Printer, Edit } from "lucide-react"
 import PageGuard from "@/components/guards/page-guard"
 import { GraphQLAPI } from "@/clients/graphql"
 import { logger } from "@/lib/logger"
+import { getOrderItemDisplayName } from "@/utils/product-display"
+import ProductList from "@/components/ui/product-list"
 
 interface Order {
   id: string
@@ -36,10 +38,13 @@ interface OrderItem {
   quantity: number
   unit_price: number
   total_price: number
+  product_name?: string
+  product_unit?: string
   product: {
     id: string
     product_name: string
     sku: string
+    unit?: string
   }
 }
 
@@ -338,6 +343,16 @@ export default function OrdersPage() {
                     </div>
                   </CardContent>
                 </Card>
+
+                {/* รายการสินค้า */}
+                <div className="mt-6">
+                  <ProductList
+                    items={selectedOrder.orderItems}
+                    title="รายการสินค้า"
+                    showTotal={true}
+                    getDisplayName={getOrderItemDisplayName}
+                  />
+                </div>
               </div>
             </>
           ) : (

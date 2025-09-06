@@ -364,7 +364,9 @@ const additionalMutations = {
             orderItems: true,
             purchaseItems: true,
             prescriptions: true,
-            stockMovements: true
+            stockMovements: true,
+            salesReports: true,
+            stockAlerts: true
           }
         }
       }
@@ -380,16 +382,21 @@ const additionalMutations = {
       throw new Error('Cannot delete product with existing transactions. Set status to inactive instead.');
     }
     
-    await context.prisma.product.delete({
-      where: { id }
+    // Use transaction to ensure data consistency
+    await context.prisma.$transaction(async (tx) => {
+      // Delete the product
+      await tx.product.delete({
+        where: { id }
+      });
+      
+      // Log the operation
+      await context.security.logSensitiveOperation(
+        context.userId,
+        'DELETE_PRODUCT',
+        'Product',
+        id, context.redisClient
+      );
     });
-    
-    await context.security.logSensitiveOperation(
-      context.userId,
-      'DELETE_PRODUCT',
-      'Product',
-      id, context.redisClient
-    );
     
     return true;
   },
