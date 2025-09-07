@@ -20,6 +20,7 @@ interface ProductListSidebarProps {
   selectedLetter: string
   products: Product[]
   onProductClick?: (productId: string) => void
+  totalProducts?: number
 }
 
 export default function ProductListSidebar({
@@ -27,7 +28,8 @@ export default function ProductListSidebar({
   onSearchChange,
   selectedLetter,
   products,
-  onProductClick
+  onProductClick,
+  totalProducts = 0
 }: ProductListSidebarProps) {
   // Group products by first letter
   const groupedProducts = useMemo(() => {
@@ -48,7 +50,7 @@ export default function ProductListSidebar({
     return grouped
   }, [searchQuery, selectedLetter, products])
 
-  const totalProducts = Object.values(groupedProducts).flat().length
+  const filteredProductsCount = Object.values(groupedProducts).flat().length
 
   return (
     <div className="w-80 bg-white border-r flex flex-col h-full">
@@ -82,8 +84,17 @@ export default function ProductListSidebar({
       {/* Stock Count - Fixed */}
       <div className="p-4 border-b flex-shrink-0">
         <div className="text-center">
-          <div className="text-2xl font-bold text-gray-700">{totalProducts}</div>
-          <div className="text-sm text-gray-500">รายการสินค้า</div>
+          <div className="text-2xl font-bold text-gray-700">
+            {searchQuery || selectedLetter ? filteredProductsCount : totalProducts}
+          </div>
+          <div className="text-sm text-gray-500">
+            {searchQuery || selectedLetter ? 'รายการที่พบ' : 'รายการสินค้าทั้งหมด'}
+          </div>
+          {totalProducts > 0 && (searchQuery || selectedLetter) && (
+            <div className="text-xs text-gray-400 mt-1">
+              จากทั้งหมด {totalProducts} รายการ
+            </div>
+          )}
         </div>
       </div>
 
@@ -133,6 +144,7 @@ export default function ProductListSidebar({
             <div className="text-sm">ลองเปลี่ยนคำค้นหาหรือเลือกหมวดหมู่อื่น</div>
           </div>
         )}
+
       </div>
     </div>
   )

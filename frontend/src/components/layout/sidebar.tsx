@@ -12,7 +12,7 @@ import { useRouter } from "next/navigation"
 import { performLogout } from "@/utils/auth"
 
 export default function Sidebar() {
-  const [activeItem, setActiveItem] = useState<string>("notifications")
+  const [activeItem, setActiveItem] = useState<string>("pos")
   const [todayReceiptsCount, setTodayReceiptsCount] = useState<number>(0)
   const [expandedItems, setExpandedItems] = useState<string[]>(["reports"])
   const [showLogoutDialog, setShowLogoutDialog] = useState<boolean>(false)

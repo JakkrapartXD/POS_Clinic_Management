@@ -5,6 +5,7 @@ import { User, UserProfile, UpdateUserInput, UsersResponse, ChangePasswordRespon
 import { logger } from '@/lib/logger';
 import { MappedProductData, ImportResult, ImportSettings } from '@/types/csv-import';
 import { handleAuthError } from '@/utils/auth';
+import { cache, CACHE_CONFIG } from '@/lib/cache';
 
 // Product interface for GraphQL operations
 interface Product {
@@ -154,6 +155,7 @@ interface GraphQLResponse<T = any> {
 interface GraphQLRequestOptions {
   variables?: Record<string, any>;
   operationName?: string;
+  skipCache?: boolean;
 }
 
 class GraphQLClient {
@@ -173,10 +175,69 @@ class GraphQLClient {
     this.authErrorHandler = handler;
   }
 
+  // Check if query should be cached
+  private shouldCache(query: string): boolean {
+    // Cache only read operations (queries, not mutations)
+    return query.trim().startsWith('query') || query.trim().startsWith('{');
+  }
+
+  // Generate cache key for query
+  private generateCacheKey(query: string, variables?: any): string {
+    const operationName = this.extractOperationName(query);
+    return cache.generateKey(operationName, variables);
+  }
+
+  // Extract operation name from query
+  private extractOperationName(query: string): string {
+    const match = query.match(/(?:query|mutation)\s+(\w+)/);
+    return match ? match[1] : 'anonymous';
+  }
+
+  // Get cache TTL based on operation
+  private getCacheTTL(operationName: string): number {
+    if (operationName.includes('Products')) return CACHE_CONFIG.PRODUCTS.TTL;
+    if (operationName.includes('Categories')) return CACHE_CONFIG.CATEGORIES.TTL;
+    if (operationName.includes('User')) return CACHE_CONFIG.USER_DATA.TTL;
+    return 2 * 60 * 1000; // Default 2 minutes
+  }
+
+  // Invalidate cache for specific operation
+  invalidateCache(operationName: string, variables?: any): void {
+    const cacheKey = cache.generateKey(operationName, variables);
+    cache.delete(cacheKey);
+    logger.info('Invalidated GraphQL cache', { cacheKey }, 'GRAPHQL_CACHE');
+  }
+
+  // Invalidate all cache entries matching a pattern
+  invalidateCachePattern(pattern: string): void {
+    const stats = cache.getStats();
+    const keysToDelete = stats.keys.filter(key => key.includes(pattern));
+    
+    keysToDelete.forEach(key => cache.delete(key));
+    logger.info('Invalidated GraphQL cache pattern', { pattern, count: keysToDelete.length }, 'GRAPHQL_CACHE');
+  }
+
+  // Clear all cache
+  clearCache(): void {
+    cache.clear();
+    logger.info('Cleared all GraphQL cache', {}, 'GRAPHQL_CACHE');
+  }
+
   private async request<T>(
     query: string,
     options: GraphQLRequestOptions = {}
   ): Promise<T> {
+    // Check cache first for read operations
+    if (this.shouldCache(query) && !options.skipCache) {
+      const cacheKey = this.generateCacheKey(query, options.variables);
+      const cachedData = cache.get<T>(cacheKey);
+      
+      if (cachedData) {
+        logger.info('Cache hit for GraphQL query', { cacheKey }, 'GRAPHQL_CACHE');
+        return cachedData;
+      }
+    }
+
     const url = `${this.baseURL}${this.endpoint}`;
 
     // Debug: Log request information
@@ -242,6 +303,16 @@ class GraphQLClient {
 
       if (!result.data) {
         throw new Error('No data returned from GraphQL query');
+      }
+
+      // Cache successful responses for read operations
+      if (this.shouldCache(query) && !options.skipCache) {
+        const cacheKey = this.generateCacheKey(query, options.variables);
+        const operationName = this.extractOperationName(query);
+        const ttl = this.getCacheTTL(operationName);
+        
+        cache.set(cacheKey, result.data, ttl);
+        logger.info('Cached GraphQL response', { cacheKey, ttl }, 'GRAPHQL_CACHE');
       }
 
       return result.data;
@@ -374,6 +445,7 @@ export const GraphQLQueries = {
           stock_quantity
           sku
           barcode
+          image_url
           categoryId
           category {
             id
@@ -458,6 +530,8 @@ export const GraphQLQueries = {
         usage_instruction
         sale_note
         purchase_note
+        image_url
+        image_path
         created_at
         updated_at
       }
@@ -909,6 +983,8 @@ export const GraphQLMutations = {
         usage_instruction
         sale_note
         purchase_note
+        image_url
+        image_path
         created_at
         updated_at
       }
@@ -962,6 +1038,8 @@ export const GraphQLMutations = {
         usage_instruction
         sale_note
         purchase_note
+        image_url
+        image_path
         created_at
         updated_at
       }
@@ -971,6 +1049,18 @@ export const GraphQLMutations = {
   DELETE_PRODUCT: `
     mutation DeleteProduct($id: String!) {
       deleteProduct(id: $id)
+    }
+  `,
+
+  UPDATE_PRODUCT_IMAGE: `
+    mutation UpdateProductImage($id: String!, $image_url: String!) {
+      updateProductImage(id: $id, image_url: $image_url) {
+        id
+        product_name
+        image_url
+        image_path
+        updated_at
+      }
     }
   `,
 
@@ -1199,6 +1289,12 @@ export const GraphQLAPI = {
       variables: { id }
     }),
 
+  // Update product image
+  updateProductImage: (id: string, image_url: string): Promise<{ updateProductImage: any }> =>
+    graphqlClient.mutation(GraphQLMutations.UPDATE_PRODUCT_IMAGE, {
+      variables: { id, image_url }
+    }),
+
   // Order Operations
   getAllOrders: (variables?: { filter?: any; pagination?: PaginationInput }): Promise<{ orders: any }> =>
     graphqlClient.query(GraphQLQueries.ALL_ORDERS, { variables }),
@@ -1323,4 +1419,74 @@ export const GraphQLAPI = {
     graphqlClient.mutation(GraphQLMutations.ACKNOWLEDGE_STOCK_ALERT, {
       variables: { id }
     }),
+
+  // Image upload methods
+  uploadImage: async (file: File, category: 'product' | 'user' | 'patient'): Promise<{ url: string }> => {
+    const formData = new FormData()
+    formData.append('file', file) // Changed from 'image' to 'file' to match backend
+    
+    // Map frontend categories to backend categories
+    const categoryMap = {
+      'product': 'products',
+      'user': 'users', 
+      'patient': 'patients'
+    }
+    
+    const backendCategory = categoryMap[category] || category
+    
+    const response = await fetch(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.UPLOAD.IMAGE}/${backendCategory}`, {
+      method: 'POST',
+      credentials: 'include', // Include cookies for authentication
+      body: formData
+    })
+    
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`Upload failed: ${response.status} - ${errorText}`)
+    }
+    
+    const result = await response.json()
+    console.log('Upload API response:', result)
+    
+    // Fix URL to use the correct endpoint
+    if (result.success && result.data && result.data.url) {
+      result.data.url = result.data.url.replace('/uploads/', '/upload/image/')
+    }
+    
+    console.log('Final URL:', result.data?.url)
+    // Return the URL directly
+    return { url: result.data?.url || '' }
+  },
+
+  // Delete uploaded image
+  deleteImage: async (filename: string, category: 'product' | 'user' | 'patient'): Promise<void> => {
+    // Map frontend categories to backend categories
+    const categoryMap = {
+      'product': 'products',
+      'user': 'users', 
+      'patient': 'patients'
+    }
+    
+    const backendCategory = categoryMap[category] || category
+    
+    const response = await fetch(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.UPLOAD.IMAGE}/${backendCategory}/${filename}`, {
+      method: 'DELETE',
+      credentials: 'include'
+    })
+    
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`Delete failed: ${response.status} - ${errorText}`)
+    }
+  },
+
+  // Cache management methods
+  invalidateCache: (operationName: string, variables?: any) =>
+    graphqlClient.invalidateCache(operationName, variables),
+
+  invalidateCachePattern: (pattern: string) =>
+    graphqlClient.invalidateCachePattern(pattern),
+
+  clearCache: () =>
+    graphqlClient.clearCache(),
 }; 

@@ -25,6 +25,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
       'reports',
       'reports/advanced',
       'settings',
+      'admin',
       'admin/users'
     ],
     menuItems: [

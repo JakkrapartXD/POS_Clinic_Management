@@ -11,7 +11,9 @@ export const queries = {
     await context.security.checkRateLimit(context.userId, 'query', context.redisClient);
     context.security.validatePagination(pagination);
     
-    const where: any = {};
+    const where: any = {
+      isDelete: false // Only show non-deleted users
+    };
     
     if (filter) {
       if (filter.role) where.role = filter.role;
@@ -46,8 +48,11 @@ export const queries = {
     context.security.requireStaff(context);
     context.security.validateId(id);
     
-    const user = await context.prisma.user.findUnique({
-      where: { id },
+    const user = await context.prisma.user.findFirst({
+      where: { 
+        id,
+        isDelete: false // Only show non-deleted users
+      },
       select: {
         id: true,
         username: true,
@@ -93,13 +98,18 @@ export const queries = {
     await context.security.checkRateLimit(context.userId, 'query', context.redisClient);
     context.security.validatePagination(pagination);
     
+    const where = {
+      isDelete: false // Only show non-deleted patients
+    };
+    
     const [patients, total] = await Promise.all([
       context.prisma.patient.findMany({
+        where,
         skip: pagination?.skip || 0,
         take: pagination?.take || 10,
         orderBy: { created_at: 'desc' }
       }),
-      context.prisma.patient.count()
+      context.prisma.patient.count({ where })
     ]);
     
     return { patients, total };
@@ -112,8 +122,11 @@ export const queries = {
     
     await context.security.validatePatientAccess(context.userId, id, context.role);
     
-    const patient = await context.prisma.patient.findUnique({
-      where: { id },
+    const patient = await context.prisma.patient.findFirst({
+      where: { 
+        id,
+        isDelete: false // Only show non-deleted patients
+      },
       include: {
         appointments: {
           orderBy: { appointment_time: 'desc' },
@@ -167,7 +180,9 @@ export const queries = {
     await context.security.checkRateLimit(context.userId, 'query', context.redisClient);
     context.security.validatePagination(pagination);
     
-    const where: any = {};
+    const where: any = {
+      isDelete: false // Only show non-deleted products
+    };
     
     if (filter) {
       if (filter.product_type) where.product_type = filter.product_type;
@@ -182,7 +197,7 @@ export const queries = {
       context.prisma.product.findMany({
         where,
         skip: pagination?.skip || 0,
-        take: pagination?.take || 10,
+        take: pagination?.take, // No default limit - load all if not specified
         orderBy: { created_at: 'desc' },
         include: {
           category: true
@@ -199,8 +214,11 @@ export const queries = {
     context.security.requireStaff(context);
     context.security.validateId(id);
     
-    const product = await context.prisma.product.findUnique({
-      where: { id },
+    const product = await context.prisma.product.findFirst({
+      where: { 
+        id,
+        isDelete: false // Only show non-deleted products
+      },
       include: {
         category: true,
         stockMovements: {
@@ -396,10 +414,16 @@ export const queries = {
     context.security.validatePagination(pagination);
     
     const suppliers = await context.prisma.supplier.findMany({
+      where: {
+        isDelete: false // Only show non-deleted suppliers
+      },
       skip: pagination?.skip || 0,
       take: pagination?.take || 10,
       include: {
         purchases: {
+          where: {
+            isDelete: false // Only show non-deleted purchases
+          },
           orderBy: { purchase_date: 'desc' },
           take: 3
         }
@@ -415,8 +439,11 @@ export const queries = {
     context.security.requireStaff(context);
     context.security.validateId(id);
     
-    const supplier = await context.prisma.supplier.findUnique({
-      where: { id },
+    const supplier = await context.prisma.supplier.findFirst({
+      where: { 
+        id,
+        isDelete: false // Only show non-deleted suppliers
+      },
       include: {
         purchases: {
           orderBy: { purchase_date: 'desc' },
@@ -447,6 +474,9 @@ export const queries = {
     context.security.validatePagination(pagination);
     
     const purchases = await context.prisma.purchase.findMany({
+      where: {
+        isDelete: false // Only show non-deleted purchases
+      },
       skip: pagination?.skip || 0,
       take: pagination?.take || 10,
       include: {
@@ -475,8 +505,11 @@ export const queries = {
     context.security.requireStaff(context);
     context.security.validateId(id);
     
-    const purchase = await context.prisma.purchase.findUnique({
-      where: { id },
+    const purchase = await context.prisma.purchase.findFirst({
+      where: { 
+        id,
+        isDelete: false // Only show non-deleted purchases
+      },
       include: {
         supplier: true,
         user: {
@@ -502,6 +535,9 @@ export const queries = {
     context.security.requireStaff(context);
     
     const categories = await context.prisma.category.findMany({
+      where: {
+        isDelete: false // Only show non-deleted categories
+      },
       orderBy: [
         { name: 'asc' }
       ],
@@ -520,8 +556,11 @@ export const queries = {
     context.security.requireStaff(context);
     context.security.validateId(id);
     
-    const category = await context.prisma.category.findUnique({
-      where: { id },
+    const category = await context.prisma.category.findFirst({
+      where: { 
+        id,
+        isDelete: false // Only show non-deleted categories
+      },
       include: {
         products: {
           select: {

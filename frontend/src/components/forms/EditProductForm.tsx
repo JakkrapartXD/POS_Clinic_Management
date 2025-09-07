@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { GraphQLAPI } from "@/clients/graphql"
+import { API_CONFIG } from "@/config/api"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -13,6 +14,7 @@ import { Switch } from "@/components/ui/switch"
 import { Card, CardContent } from "@/components/ui/card"
 
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
+import ProductImageUpload from "@/components/common/ProductImageUpload"
 
 interface EditProductFormProps {
   onBack: () => void
@@ -68,7 +70,9 @@ interface ProductFormData {
   auto_print_label: boolean
   show_dosage_table: boolean
   
-
+  // Image
+  image: File | null
+  image_url: string
 }
 
 export default function EditProductForm({ onBack, onSubmit, initialData }: EditProductFormProps) {
@@ -131,7 +135,9 @@ export default function EditProductForm({ onBack, onSubmit, initialData }: EditP
     sale_note: initialData?.sale_note || "",
     purchase_note: initialData?.purchase_note || "",
     auto_print_label: false,
-    show_dosage_table: false
+    show_dosage_table: false,
+    image: null,
+    image_url: initialData?.image_url || ""
   })
 
   const handleInputChange = (field: keyof ProductFormData, value: any) => {
@@ -141,6 +147,19 @@ export default function EditProductForm({ onBack, onSubmit, initialData }: EditP
       setHasChanges(true)
     }
   }
+
+  const handleImageChange = (file: File | null, imageUrl?: string) => {
+    setFormData(prev => ({ 
+      ...prev, 
+      image: file,
+      image_url: imageUrl || ''
+    }))
+    if (!hasChanges) {
+      setHasChanges(true)
+    }
+  }
+
+
 
 
 
@@ -162,8 +181,46 @@ export default function EditProductForm({ onBack, onSubmit, initialData }: EditP
     
     setIsSubmitting(true)
     try {
-      await onSubmit(formData)
+      // Upload image first if there's a new file
+      let imageUrl = formData.image_url
+      if (formData.image) {
+        try {
+          const uploadResult = await GraphQLAPI.uploadImage(formData.image, 'product')
+          imageUrl = uploadResult.url
+        } catch (error) {
+          console.error('Failed to upload image:', error)
+          alert('ไม่สามารถอัพโหลดรูปภาพได้ กรุณาลองใหม่')
+          return
+        }
+      }
+      
+      // Update formData with the uploaded image URL
+      const updatedFormData = {
+        ...formData,
+        image_url: imageUrl
+      }
+      
+      await onSubmit(updatedFormData)
       setHasChanges(false) // Reset changes after successful submit
+      
+      // Delete old image if exists
+      if (formData.image_url) {
+        try {
+          console.log('Deleting old image:', formData.image_url)
+          // Extract filename from URL
+          const urlParts = formData.image_url.split('/')
+          const filename = urlParts[urlParts.length - 1]
+          const category = urlParts[urlParts.length - 2]
+          
+          if (filename && category) {
+            await GraphQLAPI.deleteImage(filename, category as 'product' | 'user' | 'patient')
+            console.log('Old image deleted successfully')
+          }
+        } catch (error) {
+          console.warn('Failed to delete old image:', error)
+          // Continue even if old image deletion fails
+        }
+      }
     } catch (error) {
       console.error('Error submitting form:', error)
     } finally {
@@ -253,7 +310,9 @@ export default function EditProductForm({ onBack, onSubmit, initialData }: EditP
         sale_note: initialData.sale_note || "",
         purchase_note: initialData.purchase_note || "",
         auto_print_label: false,
-        show_dosage_table: false
+        show_dosage_table: false,
+        image: null,
+        image_url: initialData.image_url || ""
       })
     }
   }, [initialData])
@@ -391,6 +450,17 @@ export default function EditProductForm({ onBack, onSubmit, initialData }: EditP
         <Card>
           <CardContent className="p-6">
             <h2 className="text-lg font-semibold text-gray-700 mb-4">การแสดงข้อมูลสินค้า</h2>
+            
+            {/* Product Image Upload */}
+            <div className="mb-6">
+              <ProductImageUpload
+                value={formData.image}
+                onChange={handleImageChange}
+                currentImageUrl={`${API_CONFIG.BASE_URL}${formData.image_url}`}
+                label="รูปภาพสินค้า"
+                description="ขนาดรูปภาพแนะนำ 160x160 หรือ 1:1 และขนาดไม่เกิน 2MB"
+              />
+            </div>
             
             <RadioGroup 
               value={selectValues.status} 

@@ -12,6 +12,8 @@ import { Switch } from "@/components/ui/switch"
 import { ChevronDown, Search, X, Check } from "lucide-react"
 import { GraphQLAPI } from "@/clients/graphql"
 import { logger } from "@/lib/logger"
+import { useUser } from "@/hooks/use-user"
+import { API_CONFIG } from "@/config/api"
 import JsBarcode from 'jsbarcode'
 
 
@@ -25,6 +27,7 @@ interface Product {
   stock_quantity: number
   sku: string
   barcode: string
+  image_url?: string
   category?: {
     id: string
     name: string
@@ -51,6 +54,7 @@ interface Category {
 }
 
 export default function POSPage() {
+  const { user } = useUser()
   const [searchQuery, setSearchQuery] = useState("")
   const [cartItems, setCartItems] = useState<CartItem[]>([])
   const [products, setProducts] = useState<Product[]>([])
@@ -336,7 +340,7 @@ export default function POSPage() {
           total_price: item.sale_price * item.quantity
         })),
         created_at: new Date().toISOString(),
-        user: { username: 'เจ้าของร้าน' }
+        user: { username: user?.username || 'เจ้าของร้าน' }
       }
       
       // แสดงหน้าคอนเฟิร์มการชำระเงิน
@@ -380,18 +384,38 @@ export default function POSPage() {
 
   // สร้าง barcode เมื่อมี completedOrder
   useEffect(() => {
-    if (completedOrder && barcodeRef.current) {
-      try {
-        JsBarcode(barcodeRef.current, completedOrder.receiptNumber, {
-          format: "CODE128",
-          width: 2,
-          height: 50,
-          displayValue: false,
-          margin: 0
-        })
-      } catch (error) {
-        console.error('Error generating barcode:', error)
-      }
+    if (completedOrder && completedOrder.receiptNumber) {
+      // Wait for DOM to be ready
+      const timer = setTimeout(() => {
+        if (barcodeRef.current) {
+          try {
+            // Clear any existing content
+            barcodeRef.current.innerHTML = ''
+            
+            // Generate barcode
+            JsBarcode(barcodeRef.current, completedOrder.receiptNumber, {
+              format: "CODE128",
+              width: 2,
+              height: 60,
+              displayValue: false,
+              margin: 10,
+              background: "white",
+              lineColor: "black"
+            })
+          } catch (error) {
+            console.error('Error generating barcode:', error)
+            // Fallback: show receipt number as text if barcode fails
+            if (barcodeRef.current) {
+              barcodeRef.current.innerHTML = `
+                <rect x="10" y="10" width="180" height="60" fill="white" stroke="black" stroke-width="1"/>
+                <text x="100" y="45" text-anchor="middle" font-family="monospace" font-size="14" fill="black">${completedOrder.receiptNumber}</text>
+              `
+            }
+          }
+        }
+      }, 100) // Small delay to ensure DOM is ready
+      
+      return () => clearTimeout(timer)
     }
   }, [completedOrder])
 
@@ -403,6 +427,7 @@ export default function POSPage() {
     const shortId = orderId.slice(-8).toUpperCase()
     return `${year}${month}${day}-${shortId}`
   }
+
 
   const formatDateTime = (dateString: string) => {
     const date = new Date(dateString)
@@ -488,8 +513,19 @@ export default function POSPage() {
               onClick={() => addToCart(product)}
             >
               <CardContent className="p-4">
-                <div className="bg-gray-100 h-24 mb-2 flex items-center justify-center rounded-md">
-                  <span className="text-gray-400 text-3xl">Rx</span>
+                <div className="bg-gray-100 h-24 mb-2 flex items-center justify-center rounded-md overflow-hidden">
+                  {product.image_url ? (
+                    <img
+                      src={`${API_CONFIG.BASE_URL}${product.image_url}`}
+                      alt={product.product_name}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none'
+                        e.currentTarget.nextElementSibling?.classList.remove('hidden')
+                      }}
+                    />
+                  ) : null}
+                  <span className={`text-gray-400 text-3xl ${product.image_url ? 'hidden' : ''}`}>Rx</span>
                 </div>
                 <h3 className="font-medium text-sm mb-1 line-clamp-2 text-gray-700">{product.product_name}</h3>
                 <div className="text-sm text-gray-500 mb-1">
@@ -747,7 +783,7 @@ export default function POSPage() {
 
       {/* Payment Success Modal */}
       <Dialog open={showPaymentSuccess} onOpenChange={setShowPaymentSuccess}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-white">
           <DialogHeader>
             <DialogTitle className="flex justify-between items-center">
               <span className="text-purple-600 font-medium">B พิมพ์ฉลากยา</span>
@@ -759,7 +795,7 @@ export default function POSPage() {
           </DialogHeader>
 
           {completedOrder && (
-            <div className="space-y-6">
+            <div className="space-y-6 bg-white">
               {/* Success Icon */}
               <div className="flex justify-center">
                 <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center">
@@ -768,7 +804,7 @@ export default function POSPage() {
               </div>
               
               {/* Payment Confirmation */}
-              <div className="bg-gray-50 rounded-lg p-6 text-center">
+              <div className="bg-white border border-gray-200 rounded-lg p-6 text-center">
                 <h2 className="text-xl font-bold text-gray-900 mb-2">
                   รับชำระ ฿{completedOrder.payment_amount.toFixed(2)}
                 </h2>
@@ -781,28 +817,45 @@ export default function POSPage() {
               </div>
 
               {/* Receipt */}
-              <div className="bg-white border rounded-lg overflow-hidden">
-                {/* Receipt Header */}
-                <div className="text-center p-4 border-b bg-gray-50">
-                  <h3 className="text-lg font-bold">ใบเสร็จรับเงิน / RECEIPT</h3>
-                  <p className="text-sm text-gray-600">SN clinic</p>
+              <div className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
+                {/* Receipt Header with decorative top edge */}
+                <div className="relative">
+                  {/* Decorative wavy top edge */}
+                  <div className="absolute top-0 left-0 right-0 h-2 bg-white">
+                    <svg viewBox="0 0 400 20" className="w-full h-full">
+                      <path d="M0,10 Q50,0 100,10 T200,10 T300,10 T400,10 L400,20 L0,20 Z" fill="white" />
+                    </svg>
+                  </div>
+                  
+                  <div className="text-center p-4 pt-6">
+                    <h3 className="text-lg font-bold text-black">ใบเสร็จรับเงิน / RECEIPT</h3>
+                    <p className="text-sm text-gray-600">SN clinic</p>
+                  </div>
                 </div>
 
                 {/* Receipt Details */}
                 <div className="p-4 space-y-3">
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">ชำระเมื่อ:</span>
-                    <span>{formatDateTime(completedOrder.created_at)}</span>
+                    <span className="text-black">{formatDateTime(completedOrder.created_at)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">ออกโดย:</span>
-                    <span>{completedOrder.user.username}</span>
+                    <span className="text-black">{completedOrder.user.username}</span>
                   </div>
                   
-                  {/* Barcode */}
-                  <div className="text-center py-4">
-                    <svg ref={barcodeRef} className="mx-auto"></svg>
-                    <p className="text-xs text-gray-600 mt-2">{completedOrder.receiptNumber}</p>
+                  {/* Barcode Section - Centered and prominent */}
+                  <div className="text-center py-4 border-t border-b border-gray-200">
+                    <div className="bg-white p-4 rounded-lg">
+                      <svg 
+                        ref={barcodeRef} 
+                        className="mx-auto block"
+                        width="200"
+                        height="80"
+                        viewBox="0 0 200 80"
+                      ></svg>
+                      <p className="text-xs text-black mt-3 font-mono tracking-wider">{completedOrder.receiptNumber}</p>
+                    </div>
                   </div>
 
                   {/* Items */}
@@ -810,12 +863,12 @@ export default function POSPage() {
                     {completedOrder.orderItems.map((item: any) => (
                       <div key={item.id} className="flex justify-between items-start">
                         <div className="flex-1">
-                          <p className="text-sm font-medium">{item.product_name}</p>
+                          <p className="text-sm font-medium text-black">{item.product_name}</p>
                           <p className="text-xs text-gray-600">
                             ฿{item.sale_price.toFixed(2)} x{item.quantity} ({item.unit})
                           </p>
                         </div>
-                        <span className="text-sm font-medium">฿{item.total_price.toFixed(2)}</span>
+                        <span className="text-sm font-medium text-black">฿{item.total_price.toFixed(2)}</span>
                       </div>
                     ))}
                   </div>
@@ -823,32 +876,32 @@ export default function POSPage() {
                   {/* Summary */}
                   <div className="border-t pt-3 space-y-2">
                     <div className="flex justify-between text-sm">
-                      <span>สินค้า {completedOrder.orderItems.length} รายการ</span>
-                      <span>฿{completedOrder.total_amount.toFixed(2)}</span>
+                      <span className="text-black">สินค้า {completedOrder.orderItems.length} รายการ</span>
+                      <span className="text-black">฿{completedOrder.total_amount.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span>ส่วนลด (%)</span>
-                      <span>-</span>
+                      <span className="text-black">ส่วนลด (%)</span>
+                      <span className="text-black">-</span>
                     </div>
                     <div className="flex justify-between font-bold">
-                      <span>ยอดสุทธิ</span>
-                      <span>฿{completedOrder.total_amount.toFixed(2)}</span>
+                      <span className="text-black">ยอดสุทธิ</span>
+                      <span className="text-black">฿{completedOrder.total_amount.toFixed(2)}</span>
                     </div>
                   </div>
 
                   {/* Payment Info */}
                   <div className="border-t pt-3 space-y-2">
                     <div className="flex justify-between text-sm">
-                      <span>ช่องทางการชำระ</span>
-                      <span>{getPaymentMethodThai(completedOrder.payment_method)}</span>
+                      <span className="text-black">ช่องทางการชำระ</span>
+                      <span className="text-black">{getPaymentMethodThai(completedOrder.payment_method)}</span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span>รับเงิน</span>
-                      <span>฿{completedOrder.payment_amount.toFixed(2)}</span>
+                      <span className="text-black">รับเงิน</span>
+                      <span className="text-black">฿{completedOrder.payment_amount.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span>เงินทอน</span>
-                      <span>฿{completedOrder.change.toFixed(2)}</span>
+                      <span className="text-black">เงินทอน</span>
+                      <span className="text-black">฿{completedOrder.change.toFixed(2)}</span>
                     </div>
                   </div>
                 </div>

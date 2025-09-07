@@ -27,6 +27,9 @@ export const API_CONFIG = {
       UPLOAD: '/documents/upload',
       DOWNLOAD: '/documents/download',
     },
+    UPLOAD: {
+      IMAGE: '/upload/image',
+    },
   },
   TIMEOUT: 30000, // 30 seconds
   HEADERS: {

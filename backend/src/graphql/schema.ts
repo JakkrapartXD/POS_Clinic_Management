@@ -9,6 +9,8 @@ export const typeDefs = /* GraphQL */ `
     email: String!
     username: String!
     status: String!
+    avatar_url: String
+    avatar_path: String
     created_at: DateTime!
     updated_at: DateTime!
     medicalRecords: [MedicalRecord!]!
@@ -44,6 +46,8 @@ export const typeDefs = /* GraphQL */ `
     phone: String
     email: String
     address: String
+    photo_url: String
+    photo_path: String
     created_at: DateTime!
     updated_at: DateTime!
     appointments: [Appointment!]!
@@ -136,6 +140,8 @@ export const typeDefs = /* GraphQL */ `
     usage_instruction: String
     sale_note: String
     purchase_note: String
+    image_url: String
+    image_path: String
     created_at: DateTime!
     updated_at: DateTime!
     orderItems: [OrderItem!]!
@@ -184,6 +190,7 @@ export const typeDefs = /* GraphQL */ `
     usage_instruction: String
     sale_note: String
     purchase_note: String
+    image_url: String
   }
 
   # Bulk import types
@@ -254,6 +261,7 @@ export const typeDefs = /* GraphQL */ `
     usage_instruction: String
     sale_note: String
     purchase_note: String
+    image_url: String
   }
 
   # Order Types
@@ -279,6 +287,8 @@ export const typeDefs = /* GraphQL */ `
     quantity: Int!
     unit_price: Float!
     total_price: Float!
+    product_name: String
+    product_unit: String
   }
 
   input CreateOrderInput {
@@ -394,6 +404,12 @@ export const typeDefs = /* GraphQL */ `
     quantity: Int!
     unit_cost: Float!
     total_cost: Float!
+  }
+
+  input UpdatePurchaseInput {
+    supplierId: String
+    total_amount: Float
+    status: String
   }
 
   # Stock Management Types
@@ -695,11 +711,13 @@ export const typeDefs = /* GraphQL */ `
     # User Mutations
     createUser(input: CreateUserInput!): User!
     updateUser(id: String!, input: UpdateUserInput!): User!
+    updateUserAvatar(id: String!, avatar_url: String!): User!
     deleteUser(id: String!): Boolean!
 
     # Patient Mutations
     createPatient(input: CreatePatientInput!): Patient!
     updatePatient(id: String!, input: UpdatePatientInput!): Patient!
+    updatePatientPhoto(id: String!, photo_url: String!): Patient!
     deletePatient(id: String!): Boolean!
 
     # Category Mutations
@@ -710,6 +728,7 @@ export const typeDefs = /* GraphQL */ `
     # Product Mutations
     createProduct(input: CreateProductInput!): Product!
     updateProduct(id: String!, input: UpdateProductInput!): Product!
+    updateProductImage(id: String!, image_url: String!): Product!
     deleteProduct(id: String!): Boolean!
     adjustStock(productId: String!, quantity: Int!, note: String): StockMovement!
     
@@ -728,6 +747,8 @@ export const typeDefs = /* GraphQL */ `
     deleteSupplier(id: String!): Boolean!
 
     createPurchase(input: CreatePurchaseInput!): Purchase!
+    updatePurchase(id: String!, input: UpdatePurchaseInput!): Purchase!
+    deletePurchase(id: String!): Boolean!
     receivePurchase(id: String!): Purchase!
 
     # Medical Mutations

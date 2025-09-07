@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { GraphQLAPI } from "@/clients/graphql"
+import { API_CONFIG } from "@/config/api"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -11,7 +12,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Switch } from "@/components/ui/switch"
 import { Card, CardContent } from "@/components/ui/card"
-import { Upload } from "lucide-react"
+import ProductImageUpload from "@/components/common/ProductImageUpload"
 
 
 interface AddProductFormProps {
@@ -81,6 +82,7 @@ interface ProductFormData {
   
   // Image
   image: File | null
+  image_url: string
 }
 
 export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddProductFormProps) {
@@ -131,19 +133,22 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
     purchase_note: "",
     auto_print_label: false,
     show_dosage_table: false,
-    image: null
+    image: null,
+    image_url: ""
   })
 
   const handleInputChange = (field: keyof ProductFormData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }))
   }
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      handleInputChange('image', file)
-    }
+  const handleImageChange = (file: File | null, imageUrl?: string) => {
+    setFormData(prev => ({ 
+      ...prev, 
+      image: file,
+      image_url: imageUrl || ''
+    }))
   }
+
 
   const handleReportTypeChange = (reportType: string, checked: boolean) => {
     const currentReports = formData.report_type
@@ -162,7 +167,45 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
     }
     
     try {
-      await onSubmit(formData)
+      // Upload image first if there's a new file
+      let imageUrl = formData.image_url
+      if (formData.image) {
+        try {
+          const uploadResult = await GraphQLAPI.uploadImage(formData.image, 'product')
+          imageUrl = uploadResult.url
+        } catch (error) {
+          console.error('Failed to upload image:', error)
+          alert('ไม่สามารถอัพโหลดรูปภาพได้ กรุณาลองใหม่')
+          return
+        }
+      }
+      
+      // Update formData with the uploaded image URL
+      const updatedFormData = {
+        ...formData,
+        image_url: imageUrl
+      }
+      
+      await onSubmit(updatedFormData)
+      
+      // Delete old image if exists
+      if (formData.image_url) {
+        try {
+          console.log('Deleting old image:', formData.image_url)
+          // Extract filename from URL
+          const urlParts = formData.image_url.split('/')
+          const filename = urlParts[urlParts.length - 1]
+          const category = urlParts[urlParts.length - 2]
+          
+          if (filename && category) {
+            await GraphQLAPI.deleteImage(filename, category as 'product' | 'user' | 'patient')
+            console.log('Old image deleted successfully')
+          }
+        } catch (error) {
+          console.warn('Failed to delete old image:', error)
+          // Continue even if old image deletion fails
+        }
+      }
     } catch (error) {
       console.error('Error submitting form:', error)
     }
@@ -188,30 +231,6 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
           <CardContent className="p-6">
             <h2 className="text-lg font-semibold text-gray-700 mb-4">ข้อมูลทั่วไป</h2>
             <p className="text-sm text-gray-500 mb-6">โปรดระบุข้อมูลสินค้า</p>
-
-            {/* Product Image Upload */}
-            <div className="mb-6">
-              <Label className="text-sm font-medium text-gray-700">รูปภาพสินค้า</Label>
-              <div className="mt-2 flex justify-start">
-                <div className="w-48 h-48 border-2 border-gray-300 border-dashed rounded-lg flex items-center justify-center">
-                  <div className="space-y-1 text-center">
-                    <Upload className="mx-auto h-12 w-12 text-gray-400" />
-                    <div className="flex text-sm text-gray-600">
-                      <label className="relative cursor-pointer bg-white rounded-md font-medium text-purple-600 hover:text-purple-500">
-                        <span>อัพโหลดรูปภาพหรือลากแนบ</span>
-                        <input
-                          type="file"
-                          className="sr-only"
-                          accept="image/*"
-                          onChange={handleImageUpload}
-                        />
-                      </label>
-                    </div>
-                    <p className="text-xs text-gray-500">ขนาดรูปภาพแนะนำ 160x160 หรือ 1:1 และขนาดไม่เกิน 2MB</p>
-                  </div>
-                </div>
-              </div>
-            </div>
 
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div>
@@ -384,6 +403,17 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
         <Card>
           <CardContent className="p-6">
             <h2 className="text-lg font-semibold text-gray-700 mb-4">ข้อมูลหน่วยนับ และการขาย</h2>
+            
+            {/* Product Image Upload */}
+            <div className="mb-6">
+              <ProductImageUpload
+                value={formData.image}
+                onChange={handleImageChange}
+                currentImageUrl={formData.image_url ? `${API_CONFIG.BASE_URL}${formData.image_url}` : ''}
+                label="รูปภาพสินค้า"
+                description="ขนาดรูปภาพแนะนำ 160x160 หรือ 1:1 และขนาดไม่เกิน 2MB"
+              />
+            </div>
             
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div>

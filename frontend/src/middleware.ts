@@ -2,13 +2,27 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 export function middleware(request: NextRequest) {
-  // Check if the request is for a protected route
-  const isProtectedRoute = request.nextUrl.pathname.startsWith('/dashboard')
-  const isLoginPage = request.nextUrl.pathname === '/login'
+  const pathname = request.nextUrl.pathname
+  
+  // Check if the request is for different types of routes
+  const isHomePage = pathname === '/'
+  const isProtectedRoute = pathname.startsWith('/dashboard')
+  const isLoginPage = pathname === '/login'
   
   // Get cookies
   const cookies = request.cookies
   const hasAuthCookie = cookies.has('next-auth.jwt-token') || cookies.has('next-auth.session-token')
+  
+  // Handle home page - redirect based on auth status
+  if (isHomePage) {
+    if (hasAuthCookie) {
+      const dashboardUrl = new URL('/dashboard', request.url)
+      return NextResponse.redirect(dashboardUrl)
+    } else {
+      const loginUrl = new URL('/login', request.url)
+      return NextResponse.redirect(loginUrl)
+    }
+  }
   
   // If accessing protected route without auth, redirect to login
   if (isProtectedRoute && !hasAuthCookie) {

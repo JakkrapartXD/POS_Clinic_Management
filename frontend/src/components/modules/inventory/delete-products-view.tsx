@@ -91,10 +91,6 @@ export default function DeleteProductsView({ onBack, onDelete }: DeleteProductsV
             
             // Log the full error for debugging
             console.log('Delete product error:', error)
-            console.log('Error message:', error?.message)
-            console.log('Error extensions:', error?.extensions)
-            console.log('Error type:', typeof error)
-            console.log('Error keys:', Object.keys(error || {}))
             
             // Extract error message from various possible structures
             let errorMessage = ''
@@ -117,22 +113,19 @@ export default function DeleteProductsView({ onBack, onDelete }: DeleteProductsV
               errorMessage = error.toString()
             }
             
-            console.log('Extracted error message:', errorMessage)
-            
-            // Check if it's the specific error about existing transactions
-            if (errorMessage.includes('existing transactions') || 
-                errorMessage.includes('Cannot delete product with existing transactions') ||
+            // Check if it's the specific error about existing dependencies
+            if (errorMessage.includes('existing orders') || 
+                errorMessage.includes('existing prescriptions') ||
+                errorMessage.includes('Cannot delete product with existing') ||
                 errorMessage.includes('Set status to inactive instead')) {
-              console.log('Detected transaction error for product:', productName)
               errors.push({
                 productId,
                 productName,
-                error: 'สินค้านี้มีการทำธุรกรรมแล้ว ไม่สามารถลบได้ กรุณาเปลี่ยนสถานะเป็น "ไม่ใช้งาน" แทน'
+                error: 'สินค้านี้มีการใช้งานในระบบแล้ว (คำสั่งซื้อ/ใบสั่งยา) ไม่สามารถลบได้ กรุณาเปลี่ยนสถานะเป็น "ไม่ใช้งาน" แทน'
               })
             } else {
               // Show the actual error message for debugging
               const displayError = errorMessage || 'เกิดข้อผิดพลาดไม่ทราบสาเหตุ'
-              console.log('Other error for product:', productName, 'Error:', displayError)
               errors.push({
                 productId,
                 productName,
@@ -152,26 +145,28 @@ export default function DeleteProductsView({ onBack, onDelete }: DeleteProductsV
         if (errors.length > 0) {
           console.log('Processing errors:', errors)
           
-          const transactionErrors = errors.filter(e => 
-            e.error.includes('existing transactions') || 
+          const dependencyErrors = errors.filter(e => 
+            e.error.includes('existing orders') || 
+            e.error.includes('existing prescriptions') ||
             e.error.includes('ไม่สามารถลบได้') ||
-            e.error.includes('มีการทำธุรกรรมแล้ว')
+            e.error.includes('มีการใช้งานในระบบแล้ว')
           )
           const otherErrors = errors.filter(e => 
-            !e.error.includes('existing transactions') && 
+            !e.error.includes('existing orders') && 
+            !e.error.includes('existing prescriptions') &&
             !e.error.includes('ไม่สามารถลบได้') &&
-            !e.error.includes('มีการทำธุรกรรมแล้ว')
+            !e.error.includes('มีการใช้งานในระบบแล้ว')
           )
           
-          console.log('Transaction errors:', transactionErrors)
+          console.log('Dependency errors:', dependencyErrors)
           console.log('Other errors:', otherErrors)
           
           let errorMessage = ''
           
-          if (transactionErrors.length > 0) {
-            errorMessage += `ไม่สามารถลบสินค้า ${transactionErrors.length} รายการได้ เนื่องจากมีการทำธุรกรรมแล้ว:\n${transactionErrors.map(e => `• ${e.productName}`).join('\n')}\n\n`
-            console.log('Setting failed products:', transactionErrors)
-            setFailedProducts(transactionErrors)
+          if (dependencyErrors.length > 0) {
+            errorMessage += `ไม่สามารถลบสินค้า ${dependencyErrors.length} รายการได้ เนื่องจากมีการใช้งานในระบบแล้ว:\n${dependencyErrors.map(e => `• ${e.productName}`).join('\n')}\n\n`
+            console.log('Setting failed products:', dependencyErrors)
+            setFailedProducts(dependencyErrors)
             setShowAlternativeAction(true)
           }
           
@@ -191,11 +186,12 @@ export default function DeleteProductsView({ onBack, onDelete }: DeleteProductsV
             })
           }
         } else {
-          // All products deleted successfully
-          console.log('All products deleted successfully')
+          // All products soft deleted successfully
+          console.log('All products soft deleted successfully')
           onDelete({
             productIds: selectedProducts,
-            reason: deleteReason
+            reason: deleteReason,
+            action: 'soft_delete'
           })
           
           // Clear selection
@@ -205,7 +201,7 @@ export default function DeleteProductsView({ onBack, onDelete }: DeleteProductsV
         }
         
       } catch (error) {
-        console.error('Failed to delete products', error)
+        console.error('Failed to soft delete products', error)
         setError('เกิดข้อผิดพลาดในการลบสินค้า กรุณาลองใหม่อีกครั้ง')
       } finally {
         setDeleting(false)
@@ -260,7 +256,7 @@ export default function DeleteProductsView({ onBack, onDelete }: DeleteProductsV
       {/* Header */}
       <div className="mb-6">
         <h2 className="text-2xl font-semibold text-gray-800 mb-2">ลบสินค้า</h2>
-        <p className="text-gray-600">เลือกสินค้าที่ต้องการลบออกจากระบบ</p>
+        <p className="text-gray-600">เลือกสินค้าที่ต้องการลบออกจากระบบ (ข้อมูลจะถูกซ่อนแต่ยังคงอยู่ในฐานข้อมูล)</p>
         
         {/* Error Message */}
         {error && (
@@ -413,10 +409,10 @@ export default function DeleteProductsView({ onBack, onDelete }: DeleteProductsV
               </div>
 
               {/* Warning */}
-              <Alert className="border-red-200 bg-red-50">
-                <AlertTriangle className="h-4 w-4 text-red-600" />
-                <AlertDescription className="text-red-700 text-sm">
-                  การลบสินค้าไม่สามารถยกเลิกได้ กรุณาตรวจสอบข้อมูลให้แน่ใจก่อนดำเนินการ
+              <Alert className="border-orange-200 bg-orange-50">
+                <AlertTriangle className="h-4 w-4 text-orange-600" />
+                <AlertDescription className="text-orange-700 text-sm">
+                  การลบสินค้าจะซ่อนข้อมูลออกจากการแสดงผล แต่ข้อมูลยังคงอยู่ในฐานข้อมูล สามารถกู้คืนได้ในภายหลัง
                 </AlertDescription>
               </Alert>
             </CardContent>
@@ -434,7 +430,7 @@ export default function DeleteProductsView({ onBack, onDelete }: DeleteProductsV
                   กำลังจะลบ {selectedProducts.length} รายการ
                 </div>
                 <div className="text-sm text-red-600">
-                  การดำเนินการนี้จะลบสินค้าออกจากระบบอย่างถาวร
+                  การดำเนินการนี้จะซ่อนสินค้าออกจากระบบ (Soft Delete)
                 </div>
               </div>
                               <div className="text-right">

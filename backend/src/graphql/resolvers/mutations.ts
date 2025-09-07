@@ -146,38 +146,30 @@ export const mutations = {
       throw new GraphQLError('Cannot delete your own account');
     }
     
-    // Check for dependent records
-    const dependencies = await context.prisma.user.findUnique({
-      where: { id },
-      include: {
-        _count: {
-          select: {
-            appointments: true,
-            medicalRecords: true,
-            orders: true,
-            purchases: true
-          }
-        }
+    // Check if user exists and is not already deleted
+    const user = await context.prisma.user.findFirst({
+      where: { 
+        id,
+        isDelete: false
       }
     });
     
-    if (!dependencies) {
-      throw new GraphQLError('User not found');
+    if (!user) {
+      throw new GraphQLError('User not found or already deleted');
     }
     
-    const totalDependencies = (Object.values(dependencies._count) as number[]).reduce((sum, count) => sum + count, 0);
-    
-    if (totalDependencies > 0) {
-      throw new GraphQLError('Cannot delete user with existing records. Set status to inactive instead.');
-    }
-    
-    await context.prisma.user.delete({
-      where: { id }
+    // Soft delete: Update isDelete to true
+    await context.prisma.user.update({
+      where: { id },
+      data: { 
+        isDelete: true,
+        updated_at: new Date()
+      }
     });
     
     await context.security.logSensitiveOperation(
       context.userId,
-      'DELETE_USER',
+      'SOFT_DELETE_USER',
       'User',
       id, context.redisClient
     );
@@ -277,6 +269,18 @@ export const mutations = {
     
     await context.security.checkRateLimit(context.userId, 'sensitive', context.redisClient);
     
+    // Check if patient exists and is not already deleted
+    const patient = await context.prisma.patient.findFirst({
+      where: { 
+        id,
+        isDelete: false
+      }
+    });
+    
+    if (!patient) {
+      throw new GraphQLError('Patient not found or already deleted');
+    }
+    
     // Check for dependent records
     const dependencies = await context.prisma.patient.findUnique({
       where: { id },
@@ -292,23 +296,24 @@ export const mutations = {
       }
     });
     
-    if (!dependencies) {
-      throw new GraphQLError('Patient not found');
-    }
-    
-    const totalDependencies = (Object.values(dependencies._count) as number[]).reduce((sum, count) => sum + count, 0);
+    const totalDependencies = (Object.values(dependencies?._count || {}) as number[]).reduce((sum, count) => sum + count, 0);
     
     if (totalDependencies > 0) {
       throw new GraphQLError('Cannot delete patient with existing medical records, appointments, or orders');
     }
     
-    await context.prisma.patient.delete({
-      where: { id }
+    // Soft delete: Update isDelete to true
+    await context.prisma.patient.update({
+      where: { id },
+      data: { 
+        isDelete: true,
+        updated_at: new Date()
+      }
     });
     
     await context.security.logSensitiveOperation(
       context.userId,
-      'DELETE_PATIENT',
+      'SOFT_DELETE_PATIENT',
       'Patient',
       id, context.redisClient
     );
@@ -442,6 +447,45 @@ export const mutations = {
     );
     
     return product;
+  },
+
+  async deleteProduct(parent: any, args: any, context: any) {
+    const { id } = args;
+    context.security.requireStaff(context);
+    context.security.validateId(id);
+    
+    await context.security.checkRateLimit(context.userId, 'sensitive', context.redisClient);
+    
+    // Check if product exists and is not already deleted
+    const product = await context.prisma.product.findFirst({
+      where: { 
+        id,
+        isDelete: false
+      }
+    });
+    
+    if (!product) {
+      throw new GraphQLError('Product not found or already deleted');
+    }
+    
+    
+    // Soft delete: Update isDelete to true
+    await context.prisma.product.update({
+      where: { id },
+      data: { 
+        isDelete: true,
+        updated_at: new Date()
+      }
+    });
+    
+    await context.security.logSensitiveOperation(
+      context.userId,
+      'SOFT_DELETE_PRODUCT',
+      'Product',
+      id, context.redisClient
+    );
+    
+    return true;
   },
 
   async adjustStock(parent: any, args: any, context: any) {
@@ -816,32 +860,43 @@ export const mutations = {
     
     await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
     
-    // Check if category has products
+    // Check if category exists and is not already deleted
+    const category = await context.prisma.category.findFirst({
+      where: { 
+        id,
+        isDelete: false
+      }
+    });
+    
+    if (!category) {
+      throw new GraphQLError('Category not found or already deleted');
+    }
+    
+    // Check if category has active products
     const productsCount = await context.prisma.product.count({
-      where: { categoryId: id }
+      where: { 
+        categoryId: id,
+        isDelete: false
+      }
     });
     
     if (productsCount > 0) {
-      throw new GraphQLError(`Cannot delete category. It has ${productsCount} products associated with it.`);
+      throw new GraphQLError(`Cannot delete category. It has ${productsCount} active products associated with it.`);
     }
     
     try {
-      const category = await context.prisma.category.findUnique({
+      // Soft delete: Update isDelete to true
+      await context.prisma.category.update({
         where: { id },
-        select: { name: true }
-      });
-      
-      if (!category) {
-        throw new GraphQLError('Category not found');
-      }
-      
-      await context.prisma.category.delete({
-        where: { id }
+        data: { 
+          isDelete: true,
+          updated_at: new Date()
+        }
       });
       
       await context.security.logSensitiveOperation(
         context.userId,
-        'DELETE_CATEGORY',
+        'SOFT_DELETE_CATEGORY',
         'Category',
         id,
         { name: category.name }, context.redisClient
@@ -854,5 +909,591 @@ export const mutations = {
       }
       throw new GraphQLError('Failed to delete category');
     }
+  },
+
+  // Supplier Mutations
+  async updateSupplier(parent: any, args: any, context: any) {
+    const { id, input } = args;
+    context.security.requireAdmin(context);
+    context.security.validateId(id);
+    
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
+    
+    const updateData: any = {};
+    
+    // Sanitize string fields
+    if (input.name) updateData.name = context.security.sanitizeString(input.name);
+    if (input.contact_name) updateData.contact_name = context.security.sanitizeString(input.contact_name);
+    if (input.phone) updateData.phone = context.security.sanitizeString(input.phone);
+    if (input.email) updateData.email = context.security.sanitizeString(input.email);
+    if (input.address) updateData.address = context.security.sanitizeString(input.address);
+    
+    const supplier = await context.prisma.supplier.update({
+      where: { id },
+      data: updateData,
+      include: {
+        purchases: {
+          orderBy: { purchase_date: 'desc' },
+          take: 3
+        }
+      }
+    });
+    
+    await context.security.logSensitiveOperation(
+      context.userId,
+      'UPDATE_SUPPLIER',
+      'Supplier',
+      id,
+      updateData, context.redisClient
+    );
+    
+    return supplier;
+  },
+
+  async deleteSupplier(parent: any, args: any, context: any) {
+    const { id } = args;
+    context.security.requireAdmin(context);
+    context.security.validateId(id);
+    
+    await context.security.checkRateLimit(context.userId, 'sensitive', context.redisClient);
+    
+    // Check if supplier exists and is not already deleted
+    const supplier = await context.prisma.supplier.findFirst({
+      where: { 
+        id,
+        isDelete: false
+      }
+    });
+    
+    if (!supplier) {
+      throw new GraphQLError('Supplier not found or already deleted');
+    }
+    
+    // Check for dependent records
+    const dependencies = await context.prisma.supplier.findUnique({
+      where: { id },
+      include: {
+        _count: {
+          select: {
+            purchases: true
+          }
+        }
+      }
+    });
+    
+    const totalDependencies = (Object.values(dependencies?._count || {}) as number[]).reduce((sum, count) => sum + count, 0);
+    
+    if (totalDependencies > 0) {
+      throw new GraphQLError('Cannot delete supplier with existing purchases');
+    }
+    
+    // Soft delete: Update isDelete to true
+    await context.prisma.supplier.update({
+      where: { id },
+      data: { 
+        isDelete: true,
+        updated_at: new Date()
+      }
+    });
+    
+    await context.security.logSensitiveOperation(
+      context.userId,
+      'SOFT_DELETE_SUPPLIER',
+      'Supplier',
+      id, context.redisClient
+    );
+    
+    return true;
+  },
+
+  // Purchase Mutations
+  async updatePurchase(parent: any, args: any, context: any) {
+    const { id, input } = args;
+    context.security.requireStaff(context);
+    context.security.validateId(id);
+    
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
+    
+    const updateData: any = {};
+    
+    // Sanitize string fields
+    if (input.supplierId) updateData.supplierId = input.supplierId;
+    if (input.total_amount !== undefined) updateData.total_amount = input.total_amount;
+    if (input.status) updateData.status = input.status;
+    
+    const purchase = await context.prisma.purchase.update({
+      where: { id },
+      data: updateData,
+      include: {
+        supplier: true,
+        user: {
+          select: { id: true, username: true }
+        },
+        purchaseItems: {
+          include: {
+            product: {
+              select: { product_name: true, unit: true }
+            }
+          }
+        }
+      }
+    });
+    
+    await context.security.logSensitiveOperation(
+      context.userId,
+      'UPDATE_PURCHASE',
+      'Purchase',
+      id,
+      updateData, context.redisClient
+    );
+    
+    return purchase;
+  },
+
+  async deletePurchase(parent: any, args: any, context: any) {
+    const { id } = args;
+    context.security.requireStaff(context);
+    context.security.validateId(id);
+    
+    await context.security.checkRateLimit(context.userId, 'sensitive', context.redisClient);
+    
+    // Check if purchase exists and is not already deleted
+    const purchase = await context.prisma.purchase.findFirst({
+      where: { 
+        id,
+        isDelete: false
+      }
+    });
+    
+    if (!purchase) {
+      throw new GraphQLError('Purchase not found or already deleted');
+    }
+    
+    // Check for dependent records
+    const dependencies = await context.prisma.purchase.findUnique({
+      where: { id },
+      include: {
+        _count: {
+          select: {
+            purchaseItems: true
+          }
+        }
+      }
+    });
+    
+    const totalDependencies = (Object.values(dependencies?._count || {}) as number[]).reduce((sum, count) => sum + count, 0);
+    
+    if (totalDependencies > 0) {
+      throw new GraphQLError('Cannot delete purchase with existing purchase items');
+    }
+    
+    // Soft delete: Update isDelete to true
+    await context.prisma.purchase.update({
+      where: { id },
+      data: { 
+        isDelete: true,
+        updated_at: new Date()
+      }
+    });
+    
+    await context.security.logSensitiveOperation(
+      context.userId,
+      'SOFT_DELETE_PURCHASE',
+      'Purchase',
+      id, context.redisClient
+    );
+    
+    return true;
+  },
+
+  // Appointment Mutations
+  async updateAppointment(parent: any, args: any, context: any) {
+    const { id, input } = args;
+    context.security.requireStaff(context);
+    context.security.validateId(id);
+    
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
+    
+    const updateData: any = {};
+    
+    if (input.appointment_time) updateData.appointment_time = input.appointment_time;
+    if (input.status) updateData.status = input.status;
+    if (input.reason) updateData.reason = input.reason;
+    
+    const appointment = await context.prisma.appointment.update({
+      where: { id },
+      data: updateData,
+      include: {
+        patient: true,
+        doctor: {
+          select: { id: true, username: true }
+        },
+        medicalRecords: {
+          orderBy: { created_at: 'desc' },
+          take: 5
+        }
+      }
+    });
+    
+    await context.security.logSensitiveOperation(
+      context.userId,
+      'UPDATE_APPOINTMENT',
+      'Appointment',
+      id,
+      updateData, context.redisClient
+    );
+    
+    return appointment;
+  },
+
+  async deleteAppointment(parent: any, args: any, context: any) {
+    const { id } = args;
+    context.security.requireStaff(context);
+    context.security.validateId(id);
+    
+    await context.security.checkRateLimit(context.userId, 'sensitive', context.redisClient);
+    
+    // Check if appointment exists and is not already deleted
+    const appointment = await context.prisma.appointment.findFirst({
+      where: { 
+        id,
+        isDelete: false
+      }
+    });
+    
+    if (!appointment) {
+      throw new GraphQLError('Appointment not found or already deleted');
+    }
+    
+    // Check for dependent records
+    const dependencies = await context.prisma.appointment.findUnique({
+      where: { id },
+      include: {
+        _count: {
+          select: {
+            medicalRecords: true
+          }
+        }
+      }
+    });
+    
+    const totalDependencies = (Object.values(dependencies?._count || {}) as number[]).reduce((sum, count) => sum + count, 0);
+    
+    if (totalDependencies > 0) {
+      throw new GraphQLError('Cannot delete appointment with existing medical records');
+    }
+    
+    // Soft delete: Update isDelete to true
+    await context.prisma.appointment.update({
+      where: { id },
+      data: { 
+        isDelete: true,
+        updated_at: new Date()
+      }
+    });
+    
+    await context.security.logSensitiveOperation(
+      context.userId,
+      'SOFT_DELETE_APPOINTMENT',
+      'Appointment',
+      id, context.redisClient
+    );
+    
+    return true;
+  },
+
+  // MedicalRecord Mutations
+  async updateMedicalRecord(parent: any, args: any, context: any) {
+    const { id, input } = args;
+    context.security.requireStaff(context);
+    context.security.validateId(id);
+    
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
+    
+    const updateData: any = {};
+    
+    if (input.symptoms) updateData.symptoms = input.symptoms;
+    if (input.diagnosis) updateData.diagnosis = input.diagnosis;
+    if (input.treatment) updateData.treatment = input.treatment;
+    if (input.notes) updateData.notes = input.notes;
+    
+    const medicalRecord = await context.prisma.medicalRecord.update({
+      where: { id },
+      data: updateData,
+      include: {
+        patient: true,
+        doctor: {
+          select: { id: true, username: true }
+        },
+        appointment: true,
+        prescriptions: {
+          include: {
+            product: {
+              select: { product_name: true, unit: true }
+            }
+          }
+        }
+      }
+    });
+    
+    await context.security.logSensitiveOperation(
+      context.userId,
+      'UPDATE_MEDICAL_RECORD',
+      'MedicalRecord',
+      id,
+      updateData, context.redisClient
+    );
+    
+    return medicalRecord;
+  },
+
+  async deleteMedicalRecord(parent: any, args: any, context: any) {
+    const { id } = args;
+    context.security.requireStaff(context);
+    context.security.validateId(id);
+    
+    await context.security.checkRateLimit(context.userId, 'sensitive', context.redisClient);
+    
+    // Check if medical record exists and is not already deleted
+    const medicalRecord = await context.prisma.medicalRecord.findFirst({
+      where: { 
+        id,
+        isDelete: false
+      }
+    });
+    
+    if (!medicalRecord) {
+      throw new GraphQLError('Medical record not found or already deleted');
+    }
+    
+    // Check for dependent records
+    const dependencies = await context.prisma.medicalRecord.findUnique({
+      where: { id },
+      include: {
+        _count: {
+          select: {
+            prescriptions: true
+          }
+        }
+      }
+    });
+    
+    const totalDependencies = (Object.values(dependencies?._count || {}) as number[]).reduce((sum, count) => sum + count, 0);
+    
+    if (totalDependencies > 0) {
+      throw new GraphQLError('Cannot delete medical record with existing prescriptions');
+    }
+    
+    // Soft delete: Update isDelete to true
+    await context.prisma.medicalRecord.update({
+      where: { id },
+      data: { 
+        isDelete: true,
+        updated_at: new Date()
+      }
+    });
+    
+    await context.security.logSensitiveOperation(
+      context.userId,
+      'SOFT_DELETE_MEDICAL_RECORD',
+      'MedicalRecord',
+      id, context.redisClient
+    );
+    
+    return true;
+  },
+
+  // TreatmentPlan Mutations
+  async updateTreatmentPlan(parent: any, args: any, context: any) {
+    const { id, input } = args;
+    context.security.requireStaff(context);
+    context.security.validateId(id);
+    
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
+    
+    const updateData: any = {};
+    
+    if (input.plan_details) updateData.plan_details = input.plan_details;
+    if (input.start_date) updateData.start_date = input.start_date;
+    if (input.end_date) updateData.end_date = input.end_date;
+    
+    const treatmentPlan = await context.prisma.treatmentPlan.update({
+      where: { id },
+      data: updateData,
+      include: {
+        patient: true,
+        doctor: {
+          select: { id: true, username: true }
+        }
+      }
+    });
+    
+    await context.security.logSensitiveOperation(
+      context.userId,
+      'UPDATE_TREATMENT_PLAN',
+      'TreatmentPlan',
+      id,
+      updateData, context.redisClient
+    );
+    
+    return treatmentPlan;
+  },
+
+  async deleteTreatmentPlan(parent: any, args: any, context: any) {
+    const { id } = args;
+    context.security.requireStaff(context);
+    context.security.validateId(id);
+    
+    await context.security.checkRateLimit(context.userId, 'sensitive', context.redisClient);
+    
+    // Check if treatment plan exists and is not already deleted
+    const treatmentPlan = await context.prisma.treatmentPlan.findFirst({
+      where: { 
+        id,
+        isDelete: false
+      }
+    });
+    
+    if (!treatmentPlan) {
+      throw new GraphQLError('Treatment plan not found or already deleted');
+    }
+    
+    // Soft delete: Update isDelete to true
+    await context.prisma.treatmentPlan.update({
+      where: { id },
+      data: { 
+        isDelete: true,
+        updated_at: new Date()
+      }
+    });
+    
+    await context.security.logSensitiveOperation(
+      context.userId,
+      'SOFT_DELETE_TREATMENT_PLAN',
+      'TreatmentPlan',
+      id, context.redisClient
+    );
+    
+    return true;
+  },
+
+  // Image upload mutations
+  async updateUserAvatar(parent: any, args: any, context: any) {
+    const { id, avatar_url } = args;
+    
+    context.security.requireAuth(context);
+    context.security.validateId(id);
+    
+    // Check if user exists and is not deleted
+    const existingUser = await context.prisma.user.findFirst({
+      where: { 
+        id,
+        isDelete: false
+      }
+    });
+    
+    if (!existingUser) {
+      throw new GraphQLError('User not found or already deleted');
+    }
+
+    // Only allow users to update their own avatar or admin to update any
+    if (context.userId !== id && context.userRole !== 'admin') {
+      throw new GraphQLError('Unauthorized to update this user avatar');
+    }
+    
+    const user = await context.prisma.user.update({
+      where: { id },
+      data: { 
+        avatar_url,
+        avatar_path: avatar_url, // Store same as URL for now
+        updated_at: new Date()
+      }
+    });
+    
+    await context.security.logSensitiveOperation(
+      context.userId,
+      'UPDATE_USER_AVATAR',
+      'User',
+      id, context.redisClient
+    );
+    
+    return user;
+  },
+
+  async updatePatientPhoto(parent: any, args: any, context: any) {
+    const { id, photo_url } = args;
+    
+    context.security.requireAuth(context);
+    context.security.validateId(id);
+    
+    // Check if patient exists and is not deleted
+    const existingPatient = await context.prisma.patient.findFirst({
+      where: { 
+        id,
+        isDelete: false
+      }
+    });
+    
+    if (!existingPatient) {
+      throw new GraphQLError('Patient not found or already deleted');
+    }
+    
+    const patient = await context.prisma.patient.update({
+      where: { id },
+      data: { 
+        photo_url,
+        photo_path: photo_url, // Store same as URL for now
+        updated_at: new Date()
+      }
+    });
+    
+    await context.security.logSensitiveOperation(
+      context.userId,
+      'UPDATE_PATIENT_PHOTO',
+      'Patient',
+      id, context.redisClient
+    );
+    
+    return patient;
+  },
+
+  async updateProductImage(parent: any, args: any, context: any) {
+    const { id, image_url } = args;
+    
+    context.security.requireAuth(context);
+    context.security.validateId(id);
+    
+    // Check if product exists and is not deleted
+    const existingProduct = await context.prisma.product.findFirst({
+      where: { 
+        id,
+        isDelete: false
+      }
+    });
+    
+    if (!existingProduct) {
+      throw new GraphQLError('Product not found or already deleted');
+    }
+    
+    const product = await context.prisma.product.update({
+      where: { id },
+      data: { 
+        image_url,
+        image_path: image_url, // Store same as URL for now
+        updated_at: new Date()
+      },
+      include: {
+        category: true
+      }
+    });
+    
+    await context.security.logSensitiveOperation(
+      context.userId,
+      'UPDATE_PRODUCT_IMAGE',
+      'Product',
+      id, context.redisClient
+    );
+    
+    return product;
   }
 }; 

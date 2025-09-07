@@ -1,7 +1,6 @@
 "use client"
 
-import { useState, useMemo, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useState, useMemo, useEffect, useCallback, memo } from "react"
 import { Button } from "@/components/ui/button"
 import AddProductForm from "@/components/forms/AddProductForm"
 import ProductListSidebar from "@/components/modules/inventory/product-list-sidebar"
@@ -44,8 +43,7 @@ interface Product {
   pack_size?: string
 }
 
-export default function InventoryPage() {
-  const router = useRouter()
+function InventoryPage() {
   const { handleAuthError } = useAuth()
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedLetter, setSelectedLetter] = useState<string>("")
@@ -53,11 +51,14 @@ export default function InventoryPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('list')
   const [submitTrigger, setSubmitTrigger] = useState(0)
   const [products, setProducts] = useState<Product[]>([])
-  const [transformedProducts, setTransformedProducts] = useState<TransformedProduct[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null)
   const [isProductEditing, setIsProductEditing] = useState(false)
+  const [totalProducts, setTotalProducts] = useState(0)
+  
+  // Loading state to prevent multiple simultaneous requests
+  const [isLoadingProducts, setIsLoadingProducts] = useState(false)
 
   const alphabet = Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i))
   const thaiLetters = ["ก", "ข", "ค", "ง", "จ", "ฉ", "ช", "ซ", "ฌ", "ญ", "ด", "ต", "ท", "ธ", "น", "บ", "ป", "ผ", "ฝ", "พ", "ฟ", "ภ", "ม", "ย", "ร", "ล", "ว", "ศ", "ษ", "ส", "ห", "ฬ", "อ", "ฮ"]
@@ -72,25 +73,39 @@ export default function InventoryPage() {
     }
   }
 
-  const allSections = [...numbers, ...alphabet, ...thaiLetters]
   const currentSections = getCurrentSections()
 
-  // Load products from GraphQL
-  const loadProducts = async () => {
+  // Load all products from GraphQL (no pagination)
+  const loadProducts = useCallback(async () => {
+    // ป้องกันการเรียกซ้ำ
+    if (isLoadingProducts) {
+      console.log('Already loading products, skipping...')
+      return
+    }
+
     try {
+      setIsLoadingProducts(true)
       setLoading(true)
+      setProducts([])
       setError(null)
       
-      logger.info('Loading products from GraphQL', {}, 'INVENTORY')
+      logger.info('Loading all products from GraphQL', {}, 'INVENTORY')
       
+      // Load all products without pagination
       const response = await GraphQLAPI.getAllProducts({
-        pagination: { skip: 0, take: 100 } // Load first 100 products
+        filter: { status: 'active' } // Only load active products
       })
       
       if (response.products && response.products.products) {
-        setProducts(response.products.products)
+        const allProducts = response.products.products
+        const total = response.products.total || allProducts.length
+        
+        setProducts(allProducts)
+        setTotalProducts(total)
+        
         logger.info('Products loaded successfully', { 
-          count: response.products.products.length 
+          count: allProducts.length,
+          total
         }, 'INVENTORY')
       } else {
         setProducts([])
@@ -114,15 +129,23 @@ export default function InventoryPage() {
       setProducts([]) // Fallback to empty array
     } finally {
       setLoading(false)
+      setIsLoadingProducts(false)
     }
-  }
+  }, [handleAuthError, isLoadingProducts])
+
 
   useEffect(() => {
-    loadProducts()
-  }, [])
+    // Load products on initial mount
+    if (products.length === 0 && !isLoadingProducts) {
+      loadProducts()
+    }
+  }, []) // Empty dependency array for initial load only
 
   // Transform products for display - group by product name and combine units
-  useEffect(() => {
+  // Memoized for better performance
+  const transformedProducts = useMemo(() => {
+    if (!products.length) return []
+
     // Group products by name first
     const productGroups = products.reduce((acc, product) => {
       const name = product.product_name
@@ -134,7 +157,7 @@ export default function InventoryPage() {
     }, {} as Record<string, typeof products>)
 
     // Transform grouped products
-    const transformed = Object.entries(productGroups).map(([productName, productList]) => {
+    return Object.entries(productGroups).map(([productName, productList]) => {
       // Get first letter/character for grouping
       const firstChar = productName.charAt(0).toUpperCase()
       
@@ -171,18 +194,18 @@ export default function InventoryPage() {
         allProducts: productList // Keep all products for detail view
       }
     })
-    
-    setTransformedProducts(transformed)
   }, [products])
 
-  // Group products by first letter
+  // Group products by first letter - memoized for performance
   const groupedProducts = useMemo(() => {
+    if (!transformedProducts.length) return {}
+    
     const filtered = transformedProducts.filter((product) => 
       product.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
       (!selectedLetter || product.letter === selectedLetter)
     )
     
-    const grouped = filtered.reduce((acc, product) => {
+    return filtered.reduce((acc, product) => {
       const letter = product.letter
       if (!acc[letter]) {
         acc[letter] = []
@@ -190,52 +213,53 @@ export default function InventoryPage() {
       acc[letter].push(product)
       return acc
     }, {} as Record<string, TransformedProduct[]>)
-    
-    return grouped
   }, [transformedProducts, searchQuery, selectedLetter])
 
-  // Get sections that have products (from current mode)
+  // Get sections that have products (from current mode) - memoized
   const availableSections = useMemo(() => {
     const sections = Object.keys(groupedProducts)
     return currentSections.filter(section => sections.includes(section))
   }, [groupedProducts, currentSections])
 
-  const totalProducts = Object.values(groupedProducts).flat().length
+  // Total products count - memoized (for filtered results)
+  const filteredProductsCount = useMemo(() => {
+    return Object.values(groupedProducts).flat().length
+  }, [groupedProducts])
 
-  const handleModeSwitch = () => {
+  const handleModeSwitch = useCallback(() => {
     const modes: AlphabetMode[] = ['english', 'thai', 'numbers']
     const currentIndex = modes.indexOf(alphabetMode)
     const nextIndex = (currentIndex + 1) % modes.length
     setAlphabetMode(modes[nextIndex])
     setSelectedLetter("") // Reset selection when switching modes
-  }
+  }, [alphabetMode])
 
-  const getModeLabel = () => {
+  const getModeLabel = useCallback(() => {
     switch (alphabetMode) {
       case 'english': return 'A-Z'
       case 'thai': return 'ก-ฮ'
       case 'numbers': return '0-9'
       default: return 'A-Z'
     }
-  }
+  }, [alphabetMode])
 
-  // Navigation handlers
-  const handleBackToList = () => {
+  // Navigation handlers - memoized
+  const handleBackToList = useCallback(() => {
     setViewMode('list')
-  }
+  }, [])
 
-  // Action handlers
-  const handleAddProduct = () => setViewMode('add-product')
-  const handleImportProducts = () => setViewMode('import-products')
-  const handleExportProducts = () => setViewMode('export-products')
-  const handleDeleteProduct = () => setViewMode('delete-products')
-  const handlePrintBarcode = () => setViewMode('print-barcode')
-  const handlePrintPriceTag = () => setViewMode('print-price-tag')
-  const handlePrintMedicineLabel = () => setViewMode('print-medicine-label')
-  const handleProductReport = () => setViewMode('product-report')
+  // Action handlers - memoized
+  const handleAddProduct = useCallback(() => setViewMode('add-product'), [])
+  const handleImportProducts = useCallback(() => setViewMode('import-products'), [])
+  const handleExportProducts = useCallback(() => setViewMode('export-products'), [])
+  const handleDeleteProduct = useCallback(() => setViewMode('delete-products'), [])
+  const handlePrintBarcode = useCallback(() => setViewMode('print-barcode'), [])
+  const handlePrintPriceTag = useCallback(() => setViewMode('print-price-tag'), [])
+  const handlePrintMedicineLabel = useCallback(() => setViewMode('print-medicine-label'), [])
+  const handleProductReport = useCallback(() => setViewMode('product-report'), [])
 
-  // Product detail handler
-  const handleProductClick = (productId: string) => {
+  // Product detail handler - memoized
+  const handleProductClick = useCallback((productId: string) => {
     // Find the product with all its variants
     const product = transformedProducts.find(p => p.id === productId)
     if (product && product.allProducts) {
@@ -247,71 +271,132 @@ export default function InventoryPage() {
       setSelectedProductId(productId)
       setViewMode('product-detail')
     }
-  }
+  }, [transformedProducts])
 
-  // Handle product deletion callback
-  const handleProductDeleted = () => {
-    logger.info('Product deleted, refreshing inventory data', {}, 'INVENTORY')
-    loadProducts() // Reload products after deletion
-  }
-
-  // Handle product update callback
-  const handleProductUpdated = () => {
-    logger.info('Product updated, refreshing inventory data', {}, 'INVENTORY')
-    loadProducts() // Reload products after update
-  }
-
-  // Submit handlers
-  const handleSubmitProduct = (productData: any) => {
-    console.log("New product data:", productData)
-    logger.info('Product added, refreshing inventory data', {}, 'INVENTORY')
-    loadProducts() // Reload products after adding new product
-    setViewMode('list')
-  }
-
-  const handleImportSubmit = async (importData: any) => {
-    console.log("Import data:", importData)
+  // Handle product deletion callback - memoized with debounce
+  const handleProductDeleted = useCallback(() => {
+    // Invalidate product cache before reloading
+    GraphQLAPI.invalidateCachePattern('Products')
     
+    // Debounce reload to prevent multiple rapid calls
+    setTimeout(() => {
+      loadProducts() // Reload products after deletion
+    }, 500)
+  }, [loadProducts])
+
+  // Handle product update callback - memoized with debounce
+  const handleProductUpdated = useCallback(() => {
+    // Invalidate product cache before reloading
+    GraphQLAPI.invalidateCachePattern('Products')
+    
+    // Debounce reload to prevent multiple rapid calls
+    setTimeout(() => {
+      loadProducts() // Reload products after update
+    }, 500)
+  }, [loadProducts])
+
+  // Submit handlers - memoized with debounce
+  const handleSubmitProduct = useCallback(async (productData: any) => {
+    try {
+      logger.info('Creating new product', { productData }, 'INVENTORY')
+      
+      // Prepare input data for GraphQL mutation
+      const input: any = {
+        product_name: productData.product_name || '',
+        product_type: productData.product_type || 'medicine',
+        generic_name: productData.generic_name || '',
+        short_name: productData.short_name || '',
+        status: productData.status || 'active',
+        vat_percent: parseInt(productData.vat_percent) || 0,
+        expiration_warning_date: parseInt(productData.expiration_warning_days) || 90,
+        sale_price: parseFloat(productData.sale_price) || 0,
+        unit: productData.unit || '',
+        pack_size: productData.pack_size || '',
+        reorder_point: parseInt(productData.reorder_point) || 0,
+        cost: parseFloat(productData.cost) || 0,
+        stock_quantity: parseInt(productData.stock_quantity) || 0,
+        shelf_code: productData.shelf_code || '',
+        shelf_row: productData.shelf_row || '',
+        symptom_category: Array.isArray(productData.symptom_category) && productData.symptom_category.length > 0 
+          ? JSON.stringify(productData.symptom_category) 
+          : null,
+        license_number: productData.license_number || '',
+        dosage_unit: productData.dosage_unit || '',
+        dosage: productData.dosage || '',
+        times_per_day: parseInt(productData.times_per_day) || null,
+        interval_hours: parseInt(productData.interval_hours) || null,
+        before_meal: Boolean(productData.before_meal),
+        after_meal: Boolean(productData.after_meal),
+        after_meal_immediate: Boolean(productData.after_meal_immediate),
+        morning: productData.morning || '',
+        noon: productData.noon || '',
+        evening: productData.evening || '',
+        before_bed: productData.before_bed || '',
+        properties: productData.properties || '',
+        usage_instruction: productData.usage_instruction || '',
+        sale_note: productData.sale_note || '',
+        purchase_note: productData.purchase_note || '',
+        image_url: productData.image_url || ''
+      }
+
+      // Only include categoryId if it exists and is not empty
+      const categoryId = productData.categoryId || (typeof productData.category === 'object' && productData.category?.id)
+      if (categoryId && categoryId.trim() !== '') {
+        input.categoryId = categoryId
+      }
+
+      // Only include report_type if it exists and is not empty
+      if (Array.isArray(productData.report_type) && productData.report_type.length > 0) {
+        input.report_type = productData.report_type
+      }
+
+      logger.info('Creating product with input', { input }, 'INVENTORY')
+      
+      const result = await GraphQLAPI.createProduct(input)
+      logger.info('Product created successfully', { result }, 'INVENTORY')
+      
+      // Invalidate product cache before reloading
+      GraphQLAPI.invalidateCachePattern('Products')
+      
+      // Debounce reload to prevent multiple rapid calls
+      setTimeout(() => {
+        loadProducts() // Reload products after adding new product
+      }, 500)
+      setViewMode('list')
+    } catch (error) {
+      logger.error('Error creating product', { error, productData }, 'INVENTORY')
+      const errorMessage = error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการสร้างสินค้า'
+      alert(`ไม่สามารถสร้างสินค้าได้: ${errorMessage}`)
+    }
+  }, [loadProducts])
+
+  const handleImportSubmit = useCallback(async (importData: any) => {
     // If import was successful, refresh the products list
     if (importData.result && importData.result.success && importData.result.imported > 0) {
-      try {
-        logger.info('Refreshing products after successful import', {}, 'INVENTORY')
-        
-        const response = await GraphQLAPI.getAllProducts({
-          pagination: { skip: 0, take: 100 }
-        })
-        
-        if (response.products && response.products.products) {
-          setProducts(response.products.products)
-          logger.info('Products refreshed after import', { 
-            count: response.products.products.length 
-          }, 'INVENTORY')
-        }
-      } catch (err) {
-        logger.error('Failed to refresh products after import', err, 'INVENTORY')
-      }
+      // Invalidate product cache before reloading
+      GraphQLAPI.invalidateCachePattern('Products')
+      loadProducts()
     }
     
     setViewMode('list')
-  }
+  }, [loadProducts])
 
-  const handleExportSubmit = (exportSettings: any) => {
-    console.log("Export settings:", exportSettings)
+  const handleExportSubmit = useCallback((exportSettings: any) => {
     // Handle export logic here
-  }
+  }, [])
 
-  const handleDeleteSubmit = (deleteData: any) => {
-    console.log("Delete data:", deleteData)
-    logger.info('Products deleted from delete view, refreshing inventory data', {}, 'INVENTORY')
+  const handleDeleteSubmit = useCallback((deleteData: any) => {
+    // Invalidate product cache before reloading
+    GraphQLAPI.invalidateCachePattern('Products')
     loadProducts() // Reload products after bulk deletion
     setViewMode('list')
-  }
+  }, [loadProducts])
 
-  const handleSaveButtonClick = () => {
+  const handleSaveButtonClick = useCallback(() => {
     setSubmitTrigger(prev => prev + 1)
-  }
+  }, [])
 
-  const getViewTitle = () => {
+  const getViewTitle = useCallback(() => {
     switch (viewMode) {
       case 'add-product': return 'เพิ่มสินค้าใหม่'
       case 'product-detail': return 'รายละเอียดสินค้า'
@@ -324,7 +409,7 @@ export default function InventoryPage() {
       case 'product-report': return 'รายงานรับเข้า/ออกของสินค้า'
       default: return 'สต็อกสินค้า'
     }
-  }
+  }, [viewMode])
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
@@ -336,6 +421,7 @@ export default function InventoryPage() {
           selectedLetter={selectedLetter}
           products={transformedProducts}
           onProductClick={handleProductClick}
+          totalProducts={totalProducts}
         />
       )}
 
@@ -492,3 +578,5 @@ export default function InventoryPage() {
     </div>
   )
 }
+
+export default memo(InventoryPage)

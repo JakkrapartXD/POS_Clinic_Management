@@ -15,6 +15,9 @@ model User {
   username       String          @unique
   password_hash  String
   status         String          @default("active")
+  avatar_url     String?         // URL สำหรับรูปโปรไฟล์
+  avatar_path    String?         // Path ไฟล์ในเครื่อง
+  isDelete       Boolean         @default(false)
   created_at     DateTime        @default(now())
   updated_at     DateTime        @updatedAt
   sessions       Session[]
@@ -35,6 +38,9 @@ model Patient {
   phone          String?
   email          String?
   address        String?
+  photo_url      String?         // URL สำหรับรูปผู้ป่วย
+  photo_path     String?         // Path ไฟล์ในเครื่อง
+  isDelete       Boolean         @default(false)
   created_at     DateTime        @default(now())
   updated_at     DateTime        @updatedAt
   appointments   Appointment[]
@@ -48,6 +54,7 @@ model Category {
   name        String    @unique  // หมวดหมู่สินค้า
   description String?            // คำอธิบาย
   code        String?   @unique  // รหัสหมวดหมู่ (nullable)
+  isDelete    Boolean   @default(false)
   created_at  DateTime  @default(now())
   updated_at  DateTime  @updatedAt
   
@@ -95,6 +102,9 @@ model Product {
   usage_instruction       String?
   sale_note               String?
   purchase_note           String?
+  image_url               String?         // URL สำหรับรูปสินค้า
+  image_path              String?         // Path ไฟล์ในเครื่อง
+  isDelete                Boolean         @default(false)
   created_at              DateTime        @default(now())
   updated_at              DateTime        @updatedAt
   orderItems               OrderItem[]
@@ -103,6 +113,17 @@ model Product {
   stockMovements          StockMovement[]
   salesReports            SalesReport[]
   stockAlerts             StockAlert[]
+
+  // Database indexes for better query performance
+  @@index([status])
+  @@index([categoryId])
+  @@index([product_type])
+  @@index([created_at])
+  @@index([product_name])
+  @@index([isDelete])
+  @@index([status, categoryId])
+  @@index([status, product_type])
+  @@index([status, isDelete])
 }
 
 model Order {
@@ -114,6 +135,7 @@ model Order {
   order_date   DateTime    @default(now())
   status       String?     @default("completed")
   total_amount Float?
+  isDelete     Boolean     @default(false)
   created_at   DateTime    @default(now())
   updated_at   DateTime    @updatedAt
   orderItems   OrderItem[]
@@ -167,6 +189,7 @@ model Supplier {
   phone        String?
   email        String?
   address      String?
+  isDelete     Boolean    @default(false)
   created_at   DateTime   @default(now())
   updated_at   DateTime   @updatedAt
   purchases    Purchase[]
@@ -181,6 +204,7 @@ model Purchase {
   purchase_date DateTime       @default(now())
   total_amount  Float?
   status        String?        @default("received")
+  isDelete      Boolean        @default(false)
   created_at    DateTime       @default(now())
   updated_at    DateTime       @updatedAt
   purchaseItems PurchaseItem[]
@@ -226,6 +250,7 @@ model Appointment {
   appointment_time DateTime
   status           String?         @default("scheduled")
   reason           String?
+  isDelete         Boolean         @default(false)
   created_at       DateTime        @default(now())
   updated_at       DateTime        @updatedAt
   medicalRecords   MedicalRecord[]
@@ -243,6 +268,7 @@ model MedicalRecord {
   diagnosis     String?
   treatment     String?
   notes         String?
+  isDelete      Boolean        @default(false)
   created_at    DateTime       @default(now())
   updated_at    DateTime       @updatedAt
   prescriptions Prescription[]
@@ -273,6 +299,7 @@ model TreatmentPlan {
   plan_details String?
   start_date   DateTime?
   end_date     DateTime?
+  isDelete     Boolean   @default(false)
   created_at   DateTime  @default(now())
   updated_at   DateTime  @updatedAt
 }

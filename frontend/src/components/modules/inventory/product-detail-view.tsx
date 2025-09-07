@@ -10,8 +10,10 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Edit2, ArrowLeft, Upload } from "lucide-react"
+import ProductImageUpload from "@/components/common/ProductImageUpload"
 import { GraphQLAPI } from "@/clients/graphql"
 import { logger } from "@/lib/logger"
+import { API_CONFIG } from "@/config/api"
 import EditProductForm from "@/components/forms/EditProductForm"
 
 interface ProductDetailViewProps {
@@ -94,6 +96,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
     barcode: string
     display_pos: boolean
     image: File | null
+    image_url: string
   }>({
     unit_name: '',
     pack_size: '',
@@ -107,16 +110,18 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
     sku: '',
     barcode: '',
     display_pos: true,
-    image: null
+    image: null,
+    image_url: ''
   })
   const [isCreatingNewUnit, setIsCreatingNewUnit] = useState(false)
 
   // Image upload handler for unit edit
-  const handleUnitImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      setUnitFormData(prev => ({ ...prev, image: file }))
-    }
+  const handleUnitImageChange = (file: File | null, imageUrl?: string) => {
+    setUnitFormData(prev => ({ 
+      ...prev, 
+      image: file,
+      image_url: imageUrl || '' 
+    }))
   }
 
   // Helper function to determine if pack_size is main product (pack_size = 1)
@@ -223,7 +228,8 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
         sku: '',
         barcode: '',
         display_pos: true,
-        image: null
+        image: null,
+        image_url: mainProduct?.image_url || ''
       })
       setIsCreatingNewUnit(true)
     } else {
@@ -241,7 +247,8 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
         sku: unitData.sku || '',
         barcode: unitData.barcode || '',
         display_pos: unitData.status === 'active',
-        image: null
+        image: null,
+        image_url: unitData.image_url || ''
       })
       setIsCreatingNewUnit(false)
     }
@@ -310,6 +317,21 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
   const handleUnitSave = async () => {
     try {
       logger.debug('Saving unit data', { unitFormData }, 'INVENTORY')
+      
+      // Upload image first if there's a new file
+      let imageUrl = unitFormData.image_url
+      if (unitFormData.image) {
+        try {
+          logger.info('Uploading image for unit', { fileName: unitFormData.image.name }, 'INVENTORY')
+          const uploadResult = await GraphQLAPI.uploadImage(unitFormData.image, 'product')
+          imageUrl = uploadResult.url
+          logger.info('Image uploaded successfully', { imageUrl }, 'INVENTORY')
+        } catch (error) {
+          logger.error('Failed to upload image', error, 'INVENTORY')
+          alert('ไม่สามารถอัพโหลดรูปภาพได้ กรุณาลองใหม่')
+          return
+        }
+      }
       
       // Validate required fields for new unit creation
       if (isCreatingNewUnit) {
@@ -430,6 +452,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
           volume_unit: unitFormData.volume_unit || 'mg',
           shelf_code: unitFormData.shelf_code || '',
           shelf_row: unitFormData.shelf_row || '',
+          image_url: imageUrl || '',
           symptom_category: product?.symptom_category || null,
           license_number: product?.license_number || '',
           dosage_unit: product?.dosage_unit || '',
@@ -482,15 +505,9 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
           }
         }
       } else {
-        // Update existing unit using GraphQL mutation
+        // Update existing unit using GraphQL mutation - only unit-specific fields
         const productInput: any = {
-          product_name: product?.product_name || '',
-          product_type: product?.product_type || 'medicine',
-          generic_name: product?.generic_name || '',
-          short_name: product?.short_name || '',
           status: unitFormData.display_pos ? 'active' : 'inactive',
-          vat_percent: product?.vat_percent || 0,
-          expiration_warning_date: product?.expiration_warning_date || 90,
           sale_price: parseFloat(unitFormData.sale_price) || 0,
           unit: unitFormData.unit_name,
           pack_size: unitFormData.pack_size,
@@ -498,33 +515,15 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
           cost: parseFloat(unitFormData.cost) || 0,
           sku: unitFormData.sku || '',
           barcode: unitFormData.barcode || '',
-          stock_quantity: 0, // Keep existing stock quantity
           volume: parseFloat(unitFormData.volume) || 0,
           volume_unit: unitFormData.volume_unit || 'mg',
           shelf_code: unitFormData.shelf_code || '',
-          shelf_row: unitFormData.shelf_row || '',
-          symptom_category: product?.symptom_category || null,
-          license_number: product?.license_number || '',
-          dosage_unit: product?.dosage_unit || '',
-          dosage: product?.dosage || '',
-          times_per_day: product?.times_per_day || null,
-          interval_hours: product?.interval_hours || null,
-          before_meal: product?.before_meal || false,
-          after_meal: product?.after_meal || false,
-          after_meal_immediate: product?.after_meal_immediate || false,
-          morning: product?.morning || '',
-          noon: product?.noon || '',
-          evening: product?.evening || '',
-          before_bed: product?.before_bed || '',
-          properties: product?.properties || '',
-          usage_instruction: product?.usage_instruction || '',
-          sale_note: product?.sale_note || '',
-          purchase_note: product?.purchase_note || ''
+          shelf_row: unitFormData.shelf_row || ''
         }
 
-        // Only include categoryId if it exists and is not empty
-        if (product?.category?.id && product.category.id.trim() !== '') {
-          productInput.categoryId = product.category.id
+        // Only include image_url if there's a new image
+        if (imageUrl) {
+          productInput.image_url = imageUrl
         }
 
         // Find the product variant to get its ID
@@ -534,6 +533,9 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
           return
         }
 
+        // Store old image URL before updating
+        const oldImageUrl = variantToUpdate.image_url
+        
         logger.info('Updating product variant', { 
           productId: variantToUpdate.id,
           unit: productInput.unit,
@@ -547,6 +549,27 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
             productId: response.updateProduct.id,
             productName: response.updateProduct.product_name 
           }, 'INVENTORY')
+          console.log('New image URL:', productInput.image_url);
+          console.log('Old image URL:', oldImageUrl);
+          
+          // Delete old image if exists
+          if (oldImageUrl) {
+            try {
+              console.log('Deleting old image:', oldImageUrl)
+              // Extract filename from URL
+              const urlParts = oldImageUrl.split('/')
+              const filename = urlParts[urlParts.length - 1]
+              const category = urlParts[urlParts.length - 2]
+              
+              if (filename && category) {
+                await GraphQLAPI.deleteImage(filename, category as 'product' | 'user' | 'patient')
+                console.log('Old image deleted successfully')
+              }
+            } catch (error) {
+              console.warn('Failed to delete old image:', error)
+              // Continue even if old image deletion fails
+            }
+          }
           
           alert('แก้ไขหน่วยนับเรียบร้อยแล้ว')
           setShowUnitEditDialog(false)
@@ -616,7 +639,8 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
         properties: productData.properties || '',
         usage_instruction: productData.usage_instruction || '',
         sale_note: productData.sale_note || '',
-        purchase_note: productData.purchase_note || ''
+        purchase_note: productData.purchase_note || '',
+        image_url: productData.image_url || ''
       }
 
       // Only include categoryId if it exists and is not empty
@@ -738,6 +762,25 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
         // Notify parent component that product was updated
         if (onProductUpdated) {
           onProductUpdated()
+        }
+        
+        // Delete old image if exists
+        if (productData.image_url) {
+          try {
+            console.log('Deleting old image:', productData.image_url)
+            // Extract filename from URL
+            const urlParts = productData.image_url.split('/')
+            const filename = urlParts[urlParts.length - 1]
+            const category = urlParts[urlParts.length - 2]
+            
+            if (filename && category) {
+              await GraphQLAPI.deleteImage(filename, category as 'product' | 'user' | 'patient')
+              console.log('Old image deleted successfully')
+            }
+          } catch (error) {
+            console.warn('Failed to delete old image:', error)
+            // Continue even if old image deletion fails
+          }
         }
       }
       
@@ -1388,7 +1431,8 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
             sku: '',
             barcode: '',
             display_pos: true,
-            image: null
+            image: null,
+            image_url: ''
           })
         }
       }}>
@@ -1427,26 +1471,13 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                 <>
                   {/* Product Image Upload */}
                   <div className="mb-6">
-                    <Label className="text-sm font-medium text-gray-700">รูปภาพสินค้า</Label>
-                    <div className="mt-2 flex justify-start">
-                      <div className="w-48 h-48 border-2 border-gray-300 border-dashed rounded-lg flex items-center justify-center">
-                        <div className="space-y-1 text-center">
-                          <Upload className="mx-auto h-12 w-12 text-gray-400" />
-                          <div className="flex text-sm text-gray-600">
-                            <label className="relative cursor-pointer bg-white rounded-md font-medium text-purple-600 hover:text-purple-500">
-                              <span>อัพโหลดรูปภาพหรือลากแนบ</span>
-                              <input
-                                type="file"
-                                className="sr-only"
-                                accept="image/*"
-                                onChange={handleUnitImageUpload}
-                              />
-                            </label>
-                          </div>
-                          <p className="text-xs text-gray-500">ขนาดรูปภาพแนะนำ 160x160 หรือ 1:1 และขนาดไม่เกิน 2MB</p>
-                        </div>
-                      </div>
-                    </div>
+                    <ProductImageUpload
+                      value={unitFormData.image}
+                      onChange={handleUnitImageChange}
+                      currentImageUrl={unitFormData.image_url ? `${API_CONFIG.BASE_URL}${unitFormData.image_url}` : ''}
+                      label="รูปภาพสินค้า"
+                      description="ขนาดรูปภาพแนะนำ 160x160 หรือ 1:1 และขนาดไม่เกิน 2MB"
+                    />
                   </div>
 
                   {/* ชื่อหน่วยนับ ภาษาไทย, อังกฤษ และตัวเลข */}

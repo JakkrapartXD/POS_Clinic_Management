@@ -355,48 +355,33 @@ const additionalMutations = {
     
     await context.security.checkRateLimit(context.userId, 'sensitive', context.redisClient);
     
-    // Check for dependencies
-    const dependencies = await context.prisma.product.findUnique({
-      where: { id },
-      include: {
-        _count: {
-          select: {
-            orderItems: true,
-            purchaseItems: true,
-            prescriptions: true,
-            stockMovements: true,
-            salesReports: true,
-            stockAlerts: true
-          }
-        }
+    // Check if product exists and is not already deleted
+    const product = await context.prisma.product.findFirst({
+      where: { 
+        id,
+        isDelete: false
       }
     });
     
-    if (!dependencies) {
-      throw new Error('Product not found');
+    if (!product) {
+      throw new Error('Product not found or already deleted');
     }
     
-    const totalDependencies = (Object.values(dependencies._count) as number[]).reduce((sum, count) => sum + count, 0);
-    
-    if (totalDependencies > 0) {
-      throw new Error('Cannot delete product with existing transactions. Set status to inactive instead.');
-    }
-    
-    // Use transaction to ensure data consistency
-    await context.prisma.$transaction(async (tx) => {
-      // Delete the product
-      await tx.product.delete({
-        where: { id }
-      });
-      
-      // Log the operation
-      await context.security.logSensitiveOperation(
-        context.userId,
-        'DELETE_PRODUCT',
-        'Product',
-        id, context.redisClient
-      );
+    // Soft delete: Update isDelete to true
+    await context.prisma.product.update({
+      where: { id },
+      data: { 
+        isDelete: true,
+        updated_at: new Date()
+      }
     });
+    
+    await context.security.logSensitiveOperation(
+      context.userId,
+      'SOFT_DELETE_PRODUCT',
+      'Product',
+      id, context.redisClient
+    );
     
     return true;
   },
