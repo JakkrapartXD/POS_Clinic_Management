@@ -93,5 +93,20 @@ body {
   body {
     @apply bg-background text-foreground;
   }
+
+  /* Force white background for dropdowns and forms */
+  [data-radix-popper-content-wrapper],
+  [data-radix-select-content],
+  [data-radix-dropdown-menu-content],
+  [data-radix-popover-content],
+  [data-radix-dialog-content] {
+    @apply bg-white !important;
+  }
+  
+  /* Ensure form elements have white background */
+  .bg-popover,
+  .bg-background {
+    @apply bg-white !important;
+  }
 }
 

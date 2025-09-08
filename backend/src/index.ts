@@ -17,6 +17,7 @@ import { createGraphQLContext, SecurityService } from "./graphql/security";
 import { AuthRoutes } from "./routes/authRoutes";
 import { userRoutes } from "./routes/userRoutes";
 import { uploadRoutes } from "./routes/uploadRoutes";
+import { backupRoutes, oauthRoutes } from "./routes/backupRoutes";
 
 // Import logger
 import { logger } from "./lib/logger";
@@ -251,6 +252,8 @@ const app = new Elysia()
   .use(AuthRoutes)
   .use(userRoutes)
   .use(uploadRoutes)
+  .use(oauthRoutes)
+  .use(backupRoutes)
 
   // Default route
   .get("/", () => ({
