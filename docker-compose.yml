@@ -9,6 +9,7 @@ services:
       - .env.development
     networks:
       - app-network
+    restart: always
 
   backend:
     build:
@@ -20,9 +21,9 @@ services:
       - .env.development
     networks:
       - app-network
+    restart: always
     depends_on:
       - postgres
-      - mongo
       - redis
 
   postgres:
@@ -34,18 +35,6 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-    networks:
-      - app-network
-
-  mongo:
-    image: mongo:6
-    restart: always
-    env_file:
-      - .env
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongodata:/data/db
     networks:
       - app-network
 
@@ -77,6 +66,5 @@ networks:
 
 volumes:
   pgdata:
-  mongodata:
   redisdata:
   pgadmin-data:
