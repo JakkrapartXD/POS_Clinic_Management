@@ -45,9 +45,13 @@ package-lock.json
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 # Backup files and sensitive data
 /backups
 /data/google-drive-config.json
+=======
+/backups
+>>>>>>> c0df445c4c60e4ce93d4481a25b66a0f0c6ea88a
 =======
 /backups
 >>>>>>> c0df445c4c60e4ce93d4481a25b66a0f0c6ea88a
