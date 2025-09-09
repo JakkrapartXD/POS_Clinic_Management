@@ -19,4 +19,6 @@ mongodata/
 .DS_Store
 Thumbs.db
 
+# Backup files and Google Drive config
 backups/
+backend/data/google-drive-config.json
