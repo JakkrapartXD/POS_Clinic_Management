@@ -5,6 +5,7 @@ import { cors } from "@elysiajs/cors";
 import { yoga } from "@elysiajs/graphql-yoga";
 import { jwt } from "@elysiajs/jwt";
 import { swagger } from "@elysiajs/swagger";
+import { staticPlugin } from "@elysiajs/static";
 import { createClient } from "redis";
 
 // Import GraphQL components
@@ -15,6 +16,8 @@ import { createGraphQLContext, SecurityService } from "./graphql/security";
 // Import routes
 import { AuthRoutes } from "./routes/authRoutes";
 import { userRoutes } from "./routes/userRoutes";
+import { uploadRoutes } from "./routes/uploadRoutes";
+import { backupRoutes, oauthRoutes } from "./routes/backupRoutes";
 
 // Import logger
 import { logger } from "./lib/logger";
@@ -160,6 +163,12 @@ const app = new Elysia()
   )
   .use(cookie())
   .use(bearer())
+  
+  // Static file serving for uploads
+  .use(staticPlugin({
+    assets: "public/uploads",
+    prefix: "/uploads"
+  }))
 
   // Health check endpoint
   .get("/health", async () => {
@@ -242,6 +251,9 @@ const app = new Elysia()
   // Register routes
   .use(AuthRoutes)
   .use(userRoutes)
+  .use(uploadRoutes)
+  .use(oauthRoutes)
+  .use(backupRoutes)
 
   // Default route
   .get("/", () => ({

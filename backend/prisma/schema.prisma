@@ -15,6 +15,9 @@ model User {
   username       String          @unique
   password_hash  String
   status         String          @default("active")
+  avatar_url     String?         // URL สำหรับรูปโปรไฟล์
+  avatar_path    String?         // Path ไฟล์ในเครื่อง
+  isDelete       Boolean         @default(false)
   created_at     DateTime        @default(now())
   updated_at     DateTime        @updatedAt
   sessions       Session[]
@@ -35,12 +38,28 @@ model Patient {
   phone          String?
   email          String?
   address        String?
+  photo_url      String?         // URL สำหรับรูปผู้ป่วย
+  photo_path     String?         // Path ไฟล์ในเครื่อง
+  isDelete       Boolean         @default(false)
   created_at     DateTime        @default(now())
   updated_at     DateTime        @updatedAt
   appointments   Appointment[]
   medicalRecords MedicalRecord[]
   orders         Order[]
   treatmentPlans TreatmentPlan[]
+}
+
+model Category {
+  id          String    @id @default(cuid())
+  name        String    @unique  // หมวดหมู่สินค้า
+  description String?            // คำอธิบาย
+  code        String?   @unique  // รหัสหมวดหมู่ (nullable)
+  isDelete    Boolean   @default(false)
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+  
+  // Relations
+  products    Product[]
 }
 
 model Product {
@@ -51,7 +70,7 @@ model Product {
   short_name              String?
   status                  String?         @default("active")
   vat_percent             Float?          @default(0)
-  expiration_warning_date DateTime?
+  expiration_warning_date Int?
   sale_price              Float
   unit                    String?
   pack_size               String?
@@ -64,7 +83,8 @@ model Product {
   volume_unit             String?
   shelf_code              String?
   shelf_row               String?
-  category                String?
+  category                Category?       @relation(fields: [categoryId], references: [id])
+  categoryId              String?
   symptom_category        String?
   license_number          String?
   dosage_unit             String?
@@ -74,22 +94,36 @@ model Product {
   before_meal             Boolean?
   after_meal              Boolean?
   after_meal_immediate    Boolean?
-  morning                 Boolean?
-  noon                    Boolean?
-  evening                 Boolean?
-  before_bed              Boolean?
+  morning                 String?
+  noon                    String?
+  evening                 String?
+  before_bed              String?
   properties              String?
   usage_instruction       String?
   sale_note               String?
   purchase_note           String?
+  image_url               String?         // URL สำหรับรูปสินค้า
+  image_path              String?         // Path ไฟล์ในเครื่อง
+  isDelete                Boolean         @default(false)
   created_at              DateTime        @default(now())
   updated_at              DateTime        @updatedAt
-  orderItems              OrderItem[]
+  orderItems               OrderItem[]
   purchaseItems           PurchaseItem[]
   prescriptions           Prescription[]
   stockMovements          StockMovement[]
   salesReports            SalesReport[]
   stockAlerts             StockAlert[]
+
+  // Database indexes for better query performance
+  @@index([status])
+  @@index([categoryId])
+  @@index([product_type])
+  @@index([created_at])
+  @@index([product_name])
+  @@index([isDelete])
+  @@index([status, categoryId])
+  @@index([status, product_type])
+  @@index([status, isDelete])
 }
 
 model Order {
@@ -101,6 +135,7 @@ model Order {
   order_date   DateTime    @default(now())
   status       String?     @default("completed")
   total_amount Float?
+  isDelete     Boolean     @default(false)
   created_at   DateTime    @default(now())
   updated_at   DateTime    @updatedAt
   orderItems   OrderItem[]
@@ -113,11 +148,14 @@ model OrderItem {
   id          String  @id @default(cuid())
   order       Order   @relation(fields: [orderId], references: [id])
   orderId     String
-  product     Product @relation(fields: [productId], references: [id])
+  product     Product @relation(fields: [productId], references: [id], onDelete: Restrict)
   productId   String
   quantity    Int
   unit_price  Float
   total_price Float
+  // Store product name and unit for historical reference
+  product_name String?
+  product_unit String?
 }
 
 model Payment {
@@ -151,6 +189,7 @@ model Supplier {
   phone        String?
   email        String?
   address      String?
+  isDelete     Boolean    @default(false)
   created_at   DateTime   @default(now())
   updated_at   DateTime   @updatedAt
   purchases    Purchase[]
@@ -165,6 +204,7 @@ model Purchase {
   purchase_date DateTime       @default(now())
   total_amount  Float?
   status        String?        @default("received")
+  isDelete      Boolean        @default(false)
   created_at    DateTime       @default(now())
   updated_at    DateTime       @updatedAt
   purchaseItems PurchaseItem[]
@@ -174,16 +214,19 @@ model PurchaseItem {
   id         String   @id @default(cuid())
   purchase   Purchase @relation(fields: [purchaseId], references: [id])
   purchaseId String
-  product    Product  @relation(fields: [productId], references: [id])
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
   productId  String
   quantity   Int
   unit_cost  Float
   total_cost Float
+  // Store product name and unit for historical reference
+  product_name String?
+  product_unit String?
 }
 
 model StockMovement {
   id              String   @id @default(cuid())
-  product         Product  @relation(fields: [productId], references: [id])
+  product         Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
   productId       String
   movement_type   String // in, out, adjustment
   quantity        Int
@@ -193,6 +236,9 @@ model StockMovement {
   created_at      DateTime @default(now())
   createdByUserId String?
   created_by_username String?
+  // Store product name and unit for historical reference
+  product_name String?
+  product_unit String?
 }
 
 model Appointment {
@@ -204,6 +250,7 @@ model Appointment {
   appointment_time DateTime
   status           String?         @default("scheduled")
   reason           String?
+  isDelete         Boolean         @default(false)
   created_at       DateTime        @default(now())
   updated_at       DateTime        @updatedAt
   medicalRecords   MedicalRecord[]
@@ -221,6 +268,7 @@ model MedicalRecord {
   diagnosis     String?
   treatment     String?
   notes         String?
+  isDelete      Boolean        @default(false)
   created_at    DateTime       @default(now())
   updated_at    DateTime       @updatedAt
   prescriptions Prescription[]
@@ -230,13 +278,16 @@ model Prescription {
   id              String        @id @default(cuid())
   medicalRecord   MedicalRecord @relation(fields: [medicalRecordId], references: [id])
   medicalRecordId String
-  product         Product       @relation(fields: [productId], references: [id])
+  product         Product       @relation(fields: [productId], references: [id], onDelete: Restrict)
   productId       String
   dosage          String?
   dosage_unit     String?
   times_per_day   Int?
   duration_days   Int?
   instructions    String?
+  // Store product name and unit for historical reference
+  product_name String?
+  product_unit String?
 }
 
 model TreatmentPlan {
@@ -248,6 +299,7 @@ model TreatmentPlan {
   plan_details String?
   start_date   DateTime?
   end_date     DateTime?
+  isDelete     Boolean   @default(false)
   created_at   DateTime  @default(now())
   updated_at   DateTime  @updatedAt
 }
@@ -265,7 +317,7 @@ model DailyReport {
 
 model StockAlert {
   id            String   @id @default(cuid())
-  product       Product  @relation(fields: [productId], references: [id])
+  product       Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
   productId     String
   alert_type    String?
   alert_message String?
@@ -274,18 +326,24 @@ model StockAlert {
   created_by_username String?
   acknowledged  Boolean  @default(false) // บันทึกว่ามีการรับทราบแล้วหรือไม่
   acknowledged_at DateTime?
+  // Store product name and unit for historical reference
+  product_name String?
+  product_unit String?
 }
 
 model SalesReport {
   id            String   @id @default(cuid())
   report_date   DateTime
-  product       Product  @relation(fields: [productId], references: [id])
+  product       Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
   productId     String
   quantity_sold Int?
   total_sales   Float?
   created_at    DateTime @default(now())
   createdByUserId String?
   created_by_username String?
+  // Store product name and unit for historical reference
+  product_name String?
+  product_unit String?
 }
 
 model Session {

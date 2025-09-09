@@ -1,0 +1,20 @@
+{
+  "web": {
+    "client_id": "893071551229-11j92ef1dfptir97mfa4khbepd9fcgcv.apps.googleusercontent.com",
+    "project_id": "pharmacy-backup-system",
+    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+    "token_uri": "https://oauth2.googleapis.com/token",
+    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+    "client_secret": "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",
+    "redirect_uris": [
+      "http://localhost:4000/auth/google/callback",
+      "http://localhost:3000/auth/google/callback"
+    ],
+    "javascript_origins": [
+      "http://localhost:4000",
+      "http://localhost:3000"
+    ]
+  },
+  "refresh_token": "1//0gtf6_I3-O-ZNCgYIARAAGBASNwF-L9IrtVPOHqoqwSiv4sgaW5isd6ups2f0Zo4-trUxpF7UBaBz13c4Fp0jLyTUoisx_zymIy0",
+  "access_token": "ya29.A0AS3H6NzPzJYR86YEA_spZuNkDgbvXiphlDjvPme6exxHY1pz0aLnkVDIXfIb_LUICcXFA1a2sjSa2gue9Zh_jTHkHQ8kz4L56Gyvr1BlP84w8ApXO-QlgaWtyps9rgEBqPCuZZ4brSAJgJXthS49ZX1--E5_GGu4TTVRQeXnsiO0UD_PZvgf7MUMF4wRH8nwfawaJN8aCgYKAfwSARcSFQHGX2MinEUK-wBrjtkHta5clXFeCw0206"
+}

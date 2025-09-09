@@ -1,9 +1,8 @@
 FROM node:20-alpine
 WORKDIR /app
-RUN npm install -g pnpm
 COPY package*.json ./
-RUN pnpm install
+RUN npm install --legacy-peer-deps
 COPY . .
-RUN pnpm run build
+RUN npm run build
 EXPOSE 3000
-CMD ["pnpm", "run", "dev"]
+CMD ["npm", "run", "start"]

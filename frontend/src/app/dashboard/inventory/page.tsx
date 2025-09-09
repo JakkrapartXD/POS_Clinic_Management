@@ -1,29 +1,64 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect, useCallback, memo } from "react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Card, CardContent } from "@/components/ui/card"
 import AddProductForm from "@/components/forms/AddProductForm"
-import {
-  Plus,
-  Import as FileImport,
-  FileOutput as FileExport,
-  Trash2,
-  Barcode,
-  Tag,
-  Clipboard,
-} from "lucide-react"
+import ProductListSidebar from "@/components/modules/inventory/product-list-sidebar"
+import AlphabetIndex from "@/components/modules/inventory/alphabet-index"
+import InventoryActionsGrid from "@/components/modules/inventory/inventory-actions-grid"
+import ImportProductsView from "@/components/modules/inventory/import-products-view"
+import ExportProductsView from "@/components/modules/inventory/export-products-view"
+import DeleteProductsView from "@/components/modules/inventory/delete-products-view"
+import ProductDetailView from "@/components/modules/inventory/product-detail-view"
+import { GraphQLAPI } from "@/clients/graphql"
+import { logger } from "@/lib/logger"
+import { useAuth } from "@/components/providers/auth-provider"
 
 type AlphabetMode = 'english' | 'thai' | 'numbers'
-type ViewMode = 'list' | 'add-product'
+type ViewMode = 'list' | 'add-product' | 'product-detail' | 'import-products' | 'export-products' | 'delete-products' | 'print-barcode' | 'print-price-tag' | 'print-medicine-label' | 'product-report'
 
-export default function InventoryPage() {
+interface TransformedProduct {
+  id: string
+  letter: string
+  name: string
+  variant: string
+  stock: number
+  status: string
+  price: number
+  allProducts?: Product[]
+}
+
+interface Product {
+  id: string
+  product_name: string
+  product_type?: string
+  short_name?: string
+  sale_price: number
+  unit?: string
+  stock_quantity: number
+  sku?: string
+  barcode?: string
+  category?: string
+  status?: string
+  pack_size?: string
+}
+
+function InventoryPage() {
+  const { handleAuthError } = useAuth()
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedLetter, setSelectedLetter] = useState<string>("")
   const [alphabetMode, setAlphabetMode] = useState<AlphabetMode>('english')
   const [viewMode, setViewMode] = useState<ViewMode>('list')
   const [submitTrigger, setSubmitTrigger] = useState(0)
+  const [products, setProducts] = useState<Product[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(null)
+  const [isProductEditing, setIsProductEditing] = useState(false)
+  const [totalProducts, setTotalProducts] = useState(0)
+  
+  // Loading state to prevent multiple simultaneous requests
+  const [isLoadingProducts, setIsLoadingProducts] = useState(false)
 
   const alphabet = Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i))
   const thaiLetters = ["ก", "ข", "ค", "ง", "จ", "ฉ", "ช", "ซ", "ฌ", "ญ", "ด", "ต", "ท", "ธ", "น", "บ", "ป", "ผ", "ฝ", "พ", "ฟ", "ภ", "ม", "ย", "ร", "ล", "ว", "ศ", "ษ", "ส", "ห", "ฬ", "อ", "ฮ"]
@@ -38,281 +73,447 @@ export default function InventoryPage() {
     }
   }
 
-  const allSections = [...numbers, ...alphabet, ...thaiLetters]
   const currentSections = getCurrentSections()
 
-  const products = [
-    { id: 1, letter: "3", name: "3M Futuro Ankle Size M", variant: "BX", stock: 4, status: "4 BX", price: 290 },
-    {
-      id: 2,
-      letter: "G",
-      name: "Gaviscon Suspension รสเปปเปอร์มินต์",
-      variant: "ซอง ชาย 10 ซอง",
-      stock: 8,
-      status: "ซอง",
-      price: 29,
-    },
-    {
-      id: 3,
-      letter: "G",
-      name: "Gaviscon Suspension รสเปปเปอร์มินต์", 
-      variant: "กล่อง(4)",
-      stock: 12,
-      status: "กล่อง(4)",
-      price: 94,
-    },
-    { 
-      id: 4, 
-      letter: "ช", 
-      name: "ชาร่า ยาเม็ดบรรเทาปวด ลดไข้", 
-      variant: "พาราเซตามอล 500mg", 
-      stock: 10, 
-      status: "แผง", 
-      price: 9 
-    },
-    { 
-      id: 5, 
-      letter: "ช", 
-      name: "ชาร่า ยาเม็ดบรรเทาปวด ลดไข้", 
-      variant: "กล่อง", 
-      stock: 8, 
-      status: "กล่อง", 
-      price: 180 
-    },
-    { 
-      id: 6, 
-      letter: "ย", 
-      name: "ยาแก้อักเสบ อีตัว XXXX", 
-      variant: "แผง", 
-      stock: 0, 
-      status: "แผง", 
-      price: 18 
-    },
-  ]
+  // Load all products from GraphQL (no pagination)
+  const loadProducts = useCallback(async () => {
+    // ป้องกันการเรียกซ้ำ
+    if (isLoadingProducts) {
+      console.log('Already loading products, skipping...')
+      return
+    }
 
-  // Group products by first letter
+    try {
+      setIsLoadingProducts(true)
+      setLoading(true)
+      setProducts([])
+      setError(null)
+      
+      logger.info('Loading all products from GraphQL', {}, 'INVENTORY')
+      
+      // Load all products without pagination
+      const response = await GraphQLAPI.getAllProducts({
+        filter: { status: 'active' } // Only load active products
+      })
+      
+      if (response.products && response.products.products) {
+        const allProducts = response.products.products
+        const total = response.products.total || allProducts.length
+        
+        setProducts(allProducts)
+        setTotalProducts(total)
+        
+        logger.info('Products loaded successfully', { 
+          count: allProducts.length,
+          total
+        }, 'INVENTORY')
+      } else {
+        setProducts([])
+      }
+    } catch (err) {
+      logger.error('Failed to load products', err, 'INVENTORY')
+      
+      // Check if it's an authentication error
+      if (err instanceof Error && (
+        err.message.includes('Authentication required') ||
+        err.message.includes('Unauthorized') ||
+        err.message.includes('Not authenticated') ||
+        err.message.includes('Invalid token') ||
+        err.message.includes('Token expired')
+      )) {
+        handleAuthError(err)
+        return
+      }
+      
+      setError(err instanceof Error ? err.message : 'Failed to load products')
+      setProducts([]) // Fallback to empty array
+    } finally {
+      setLoading(false)
+      setIsLoadingProducts(false)
+    }
+  }, [handleAuthError, isLoadingProducts])
+
+
+  useEffect(() => {
+    // Load products on initial mount
+    if (products.length === 0 && !isLoadingProducts) {
+      loadProducts()
+    }
+  }, []) // Empty dependency array for initial load only
+
+  // Transform products for display - group by product name and combine units
+  // Memoized for better performance
+  const transformedProducts = useMemo(() => {
+    if (!products.length) return []
+
+    // Group products by name first
+    const productGroups = products.reduce((acc, product) => {
+      const name = product.product_name
+      if (!acc[name]) {
+        acc[name] = []
+      }
+      acc[name].push(product)
+      return acc
+    }, {} as Record<string, typeof products>)
+
+    // Transform grouped products
+    return Object.entries(productGroups).map(([productName, productList]) => {
+      // Get first letter/character for grouping
+      const firstChar = productName.charAt(0).toUpperCase()
+      
+      // Determine if it's Thai, English, or Number
+      let letter = firstChar
+      if (/[ก-ฮ]/.test(firstChar)) {
+        letter = firstChar // Thai letter
+      } else if (/[A-Z]/.test(firstChar)) {
+        letter = firstChar // English letter
+      } else if (/[0-9]/.test(firstChar)) {
+        letter = firstChar // Number
+      } else {
+        letter = '#' // Special characters
+      }
+
+      // Get unique units for this product
+      const uniqueUnits = [...new Set(productList.map(p => p.unit || 'หน่วย'))]
+      const unitsDisplay = uniqueUnits.join(', ')
+      
+      // Calculate total stock across all variants
+      const totalStock = productList.reduce((sum, p) => sum + (p.stock_quantity || 0), 0)
+      
+      // Use the first product's ID as representative ID
+      const representativeId = productList[0].id
+      
+      return {
+        id: representativeId,
+        letter,
+        name: productName,
+        variant: unitsDisplay,
+        stock: totalStock,
+        status: `${totalStock} ${uniqueUnits.length > 1 ? 'หน่วย' : uniqueUnits[0] || 'หน่วย'}`,
+        price: productList[0].sale_price, // Use first product's price as representative
+        allProducts: productList // Keep all products for detail view
+      }
+    })
+  }, [products])
+
+  // Group products by first letter - memoized for performance
   const groupedProducts = useMemo(() => {
-    const filtered = products.filter((product) => 
+    if (!transformedProducts.length) return {}
+    
+    const filtered = transformedProducts.filter((product) => 
       product.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
       (!selectedLetter || product.letter === selectedLetter)
     )
     
-    const grouped = filtered.reduce((acc, product) => {
+    return filtered.reduce((acc, product) => {
       const letter = product.letter
       if (!acc[letter]) {
         acc[letter] = []
       }
       acc[letter].push(product)
       return acc
-    }, {} as Record<string, typeof products>)
-    
-    return grouped
-  }, [searchQuery, selectedLetter])
+    }, {} as Record<string, TransformedProduct[]>)
+  }, [transformedProducts, searchQuery, selectedLetter])
 
-  // Get sections that have products (from current mode)
+  // Get sections that have products (from current mode) - memoized
   const availableSections = useMemo(() => {
     const sections = Object.keys(groupedProducts)
     return currentSections.filter(section => sections.includes(section))
   }, [groupedProducts, currentSections])
 
-  const totalProducts = Object.values(groupedProducts).flat().length
+  // Total products count - memoized (for filtered results)
+  const filteredProductsCount = useMemo(() => {
+    return Object.values(groupedProducts).flat().length
+  }, [groupedProducts])
 
-  const handleModeSwitch = () => {
+  const handleModeSwitch = useCallback(() => {
     const modes: AlphabetMode[] = ['english', 'thai', 'numbers']
     const currentIndex = modes.indexOf(alphabetMode)
     const nextIndex = (currentIndex + 1) % modes.length
     setAlphabetMode(modes[nextIndex])
     setSelectedLetter("") // Reset selection when switching modes
-  }
+  }, [alphabetMode])
 
-  const getModeLabel = () => {
+  const getModeLabel = useCallback(() => {
     switch (alphabetMode) {
       case 'english': return 'A-Z'
       case 'thai': return 'ก-ฮ'
       case 'numbers': return '0-9'
       default: return 'A-Z'
     }
-  }
+  }, [alphabetMode])
 
-  const handleAddProduct = () => {
-    setViewMode('add-product')
-  }
-
-  const handleBackToList = () => {
+  // Navigation handlers - memoized
+  const handleBackToList = useCallback(() => {
     setViewMode('list')
-  }
+  }, [])
 
-  const handleSubmitProduct = (productData: any) => {
-    // Handle form submission here - connect to your API
-    console.log("New product data:", productData)
-    // After successful submission, go back to list
+  // Action handlers - memoized
+  const handleAddProduct = useCallback(() => setViewMode('add-product'), [])
+  const handleImportProducts = useCallback(() => setViewMode('import-products'), [])
+  const handleExportProducts = useCallback(() => setViewMode('export-products'), [])
+  const handleDeleteProduct = useCallback(() => setViewMode('delete-products'), [])
+  const handlePrintBarcode = useCallback(() => setViewMode('print-barcode'), [])
+  const handlePrintPriceTag = useCallback(() => setViewMode('print-price-tag'), [])
+  const handlePrintMedicineLabel = useCallback(() => setViewMode('print-medicine-label'), [])
+  const handleProductReport = useCallback(() => setViewMode('product-report'), [])
+
+  // Product detail handler - memoized
+  const handleProductClick = useCallback((productId: string) => {
+    // Find the product with all its variants
+    const product = transformedProducts.find(p => p.id === productId)
+    if (product && product.allProducts) {
+      // Store all product variants for detail view
+      setSelectedProductId(productId)
+      setViewMode('product-detail')
+    } else {
+      // Fallback to single product
+      setSelectedProductId(productId)
+      setViewMode('product-detail')
+    }
+  }, [transformedProducts])
+
+  // Handle product deletion callback - memoized with debounce
+  const handleProductDeleted = useCallback(() => {
+    // Invalidate product cache before reloading
+    GraphQLAPI.invalidateCachePattern('Products')
+    
+    // Debounce reload to prevent multiple rapid calls
+    setTimeout(() => {
+      loadProducts() // Reload products after deletion
+    }, 500)
+  }, [loadProducts])
+
+  // Handle product update callback - memoized with debounce
+  const handleProductUpdated = useCallback(() => {
+    // Invalidate product cache before reloading
+    GraphQLAPI.invalidateCachePattern('Products')
+    
+    // Debounce reload to prevent multiple rapid calls
+    setTimeout(() => {
+      loadProducts() // Reload products after update
+    }, 500)
+  }, [loadProducts])
+
+  // Submit handlers - memoized with debounce
+  const handleSubmitProduct = useCallback(async (productData: any) => {
+    try {
+      logger.info('Creating new product', { productData }, 'INVENTORY')
+      
+      // Prepare input data for GraphQL mutation
+      const input: any = {
+        product_name: productData.product_name || '',
+        product_type: productData.product_type || 'medicine',
+        generic_name: productData.generic_name || '',
+        short_name: productData.short_name || '',
+        status: productData.status || 'active',
+        vat_percent: parseInt(productData.vat_percent) || 0,
+        expiration_warning_date: parseInt(productData.expiration_warning_days) || 90,
+        sale_price: parseFloat(productData.sale_price) || 0,
+        unit: productData.unit || '',
+        pack_size: productData.pack_size || '',
+        reorder_point: parseInt(productData.reorder_point) || 0,
+        cost: parseFloat(productData.cost) || 0,
+        stock_quantity: parseInt(productData.stock_quantity) || 0,
+        shelf_code: productData.shelf_code || '',
+        shelf_row: productData.shelf_row || '',
+        symptom_category: Array.isArray(productData.symptom_category) && productData.symptom_category.length > 0 
+          ? JSON.stringify(productData.symptom_category) 
+          : null,
+        license_number: productData.license_number || '',
+        dosage_unit: productData.dosage_unit || '',
+        dosage: productData.dosage || '',
+        times_per_day: parseInt(productData.times_per_day) || null,
+        interval_hours: parseInt(productData.interval_hours) || null,
+        before_meal: Boolean(productData.before_meal),
+        after_meal: Boolean(productData.after_meal),
+        after_meal_immediate: Boolean(productData.after_meal_immediate),
+        morning: productData.morning || '',
+        noon: productData.noon || '',
+        evening: productData.evening || '',
+        before_bed: productData.before_bed || '',
+        properties: productData.properties || '',
+        usage_instruction: productData.usage_instruction || '',
+        sale_note: productData.sale_note || '',
+        purchase_note: productData.purchase_note || '',
+        image_url: productData.image_url || ''
+      }
+
+      // Only include categoryId if it exists and is not empty
+      const categoryId = productData.categoryId || (typeof productData.category === 'object' && productData.category?.id)
+      if (categoryId && categoryId.trim() !== '') {
+        input.categoryId = categoryId
+      }
+
+      // Only include report_type if it exists and is not empty
+      if (Array.isArray(productData.report_type) && productData.report_type.length > 0) {
+        input.report_type = productData.report_type
+      }
+
+      logger.info('Creating product with input', { input }, 'INVENTORY')
+      
+      const result = await GraphQLAPI.createProduct(input)
+      logger.info('Product created successfully', { result }, 'INVENTORY')
+      
+      // Invalidate product cache before reloading
+      GraphQLAPI.invalidateCachePattern('Products')
+      
+      // Debounce reload to prevent multiple rapid calls
+      setTimeout(() => {
+        loadProducts() // Reload products after adding new product
+      }, 500)
+      setViewMode('list')
+    } catch (error) {
+      logger.error('Error creating product', { error, productData }, 'INVENTORY')
+      const errorMessage = error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการสร้างสินค้า'
+      alert(`ไม่สามารถสร้างสินค้าได้: ${errorMessage}`)
+    }
+  }, [loadProducts])
+
+  const handleImportSubmit = useCallback(async (importData: any) => {
+    // If import was successful, refresh the products list
+    if (importData.result && importData.result.success && importData.result.imported > 0) {
+      // Invalidate product cache before reloading
+      GraphQLAPI.invalidateCachePattern('Products')
+      loadProducts()
+    }
+    
     setViewMode('list')
-    // You can also show a success message or refresh the product list
-  }
+  }, [loadProducts])
 
-  const handleSaveButtonClick = () => {
+  const handleExportSubmit = useCallback((exportSettings: any) => {
+    // Handle export logic here
+  }, [])
+
+  const handleDeleteSubmit = useCallback((deleteData: any) => {
+    // Invalidate product cache before reloading
+    GraphQLAPI.invalidateCachePattern('Products')
+    loadProducts() // Reload products after bulk deletion
+    setViewMode('list')
+  }, [loadProducts])
+
+  const handleSaveButtonClick = useCallback(() => {
     setSubmitTrigger(prev => prev + 1)
-  }
+  }, [])
+
+  const getViewTitle = useCallback(() => {
+    switch (viewMode) {
+      case 'add-product': return 'เพิ่มสินค้าใหม่'
+      case 'product-detail': return 'รายละเอียดสินค้า'
+      case 'import-products': return 'เพิ่มชุดสินค้า/นำเข้า/แก้ไข'
+      case 'export-products': return 'ส่งออกยอดสินค้า'
+      case 'delete-products': return 'ลบสินค้า'
+      case 'print-barcode': return 'พิมพ์บาร์โค้ด'
+      case 'print-price-tag': return 'พิมพ์ป้ายราคาสินค้า'
+      case 'print-medicine-label': return 'พิมพ์ฉลากยา'
+      case 'product-report': return 'รายงานรับเข้า/ออกของสินค้า'
+      default: return 'สต็อกสินค้า'
+    }
+  }, [viewMode])
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
-      {/* Left Sidebar - Product List */}
-      <div className="w-80 bg-white border-r flex flex-col h-full">
-        {/* Search Section - Fixed */}
-        <div className="p-4 border-b flex-shrink-0">
-          <div className="relative">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-            >
-              <circle cx="11" cy="11" r="8"></circle>
-              <path d="m21 21-4.3-4.3"></path>
-            </svg>
-            <Input
-              placeholder="ค้นหาสินค้าจากรายชื่อ หรือรวมรหัสโค้ด..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 text-sm border-gray-200"
-            />
-          </div>
-        </div>
+      {/* Left Sidebar - Product List - Only show in list mode */}
+      {viewMode === 'list' && (
+        <ProductListSidebar
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          selectedLetter={selectedLetter}
+          products={transformedProducts}
+          onProductClick={handleProductClick}
+          totalProducts={totalProducts}
+        />
+      )}
 
-        {/* Stock Count - Fixed */}
-        <div className="p-4 border-b flex-shrink-0">
-          <div className="text-center">
-            <div className="text-2xl font-bold text-gray-700">{totalProducts}</div>
-            <div className="text-sm text-gray-500">รายการสินค้า</div>
-          </div>
-        </div>
-
-        {/* Product List with Sections - Scrollable */}
-        <div className="flex-1 overflow-y-auto">
-          {Object.entries(groupedProducts).length > 0 ? (
-            Object.entries(groupedProducts).map(([letter, products]) => (
-              <div key={letter} className="border-b border-gray-100">
-                {/* Section Header */}
-                <div className="sticky top-0 bg-gray-50 px-4 py-2 border-b z-10">
-                  <h3 className="font-medium text-gray-700 text-lg">{letter}</h3>
-                </div>
-                
-                {/* Products in Section */}
-                <div className="space-y-1 p-2">
-                  {products.map((product) => (
-                    <div 
-                      key={product.id} 
-                      className="p-3 hover:bg-gray-50 rounded-lg border border-gray-100 bg-white cursor-pointer transition-colors"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <div className="font-medium text-gray-900 text-sm">{product.name}</div>
-                          <div className="text-xs text-gray-500 mt-1">{product.variant}</div>
-                          <div className="text-xs text-gray-400 mt-1">{product.status}</div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-sm font-medium text-purple-600">฿{product.price}</div>
-                          <div className="w-4 h-4 border border-gray-300 mt-1"></div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))
-          ) : (
-            <div className="p-8 text-center text-gray-500">
-              <div className="text-lg mb-2">ไม่พบสินค้า</div>
-              <div className="text-sm">ลองเปลี่ยนคำค้นหาหรือเลือกหมวดหมู่อื่น</div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Alphabet Index - Fixed width */}
-      <div className="w-16 bg-white border-r flex flex-col h-full">
-        {/* Mode Indicator - Fixed */}
-        <div className="p-2 border-b flex-shrink-0 text-center">
-          <div className="text-xs font-medium text-gray-600">{getModeLabel()}</div>
-        </div>
-
-        {/* Alphabet List - Scrollable */}
-        <div className="flex-1 overflow-y-auto py-2">
-          <div className="space-y-1 px-2">
-            <div 
-              onClick={() => setSelectedLetter("")}
-              className={`text-xs px-2 py-1 cursor-pointer rounded transition-colors text-center ${
-                !selectedLetter ? "bg-purple-100 text-purple-600" : "text-gray-500 hover:bg-gray-100"
-              }`}
-            >
-              ทั้งหมด
-            </div>
-            {currentSections.map((section) => {
-              const hasProducts = availableSections.includes(section)
-              return (
-                <div 
-                  key={section}
-                  onClick={() => setSelectedLetter(section)}
-                  className={`text-xs px-2 py-1 cursor-pointer rounded transition-colors text-center ${
-                    selectedLetter === section 
-                      ? "bg-purple-100 text-purple-600" 
-                      : hasProducts 
-                        ? "text-gray-700 hover:bg-gray-100 font-medium" 
-                        : "text-gray-300"
-                  }`}
-                >
-                  {section}
-                </div>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* Mode Switcher - Fixed */}
-        <div className="p-2 border-t flex-shrink-0">
-          <div 
-            onClick={handleModeSwitch}
-            className="text-xs px-2 py-1 cursor-pointer rounded transition-colors text-center text-gray-500 hover:bg-gray-100 hover:text-gray-700"
-          >
-            ···
-          </div>
-        </div>
-      </div>
+      {/* Alphabet Index - Only show in list mode */}
+      {viewMode === 'list' && (
+        <AlphabetIndex
+          alphabetMode={alphabetMode}
+          selectedLetter={selectedLetter}
+          onLetterSelect={setSelectedLetter}
+          onModeSwitch={handleModeSwitch}
+          groupedProducts={groupedProducts}
+        />
+      )}
 
       {/* Main Content Area - Scrollable */}
       <div className="flex-1 flex flex-col h-full overflow-hidden">
-        {/* Header - Fixed */}
-        <div className="bg-white border-b p-6 flex-shrink-0">
-          <div className="flex justify-between items-center">
-            <h1 className="text-2xl font-semibold text-gray-700">
-              {viewMode === 'add-product' ? 'เพิ่มสินค้าใหม่' : 'สต็อกสินค้า'}
-            </h1>
-            {viewMode === 'list' ? (
-              <Button className="text-purple-500 bg-white hover:bg-purple-50 border border-purple-200">
-                ตัวเลือก
-              </Button>
-            ) : (
-              <div className="flex space-x-3">
+        {/* Header - Fixed - Hide when product is being edited */}
+        {!isProductEditing && (
+          <div className="bg-white border-b p-6 flex-shrink-0">
+            <div className="flex justify-between items-center">
+              <h1 className="text-2xl font-semibold text-gray-700">
+                {getViewTitle()}
+              </h1>
+              {viewMode === 'list' ? (
+                <Button className="text-purple-500 bg-white hover:bg-purple-50 border border-purple-200">
+                  ตัวเลือก
+                </Button>
+              ) : viewMode === 'add-product' ? (
+                <div className="flex space-x-3">
+                  <Button variant="outline" onClick={handleBackToList}>
+                    ยกเลิก
+                  </Button>
+                  <Button onClick={handleSaveButtonClick} className="bg-purple-500 hover:bg-purple-600">
+                    บันทึกสินค้า
+                  </Button>
+                </div>
+              ) : viewMode === 'product-detail' ? (
+                null // ProductDetailView handles its own header buttons
+              ) : (
                 <Button variant="outline" onClick={handleBackToList}>
-                  ยกเลิก
+                  ย้อนกลับ
                 </Button>
-                <Button onClick={handleSaveButtonClick} className="bg-purple-500 hover:bg-purple-600">
-                  บันทึกสินค้า
-                </Button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Dynamic Content - Scrollable */}
-        <div className="flex-1 overflow-y-auto">
-          {viewMode === 'add-product' ? (
+        <div className={`flex-1 overflow-y-auto ${isProductEditing ? 'h-full' : ''}`}>
+          {/* Loading State */}
+          {loading && viewMode === 'list' && (
+            <div className="flex items-center justify-center h-64">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500 mx-auto mb-4"></div>
+                <div className="text-gray-600">กำลังโหลดข้อมูลสินค้า...</div>
+              </div>
+            </div>
+          )}
+
+          {/* Error State */}
+          {error && viewMode === 'list' && (
+            <div className="flex items-center justify-center h-64">
+              <div className="text-center">
+                <div className="text-red-500 mb-4">⚠️</div>
+                <div className="text-red-600 mb-2">เกิดข้อผิดพลาดในการโหลดข้อมูล</div>
+                <div className="text-gray-500 text-sm mb-4">{error}</div>
+                <Button 
+                  onClick={() => window.location.reload()} 
+                  variant="outline"
+                  className="text-purple-600 border-purple-200"
+                >
+                  ลองใหม่
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Content */}
+          {!loading && !error && viewMode === 'list' && (
+            <InventoryActionsGrid
+              onAddProduct={handleAddProduct}
+              onImportProducts={handleImportProducts}
+              onExportProducts={handleExportProducts}
+              onDeleteProduct={handleDeleteProduct}
+              onPrintBarcode={handlePrintBarcode}
+              onPrintPriceTag={handlePrintPriceTag}
+              onPrintMedicineLabel={handlePrintMedicineLabel}
+              onProductReport={handleProductReport}
+            />
+          )}
+
+          {viewMode === 'add-product' && (
             <div className="h-full">
               <AddProductForm 
                 submitTrigger={submitTrigger}
@@ -320,72 +521,55 @@ export default function InventoryPage() {
                 onSubmit={handleSubmitProduct}
               />
             </div>
-          ) : (
-            <div className="p-6">
-              <div className="grid grid-cols-3 gap-6">
-                <Card className="bg-white shadow-sm border border-gray-200 hover:shadow-md transition-shadow cursor-pointer" onClick={handleAddProduct}>
-                  <CardContent className="p-8 text-center">
-                    <Plus className="h-12 w-12 text-purple-500 mb-4 mx-auto" />
-                    <div className="text-purple-500 font-medium mb-2 text-lg">เพิ่มสินค้าใหม่</div>
-                    <div className="text-gray-500 text-sm">Create New Item</div>
-                  </CardContent>
-                </Card>
+          )}
 
-                <Card className="bg-white shadow-sm border border-gray-200 hover:shadow-md transition-shadow cursor-pointer">
-                  <CardContent className="p-8 text-center">
-                    <FileImport className="h-12 w-12 text-purple-500 mb-4 mx-auto" />
-                    <div className="text-purple-500 font-medium mb-2 text-lg">เพิ่มชุดสินค้า/นำเข้า/แก้ไข</div>
-                    <div className="text-gray-500 text-sm">Import</div>
-                  </CardContent>
-                </Card>
+          {viewMode === 'product-detail' && selectedProductId && (
+            <ProductDetailView 
+              productId={selectedProductId}
+              onBack={handleBackToList}
+              onEditingChange={setIsProductEditing}
+              productVariants={(() => {
+                const product = transformedProducts.find(p => p.id === selectedProductId)
+                return product?.allProducts || undefined
+              })()}
+              onProductDeleted={handleProductDeleted}
+              onProductUpdated={handleProductUpdated}
+            />
+          )}
 
-                <Card className="bg-white shadow-sm border border-gray-200 hover:shadow-md transition-shadow cursor-pointer">
-                  <CardContent className="p-8 text-center">
-                    <FileExport className="h-12 w-12 text-purple-500 mb-4 mx-auto" />
-                    <div className="text-purple-500 font-medium mb-2 text-lg">ส่งออกยอดสินค้า</div>
-                    <div className="text-gray-500 text-sm">Export</div>
-                  </CardContent>
-                </Card>
+          {viewMode === 'import-products' && (
+            <ImportProductsView
+              onBack={handleBackToList}
+              onImport={handleImportSubmit}
+            />
+          )}
 
-                <Card className="bg-white shadow-sm border border-gray-200 hover:shadow-md transition-shadow cursor-pointer">
-                  <CardContent className="p-8 text-center">
-                    <Trash2 className="h-12 w-12 text-purple-500 mb-4 mx-auto" />
-                    <div className="text-purple-500 font-medium mb-2 text-lg">ลบสินค้า</div>
-                    <div className="text-gray-500 text-sm">Remove Product</div>
-                  </CardContent>
-                </Card>
+          {viewMode === 'export-products' && (
+            <ExportProductsView
+              onBack={handleBackToList}
+              onExport={handleExportSubmit}
+            />
+          )}
 
-                <Card className="bg-white shadow-sm border border-gray-200 hover:shadow-md transition-shadow cursor-pointer">
-                  <CardContent className="p-8 text-center">
-                    <Barcode className="h-12 w-12 text-purple-500 mb-4 mx-auto" />
-                    <div className="text-purple-500 font-medium mb-2 text-lg">พิมพ์บาร์โค้ด</div>
-                    <div className="text-gray-500 text-sm">Barcode</div>
-                  </CardContent>
-                </Card>
+          {viewMode === 'delete-products' && (
+            <DeleteProductsView
+              onBack={handleBackToList}
+              onDelete={handleDeleteSubmit}
+            />
+          )}
 
-                <Card className="bg-white shadow-sm border border-gray-200 hover:shadow-md transition-shadow cursor-pointer">
-                  <CardContent className="p-8 text-center">
-                    <Tag className="h-12 w-12 text-purple-500 mb-4 mx-auto" />
-                    <div className="text-purple-500 font-medium mb-2 text-lg">พิมพ์ป้ายราคาสินค้า</div>
-                    <div className="text-gray-500 text-sm">Price Tag</div>
-                  </CardContent>
-                </Card>
-
-                <Card className="bg-white shadow-sm border border-gray-200 hover:shadow-md transition-shadow cursor-pointer">
-                  <CardContent className="p-8 text-center">
-                    <Tag className="h-12 w-12 text-purple-500 mb-4 mx-auto" />
-                    <div className="text-purple-500 font-medium mb-2 text-lg">พิมพ์ฉลากยา</div>
-                    <div className="text-gray-500 text-sm">Label</div>
-                  </CardContent>
-                </Card>
-
-                <Card className="bg-white shadow-sm border border-gray-200 hover:shadow-md transition-shadow cursor-pointer">
-                  <CardContent className="p-8 text-center">
-                    <Clipboard className="h-12 w-12 text-purple-500 mb-4 mx-auto" />
-                    <div className="text-purple-500 font-medium mb-2 text-lg">รายงานรับเข้า/ออกของสินค้า</div>
-                    <div className="text-gray-500 text-sm">Product IN/OUT Report</div>
-                  </CardContent>
-                </Card>
+          {(viewMode === 'print-barcode' || viewMode === 'print-price-tag' || viewMode === 'print-medicine-label' || viewMode === 'product-report') && (
+            <div className="p-6 text-center">
+              <div className="max-w-md mx-auto">
+                <div className="text-lg font-medium text-gray-700 mb-2">
+                  {getViewTitle()}
+                </div>
+                <div className="text-gray-500 mb-6">
+                  ฟีเจอร์นี้กำลังอยู่ในระหว่างการพัฒนา
+                </div>
+                <Button onClick={handleBackToList}>
+                  ย้อนกลับ
+                </Button>
               </div>
             </div>
           )}
@@ -394,3 +578,5 @@ export default function InventoryPage() {
     </div>
   )
 }
+
+export default memo(InventoryPage)

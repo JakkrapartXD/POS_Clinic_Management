@@ -9,6 +9,8 @@ export const typeDefs = /* GraphQL */ `
     email: String!
     username: String!
     status: String!
+    avatar_url: String
+    avatar_path: String
     created_at: DateTime!
     updated_at: DateTime!
     medicalRecords: [MedicalRecord!]!
@@ -44,6 +46,8 @@ export const typeDefs = /* GraphQL */ `
     phone: String
     email: String
     address: String
+    photo_url: String
+    photo_path: String
     created_at: DateTime!
     updated_at: DateTime!
     appointments: [Appointment!]!
@@ -72,6 +76,29 @@ export const typeDefs = /* GraphQL */ `
     address: String
   }
 
+  # Category Types
+  type Category {
+    id: String!
+    name: String!
+    description: String
+    code: String
+    created_at: DateTime!
+    updated_at: DateTime!
+    products: [Product!]!
+  }
+
+  input CreateCategoryInput {
+    name: String!
+    description: String
+    code: String
+  }
+
+  input UpdateCategoryInput {
+    name: String
+    description: String
+    code: String
+  }
+
   # Product Types
   type Product {
     id: String!
@@ -81,7 +108,7 @@ export const typeDefs = /* GraphQL */ `
     short_name: String
     status: String
     vat_percent: Float
-    expiration_warning_date: DateTime
+    expiration_warning_date: Int
     sale_price: Float!
     unit: String
     pack_size: String
@@ -94,7 +121,8 @@ export const typeDefs = /* GraphQL */ `
     volume_unit: String
     shelf_code: String
     shelf_row: String
-    category: String
+    category: Category
+    categoryId: String
     symptom_category: String
     license_number: String
     dosage_unit: String
@@ -104,14 +132,16 @@ export const typeDefs = /* GraphQL */ `
     before_meal: Boolean
     after_meal: Boolean
     after_meal_immediate: Boolean
-    morning: Boolean
-    noon: Boolean
-    evening: Boolean
-    before_bed: Boolean
+    morning: String
+    noon: String
+    evening: String
+    before_bed: String
     properties: String
     usage_instruction: String
     sale_note: String
     purchase_note: String
+    image_url: String
+    image_path: String
     created_at: DateTime!
     updated_at: DateTime!
     orderItems: [OrderItem!]!
@@ -129,7 +159,7 @@ export const typeDefs = /* GraphQL */ `
     short_name: String
     status: String = "active"
     vat_percent: Float = 0
-    expiration_warning_date: DateTime
+    expiration_warning_date: Int
     sale_price: Float!
     unit: String
     pack_size: String
@@ -142,7 +172,7 @@ export const typeDefs = /* GraphQL */ `
     volume_unit: String
     shelf_code: String
     shelf_row: String
-    category: String
+    categoryId: String
     symptom_category: String
     license_number: String
     dosage_unit: String
@@ -152,14 +182,45 @@ export const typeDefs = /* GraphQL */ `
     before_meal: Boolean
     after_meal: Boolean
     after_meal_immediate: Boolean
-    morning: Boolean
-    noon: Boolean
-    evening: Boolean
-    before_bed: Boolean
+    morning: String
+    noon: String
+    evening: String
+    before_bed: String
     properties: String
     usage_instruction: String
     sale_note: String
     purchase_note: String
+    image_url: String
+  }
+
+  # Bulk import types
+  input BulkImportProductsInput {
+    products: [CreateProductInput!]!
+    settings: ImportSettingsInput
+  }
+
+  input ImportSettingsInput {
+    skipDuplicates: Boolean = true
+    updateExisting: Boolean = false
+    createBackup: Boolean = true
+  }
+
+  type ImportResult {
+    success: Boolean!
+    message: String!
+    imported: Int!
+    failed: Int!
+    skipped: Int!
+    errors: [String!]
+    results: [ProductImportResult!]
+  }
+
+  type ProductImportResult {
+    product: Product
+    status: String!
+    error: String
+    sku: String
+    product_name: String!
   }
 
   input UpdateProductInput {
@@ -169,7 +230,7 @@ export const typeDefs = /* GraphQL */ `
     short_name: String
     status: String
     vat_percent: Float
-    expiration_warning_date: DateTime
+    expiration_warning_date: Int
     sale_price: Float
     unit: String
     pack_size: String
@@ -182,7 +243,7 @@ export const typeDefs = /* GraphQL */ `
     volume_unit: String
     shelf_code: String
     shelf_row: String
-    category: String
+    categoryId: String
     symptom_category: String
     license_number: String
     dosage_unit: String
@@ -192,14 +253,15 @@ export const typeDefs = /* GraphQL */ `
     before_meal: Boolean
     after_meal: Boolean
     after_meal_immediate: Boolean
-    morning: Boolean
-    noon: Boolean
-    evening: Boolean
-    before_bed: Boolean
+    morning: String
+    noon: String
+    evening: String
+    before_bed: String
     properties: String
     usage_instruction: String
     sale_note: String
     purchase_note: String
+    image_url: String
   }
 
   # Order Types
@@ -225,6 +287,8 @@ export const typeDefs = /* GraphQL */ `
     quantity: Int!
     unit_price: Float!
     total_price: Float!
+    product_name: String
+    product_unit: String
   }
 
   input CreateOrderInput {
@@ -340,6 +404,12 @@ export const typeDefs = /* GraphQL */ `
     quantity: Int!
     unit_cost: Float!
     total_cost: Float!
+  }
+
+  input UpdatePurchaseInput {
+    supplierId: String
+    total_amount: Float
+    status: String
   }
 
   # Stock Management Types
@@ -504,6 +574,36 @@ export const typeDefs = /* GraphQL */ `
     created_by_username: String
   }
 
+  # Report Generation Results
+  type SalesReportGenerationResult {
+    success: Boolean!
+    message: String!
+    reports: [SalesReport!]!
+    count: Int!
+  }
+
+  type StockAlertGenerationResult {
+    success: Boolean!
+    message: String!
+    alerts: [StockAlert!]!
+    count: Int!
+  }
+
+  type ComprehensiveDailyReport {
+    dailyReport: DailyReport!
+    salesReports: [SalesReport!]!
+    stockAlerts: [StockAlert!]!
+    summary: ReportSummary!
+  }
+
+  type ReportSummary {
+    total_sales: Float!
+    total_orders: Int!
+    total_patients: Int!
+    products_sold: Int!
+    new_alerts: Int!
+  }
+
   # Pagination & Filtering
   input PaginationInput {
     skip: Int = 0
@@ -564,11 +664,16 @@ export const typeDefs = /* GraphQL */ `
     patient(id: String!): Patient
     searchPatients(query: String!): [Patient!]!
 
+    # Category Queries
+    categories: [Category!]!
+    category(id: String!): Category
+
     # Product Queries
     products(filter: ProductFilterInput, pagination: PaginationInput): ProductsResponse!
     product(id: String!): Product
     searchProducts(query: String!): [Product!]!
     lowStockProducts: [Product!]!
+    checkSkuExists(sku: String!): Boolean!
 
     # Order Queries
     orders(filter: OrderFilterInput, pagination: PaginationInput): OrdersResponse!
@@ -606,18 +711,29 @@ export const typeDefs = /* GraphQL */ `
     # User Mutations
     createUser(input: CreateUserInput!): User!
     updateUser(id: String!, input: UpdateUserInput!): User!
+    updateUserAvatar(id: String!, avatar_url: String!): User!
     deleteUser(id: String!): Boolean!
 
     # Patient Mutations
     createPatient(input: CreatePatientInput!): Patient!
     updatePatient(id: String!, input: UpdatePatientInput!): Patient!
+    updatePatientPhoto(id: String!, photo_url: String!): Patient!
     deletePatient(id: String!): Boolean!
+
+    # Category Mutations
+    createCategory(input: CreateCategoryInput!): Category!
+    updateCategory(id: String!, input: UpdateCategoryInput!): Category!
+    deleteCategory(id: String!): Boolean!
 
     # Product Mutations
     createProduct(input: CreateProductInput!): Product!
     updateProduct(id: String!, input: UpdateProductInput!): Product!
+    updateProductImage(id: String!, image_url: String!): Product!
     deleteProduct(id: String!): Boolean!
     adjustStock(productId: String!, quantity: Int!, note: String): StockMovement!
+    
+    # Bulk import
+    bulkImportProducts(input: BulkImportProductsInput!): ImportResult!
 
     # Order Mutations
     createOrder(input: CreateOrderInput!): Order!
@@ -631,6 +747,8 @@ export const typeDefs = /* GraphQL */ `
     deleteSupplier(id: String!): Boolean!
 
     createPurchase(input: CreatePurchaseInput!): Purchase!
+    updatePurchase(id: String!, input: UpdatePurchaseInput!): Purchase!
+    deletePurchase(id: String!): Boolean!
     receivePurchase(id: String!): Purchase!
 
     # Medical Mutations
@@ -652,5 +770,10 @@ export const typeDefs = /* GraphQL */ `
     # Stock Management
     acknowledgeStockAlert(id: String!): StockAlert!
     generateDailyReport(date: DateTime!): DailyReport!
+    
+    # Report Generation
+    generateSalesReports(date: DateTime!): SalesReportGenerationResult!
+    generateStockAlerts: StockAlertGenerationResult!
+    generateComprehensiveDailyReport(date: DateTime!): ComprehensiveDailyReport!
   }
 `; 

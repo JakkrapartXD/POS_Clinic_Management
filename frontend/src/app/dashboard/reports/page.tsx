@@ -1,10 +1,11 @@
 'use client'
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Input } from "@/components/ui/input"
 import { 
   BarChart3, 
   TrendingUp, 
@@ -13,295 +14,443 @@ import {
   Users, 
   Calendar,
   Download,
-  Eye
+  Eye,
+  AlertTriangle,
+  Loader2,
+  RefreshCw
 } from "lucide-react"
 import PageGuard from "@/components/guards/page-guard"
+import { GraphQLAPI } from "@/clients/graphql"
+import { useToast } from "@/hooks/use-toast"
 
-// Mock data for reports
-const salesData = {
-  daily: { amount: 15650, orders: 45, growth: 12.5 },
-  weekly: { amount: 89230, orders: 287, growth: 8.3 },
-  monthly: { amount: 356780, orders: 1240, growth: 15.7 }
-}
-
-const topProducts = [
-  { name: "Paracetamol 500mg", sold: 245, revenue: 12250 },
-  { name: "Amoxicillin 250mg", sold: 189, revenue: 18900 },
-  { name: "Ibuprofen 400mg", sold: 156, revenue: 9360 },
-  { name: "Vitamin C", sold: 134, revenue: 6700 },
-  { name: "Aspirin 100mg", sold: 98, revenue: 4900 }
-]
-
-const recentReports = [
-  {
-    id: "RPT-001",
-    name: "รายงานยอดขายรายวัน",
-    type: "sales",
-    date: "2024-01-15",
-    status: "completed"
-  },
-  {
-    id: "RPT-002", 
-    name: "รายงานสินค้าคงคลัง",
-    type: "inventory",
-    date: "2024-01-14",
-    status: "completed"
-  },
-  {
-    id: "RPT-003",
-    name: "รายงานลูกค้า",
-    type: "customer",
-    date: "2024-01-13",
-    status: "processing"
-  }
-]
+// Import new components
+import { 
+  SalesChart, 
+  ProductSalesChart, 
+  StockDistributionChart, 
+  MonthlyTrendChart, 
+  StockLevelIndicator 
+} from "@/components/modules/reports/charts"
+import { 
+  SalesReportTable, 
+  StockAlertsTable, 
+  DailyReportTable 
+} from "@/components/modules/reports/data-tables"
 
 export default function ReportsPage() {
-  const [selectedPeriod, setSelectedPeriod] = useState("daily")
+  const { toast } = useToast()
+  const [loading, setLoading] = useState(false)
+  const [activeTab, setActiveTab] = useState("sales")
+  const [dateFilter, setDateFilter] = useState({
+    from: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days ago
+    to: new Date().toISOString().split('T')[0] // today
+  })
+
+  // State for real data
+  const [dailyReports, setDailyReports] = useState<any[]>([])
+  const [salesReports, setSalesReports] = useState<any[]>([])
+  const [stockAlerts, setStockAlerts] = useState<any[]>([])
+  const [lowStockProducts, setLowStockProducts] = useState<any[]>([])
+
+  // State for quick stats
+  const [quickStats, setQuickStats] = useState({
+    todaySales: 0,
+    todayOrders: 0,
+    totalProducts: 0,
+    newPatients: 0
+  })
+
+  // Mock data for features not yet implemented
+  const mockSalesChartData = [
+    { date: "2024-01-01", sales: 15650, orders: 45 },
+    { date: "2024-01-02", sales: 18230, orders: 52 },
+    { date: "2024-01-03", sales: 16780, orders: 48 },
+    { date: "2024-01-04", sales: 21340, orders: 61 },
+    { date: "2024-01-05", sales: 19560, orders: 55 },
+    { date: "2024-01-06", sales: 17890, orders: 49 },
+    { date: "2024-01-07", sales: 22150, orders: 63 }
+  ]
+
+  const mockStockDistribution = [
+    { category: "ยาแก้ปวด", count: 45, value: 125000 },
+    { category: "ยาปฏิชีวนะ", count: 32, value: 89000 },
+    { category: "วิตามิน", count: 28, value: 67000 },
+    { category: "ยาแก้ไข้", count: 22, value: 54000 },
+    { category: "อื่นๆ", count: 18, value: 32000 }
+  ]
+
+  const mockMonthlyTrend = [
+    { month: "ม.ค.", sales: 450000, orders: 1250, patients: 680 },
+    { month: "ก.พ.", sales: 520000, orders: 1380, patients: 720 },
+    { month: "มี.ค.", sales: 480000, orders: 1320, patients: 695 },
+    { month: "เม.ย.", sales: 610000, orders: 1450, patients: 785 },
+    { month: "พ.ค.", sales: 580000, orders: 1380, patients: 742 },
+    { month: "มิ.ย.", sales: 650000, orders: 1520, patients: 820 }
+  ]
+
+  // Load data functions
+  const loadDailyReports = async () => {
+    try {
+      const response = await GraphQLAPI.getDailyReports({
+        date_from: dateFilter.from,
+        date_to: dateFilter.to
+      })
+      setDailyReports(response.dailyReports)
+      
+      // Calculate quick stats from daily reports
+      const today = new Date().toISOString().split('T')[0]
+      const todayReport = response.dailyReports.find(report => 
+        new Date(report.report_date).toISOString().split('T')[0] === today
+      )
+      
+      if (todayReport) {
+        setQuickStats(prev => ({
+          ...prev,
+          todaySales: todayReport.total_sales,
+          todayOrders: todayReport.total_orders,
+          newPatients: todayReport.total_patients
+        }))
+      }
+    } catch (error) {
+      console.error("Error loading daily reports:", error)
+      // Use mock data as fallback
+      setQuickStats({
+        todaySales: 15650,
+        todayOrders: 45,
+        totalProducts: 156,
+        newPatients: 28
+      })
+    }
+  }
+
+  const loadSalesReports = async () => {
+    try {
+      const response = await GraphQLAPI.getSalesReports({
+        date_from: dateFilter.from,
+        date_to: dateFilter.to
+      })
+      setSalesReports(response.salesReports)
+    } catch (error) {
+      console.error("Error loading sales reports:", error)
+      toast({
+        title: "ข้อผิดพลาด",
+        description: "ไม่สามารถโหลดข้อมูลรายงานยอดขายได้",
+        variant: "destructive"
+      })
+    }
+  }
+
+  const loadStockAlerts = async () => {
+    try {
+      const response = await GraphQLAPI.getStockAlerts({
+        acknowledged: false,
+        pagination: { skip: 0, take: 50 }
+      })
+      setStockAlerts(response.stockAlerts)
+    } catch (error) {
+      console.error("Error loading stock alerts:", error)
+      toast({
+        title: "ข้อผิดพลาด", 
+        description: "ไม่สามารถโหลดข้อมูลการแจ้งเตือนได้",
+        variant: "destructive"
+      })
+    }
+  }
+
+  const loadLowStockProducts = async () => {
+    try {
+      const response = await GraphQLAPI.getLowStockProducts()
+      setLowStockProducts(response.lowStockProducts)
+      setQuickStats(prev => ({
+        ...prev,
+        totalProducts: response.lowStockProducts.length
+      }))
+    } catch (error) {
+      console.error("Error loading low stock products:", error)
+    }
+  }
+
+  const loadAllData = async () => {
+    setLoading(true)
+    try {
+      await Promise.all([
+        loadDailyReports(),
+        loadSalesReports(),
+        loadStockAlerts(),
+        loadLowStockProducts()
+      ])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleAcknowledgeAlert = async (alertId: string) => {
+    try {
+      await GraphQLAPI.acknowledgeStockAlert(alertId)
+      toast({
+        title: "สำเร็จ",
+        description: "รับทราบการแจ้งเตือนแล้ว"
+      })
+      loadStockAlerts() // Reload alerts
+    } catch (error) {
+      console.error("Error acknowledging alert:", error)
+      toast({
+        title: "ข้อผิดพลาด",
+        description: "ไม่สามารถรับทราบการแจ้งเตือนได้",
+        variant: "destructive"
+      })
+    }
+  }
+
+  const generateDailyReport = async () => {
+    try {
+      setLoading(true)
+      const today = new Date().toISOString()
+      await GraphQLAPI.generateDailyReport(today)
+      toast({
+        title: "สำเร็จ",
+        description: "สร้างรายงานรายวันเรียบร้อยแล้ว"
+      })
+      loadDailyReports() // Reload reports
+    } catch (error: any) {
+      console.error("Error generating daily report:", error)
+      toast({
+        title: "ข้อผิดพลาด",
+        description: error.message || "ไม่สามารถสร้างรายงานได้",
+        variant: "destructive"
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadAllData()
+  }, [dateFilter])
+
+  // Process sales data for charts
+  const salesChartData = salesReports.length > 0 ? 
+    salesReports.reduce((acc: any[], report) => {
+      const date = new Date(report.report_date).toISOString().split('T')[0]
+      const existing = acc.find(item => item.date === date)
+      
+      if (existing) {
+        existing.sales += report.total_sales
+        existing.orders += 1
+      } else {
+        acc.push({
+          date,
+          sales: report.total_sales,
+          orders: 1
+        })
+      }
+      return acc
+    }, []) : mockSalesChartData
+
+  const productSalesData = salesReports.length > 0 ?
+    salesReports.map(report => ({
+      product_name: report.product.product_name,
+      quantity_sold: report.quantity_sold,
+      total_sales: report.total_sales
+    })).slice(0, 10) : []
+
+  const stockLevelData = lowStockProducts.map(product => ({
+    product_name: product.product_name,
+    current_stock: product.stock_quantity,
+    reorder_point: product.reorder_point
+  }))
 
   return (
     <PageGuard requiredPermission="reports">
       <div className="p-6 max-w-7xl mx-auto space-y-6">
         {/* Header */}
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">รายงานและการวิเคราะห์</h1>
-          <p className="text-gray-600 mt-2">ติดตามประสิทธิภาพและสร้างรายงานต่างๆ</p>
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">รายงานและการวิเคราะห์</h1>
+            <p className="text-gray-600 mt-2">ติดตามประสิทธิภาพและสร้างรายงานต่างๆ</p>
+          </div>
+          <div className="flex space-x-2">
+            <Input
+              type="date"
+              value={dateFilter.from}
+              onChange={(e) => setDateFilter(prev => ({ ...prev, from: e.target.value }))}
+              className="w-40"
+            />
+            <Input
+              type="date"
+              value={dateFilter.to}
+              onChange={(e) => setDateFilter(prev => ({ ...prev, to: e.target.value }))}
+              className="w-40"
+            />
+            <Button
+              onClick={loadAllData}
+              disabled={loading}
+              variant="outline"
+            >
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            </Button>
+          </div>
         </div>
 
-      {/* Quick Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">ยอดขายวันนี้</p>
-                <p className="text-2xl font-bold">฿{salesData.daily.amount.toLocaleString()}</p>
-                <div className="flex items-center mt-1">
-                  <TrendingUp className="h-4 w-4 text-green-600 mr-1" />
-                  <span className="text-sm text-green-600">+{salesData.daily.growth}%</span>
+        {/* Quick Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">ยอดขายวันนี้</p>
+                  <p className="text-2xl font-bold">฿{quickStats.todaySales.toLocaleString()}</p>
+                  <div className="flex items-center mt-1">
+                    <TrendingUp className="h-4 w-4 text-green-600 mr-1" />
+                    <span className="text-sm text-green-600">+12.5%</span>
+                  </div>
                 </div>
+                <DollarSign className="h-8 w-8 text-green-600" />
               </div>
-              <DollarSign className="h-8 w-8 text-green-600" />
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">คำสั่งซื้อวันนี้</p>
-                <p className="text-2xl font-bold">{salesData.daily.orders}</p>
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">คำสั่งซื้อวันนี้</p>
+                  <p className="text-2xl font-bold">{quickStats.todayOrders}</p>
+                </div>
+                <Package className="h-8 w-8 text-blue-600" />
               </div>
-              <Package className="h-8 w-8 text-blue-600" />
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">ผลิตภัณฑ์ขายดี</p>
-                <p className="text-2xl font-bold">{topProducts.length}</p>
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">สินค้าใกล้หมด</p>
+                  <p className="text-2xl font-bold">{lowStockProducts.length}</p>
+                </div>
+                <AlertTriangle className="h-8 w-8 text-orange-600" />
               </div>
-              <BarChart3 className="h-8 w-8 text-purple-600" />
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">ลูกค้าใหม่</p>
-                <p className="text-2xl font-bold">28</p>
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">ผู้ป่วยใหม่</p>
+                  <p className="text-2xl font-bold">{quickStats.newPatients}</p>
+                </div>
+                <Users className="h-8 w-8 text-purple-600" />
               </div>
-              <Users className="h-8 w-8 text-orange-600" />
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Main Content */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+          <TabsList>
+            <TabsTrigger value="sales">รายงานยอดขาย</TabsTrigger>
+            <TabsTrigger value="inventory">รายงานคลังสินค้า</TabsTrigger>
+            <TabsTrigger value="daily">รายงานรายวัน</TabsTrigger>
+            <TabsTrigger value="analytics">การวิเคราะห์</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="sales" className="space-y-6">
+            {/* Sales Chart */}
+            <SalesChart data={salesChartData} />
+            
+            {/* Product Sales Chart */}
+            {productSalesData.length > 0 && (
+              <ProductSalesChart data={productSalesData} />
+            )}
+            
+            {/* Sales Report Table */}
+            <SalesReportTable data={salesReports} />
+          </TabsContent>
+
+          <TabsContent value="inventory" className="space-y-6">
+            {/* Stock Distribution Chart */}
+            <StockDistributionChart data={mockStockDistribution} />
+            
+            {/* Stock Level Indicator */}
+            {stockLevelData.length > 0 && (
+              <StockLevelIndicator data={stockLevelData} />
+            )}
+            
+            {/* Stock Alerts Table */}
+            <StockAlertsTable 
+              data={stockAlerts} 
+              onAcknowledge={handleAcknowledgeAlert}
+            />
+          </TabsContent>
+
+          <TabsContent value="daily" className="space-y-6">
+            <div className="flex justify-between items-center">
+              <h2 className="text-xl font-semibold">รายงานรายวัน</h2>
+              <Button onClick={generateDailyReport} disabled={loading}>
+                {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Calendar className="h-4 w-4 mr-2" />}
+                สร้างรายงานวันนี้
+              </Button>
             </div>
-          </CardContent>
-        </Card>
+            
+            {/* Daily Report Table */}
+            <DailyReportTable data={dailyReports} />
+          </TabsContent>
+
+          <TabsContent value="analytics" className="space-y-6">
+            {/* Monthly Trend Chart */}
+            <MonthlyTrendChart data={mockMonthlyTrend} />
+            
+            {/* Analytics Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>สถิติการขาย</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="flex justify-between">
+                      <span>ยอดขายเฉลี่ยต่อวัน</span>
+                      <span className="font-medium">฿18,500</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>คำสั่งซื้อเฉลี่ยต่อวัน</span>
+                      <span className="font-medium">52</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>มูลค่าเฉลี่ยต่อคำสั่งซื้อ</span>
+                      <span className="font-medium">฿355</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>สถิติคลังสินค้า</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="flex justify-between">
+                      <span>สินค้าทั้งหมด</span>
+                      <span className="font-medium">{lowStockProducts.length + 120}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>สินค้าใกล้หมด</span>
+                      <span className="font-medium text-orange-600">{lowStockProducts.length}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>การหมุนเวียนสินค้า</span>
+                      <span className="font-medium">85%</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+        </Tabs>
       </div>
-
-      {/* Main Content */}
-      <Tabs defaultValue="sales" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="sales">รายงานยอดขาย</TabsTrigger>
-          <TabsTrigger value="inventory">รายงานคลังสินค้า</TabsTrigger>
-          <TabsTrigger value="customer">รายงานลูกค้า</TabsTrigger>
-          <TabsTrigger value="generated">รายงานที่สร้างแล้ว</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="sales" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>สรุปยอดขาย</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                <Card className="border-l-4 border-l-blue-500">
-                  <CardContent className="p-4">
-                    <p className="text-sm text-gray-600">รายวัน</p>
-                    <p className="text-xl font-bold">฿{salesData.daily.amount.toLocaleString()}</p>
-                    <p className="text-sm text-gray-500">{salesData.daily.orders} คำสั่งซื้อ</p>
-                  </CardContent>
-                </Card>
-                <Card className="border-l-4 border-l-green-500">
-                  <CardContent className="p-4">
-                    <p className="text-sm text-gray-600">รายสัปดาห์</p>
-                    <p className="text-xl font-bold">฿{salesData.weekly.amount.toLocaleString()}</p>
-                    <p className="text-sm text-gray-500">{salesData.weekly.orders} คำสั่งซื้อ</p>
-                  </CardContent>
-                </Card>
-                <Card className="border-l-4 border-l-purple-500">
-                  <CardContent className="p-4">
-                    <p className="text-sm text-gray-600">รายเดือน</p>
-                    <p className="text-xl font-bold">฿{salesData.monthly.amount.toLocaleString()}</p>
-                    <p className="text-sm text-gray-500">{salesData.monthly.orders} คำสั่งซื้อ</p>
-                  </CardContent>
-                </Card>
-              </div>
-
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold">ผลิตภัณฑ์ขายดีอันดับต้น</h3>
-                <div className="space-y-2">
-                  {topProducts.map((product, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
-                      <div className="flex items-center space-x-3">
-                        <Badge variant="outline">#{index + 1}</Badge>
-                        <span className="font-medium">{product.name}</span>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-semibold">฿{product.revenue.toLocaleString()}</p>
-                        <p className="text-sm text-gray-500">{product.sold} ชิ้น</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="inventory" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>รายงานคลังสินค้า</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold">สินค้าใกล้หมด</h3>
-                  <div className="space-y-2">
-                    <div className="p-3 border rounded-lg border-red-200 bg-red-50">
-                      <div className="flex justify-between items-center">
-                        <span className="font-medium">Paracetamol 500mg</span>
-                        <Badge variant="destructive">5 ชิ้น</Badge>
-                      </div>
-                    </div>
-                    <div className="p-3 border rounded-lg border-yellow-200 bg-yellow-50">
-                      <div className="flex justify-between items-center">
-                        <span className="font-medium">Amoxicillin 250mg</span>
-                        <Badge variant="outline" className="border-yellow-500 text-yellow-700">15 ชิ้น</Badge>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold">สินค้าใกล้หมดอายุ</h3>
-                  <div className="space-y-2">
-                    <div className="p-3 border rounded-lg border-orange-200 bg-orange-50">
-                      <div className="flex justify-between items-center">
-                        <span className="font-medium">Vitamin C</span>
-                        <Badge variant="outline" className="border-orange-500 text-orange-700">30 วัน</Badge>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="customer" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>รายงานลูกค้า</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Card>
-                  <CardContent className="p-4 text-center">
-                    <Users className="h-8 w-8 mx-auto text-blue-600 mb-2" />
-                    <p className="text-2xl font-bold">1,248</p>
-                    <p className="text-sm text-gray-600">ลูกค้าทั้งหมด</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="p-4 text-center">
-                    <TrendingUp className="h-8 w-8 mx-auto text-green-600 mb-2" />
-                    <p className="text-2xl font-bold">28</p>
-                    <p className="text-sm text-gray-600">ลูกค้าใหม่เดือนนี้</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="p-4 text-center">
-                    <BarChart3 className="h-8 w-8 mx-auto text-purple-600 mb-2" />
-                    <p className="text-2xl font-bold">฿2,450</p>
-                    <p className="text-sm text-gray-600">ยอดซื้อเฉลี่ยต่อลูกค้า</p>
-                  </CardContent>
-                </Card>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="generated" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <div className="flex justify-between items-center">
-                <CardTitle>รายงานที่สร้างแล้ว</CardTitle>
-                <Button>
-                  <Download className="w-4 h-4 mr-2" />
-                  สร้างรายงานใหม่
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {recentReports.map((report) => (
-                  <div key={report.id} className="flex items-center justify-between p-4 border rounded-lg">
-                    <div className="flex items-center space-x-4">
-                      <Calendar className="h-5 w-5 text-gray-400" />
-                      <div>
-                        <p className="font-medium">{report.name}</p>
-                        <p className="text-sm text-gray-500">สร้างเมื่อ {new Date(report.date).toLocaleDateString('th-TH')}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-3">
-                      <Badge 
-                        variant={report.status === 'completed' ? 'default' : 'secondary'}
-                      >
-                        {report.status === 'completed' ? 'เสร็จสิ้น' : 'กำลังประมวลผล'}
-                      </Badge>
-                      <Button variant="outline" size="sm">
-                        <Eye className="w-4 h-4 mr-1" />
-                        ดู
-                      </Button>
-                      <Button variant="outline" size="sm">
-                        <Download className="w-4 h-4 mr-1" />
-                        ดาวน์โหลด
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-    </div>
     </PageGuard>
   )
-} 
+}

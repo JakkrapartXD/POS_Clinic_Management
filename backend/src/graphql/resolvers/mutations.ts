@@ -1,5 +1,6 @@
 import { GraphQLError } from "graphql";
 import { hash } from "bcrypt";
+import { logger } from "../../lib/logger";
 
 export const mutations = {
   // User Mutations
@@ -145,38 +146,30 @@ export const mutations = {
       throw new GraphQLError('Cannot delete your own account');
     }
     
-    // Check for dependent records
-    const dependencies = await context.prisma.user.findUnique({
-      where: { id },
-      include: {
-        _count: {
-          select: {
-            appointments: true,
-            medicalRecords: true,
-            orders: true,
-            purchases: true
-          }
-        }
+    // Check if user exists and is not already deleted
+    const user = await context.prisma.user.findFirst({
+      where: { 
+        id,
+        isDelete: false
       }
     });
     
-    if (!dependencies) {
-      throw new GraphQLError('User not found');
+    if (!user) {
+      throw new GraphQLError('User not found or already deleted');
     }
     
-    const totalDependencies = (Object.values(dependencies._count) as number[]).reduce((sum, count) => sum + count, 0);
-    
-    if (totalDependencies > 0) {
-      throw new GraphQLError('Cannot delete user with existing records. Set status to inactive instead.');
-    }
-    
-    await context.prisma.user.delete({
-      where: { id }
+    // Soft delete: Update isDelete to true
+    await context.prisma.user.update({
+      where: { id },
+      data: { 
+        isDelete: true,
+        updated_at: new Date()
+      }
     });
     
     await context.security.logSensitiveOperation(
       context.userId,
-      'DELETE_USER',
+      'SOFT_DELETE_USER',
       'User',
       id, context.redisClient
     );
@@ -276,6 +269,18 @@ export const mutations = {
     
     await context.security.checkRateLimit(context.userId, 'sensitive', context.redisClient);
     
+    // Check if patient exists and is not already deleted
+    const patient = await context.prisma.patient.findFirst({
+      where: { 
+        id,
+        isDelete: false
+      }
+    });
+    
+    if (!patient) {
+      throw new GraphQLError('Patient not found or already deleted');
+    }
+    
     // Check for dependent records
     const dependencies = await context.prisma.patient.findUnique({
       where: { id },
@@ -291,23 +296,24 @@ export const mutations = {
       }
     });
     
-    if (!dependencies) {
-      throw new GraphQLError('Patient not found');
-    }
-    
-    const totalDependencies = (Object.values(dependencies._count) as number[]).reduce((sum, count) => sum + count, 0);
+    const totalDependencies = (Object.values(dependencies?._count || {}) as number[]).reduce((sum, count) => sum + count, 0);
     
     if (totalDependencies > 0) {
       throw new GraphQLError('Cannot delete patient with existing medical records, appointments, or orders');
     }
     
-    await context.prisma.patient.delete({
-      where: { id }
+    // Soft delete: Update isDelete to true
+    await context.prisma.patient.update({
+      where: { id },
+      data: { 
+        isDelete: true,
+        updated_at: new Date()
+      }
     });
     
     await context.security.logSensitiveOperation(
       context.userId,
-      'DELETE_PATIENT',
+      'SOFT_DELETE_PATIENT',
       'Patient',
       id, context.redisClient
     );
@@ -353,7 +359,10 @@ export const mutations = {
     }
     
     const product = await context.prisma.product.create({
-      data: sanitizedInput
+      data: sanitizedInput,
+      include: {
+        category: true
+      }
     });
     
     // Create initial stock movement
@@ -423,7 +432,10 @@ export const mutations = {
     
     const product = await context.prisma.product.update({
       where: { id },
-      data: updateData
+      data: updateData,
+      include: {
+        category: true
+      }
     });
     
     await context.security.logSensitiveOperation(
@@ -435,6 +447,45 @@ export const mutations = {
     );
     
     return product;
+  },
+
+  async deleteProduct(parent: any, args: any, context: any) {
+    const { id } = args;
+    context.security.requireStaff(context);
+    context.security.validateId(id);
+    
+    await context.security.checkRateLimit(context.userId, 'sensitive', context.redisClient);
+    
+    // Check if product exists and is not already deleted
+    const product = await context.prisma.product.findFirst({
+      where: { 
+        id,
+        isDelete: false
+      }
+    });
+    
+    if (!product) {
+      throw new GraphQLError('Product not found or already deleted');
+    }
+    
+    
+    // Soft delete: Update isDelete to true
+    await context.prisma.product.update({
+      where: { id },
+      data: { 
+        isDelete: true,
+        updated_at: new Date()
+      }
+    });
+    
+    await context.security.logSensitiveOperation(
+      context.userId,
+      'SOFT_DELETE_PRODUCT',
+      'Product',
+      id, context.redisClient
+    );
+    
+    return true;
   },
 
   async adjustStock(parent: any, args: any, context: any) {
@@ -498,5 +549,951 @@ export const mutations = {
     );
     
     return stockMovement;
+  },
+
+  // Bulk Import Products
+  async bulkImportProducts(parent: any, args: any, context: any) {
+    const { input } = args;
+    const { products, settings = {} } = input;
+    
+    // Check permissions - require admin or staff
+    context.security.requireAdmin(context);
+    
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
+    
+    logger.info('Starting bulk product import', { 
+      productCount: products.length, 
+      userId: context.userId,
+      settings 
+    }, 'IMPORT');
+
+    const results = [];
+    let imported = 0;
+    let failed = 0;
+    let skipped = 0;
+    const errors = [];
+
+    // Create backup if requested
+    if (settings.createBackup) {
+      try {
+        logger.info('Creating backup before import', {}, 'IMPORT');
+        // You could implement backup logic here
+      } catch (error) {
+        logger.error('Failed to create backup', error, 'IMPORT');
+        errors.push('ไม่สามารถสร้างข้อมูลสำรองได้');
+      }
+    }
+
+    // Process each product
+    for (const productInput of products) {
+      try {
+        // Validate required fields
+        if (!productInput.product_name || !productInput.sale_price) {
+          failed++;
+          results.push({
+            product: null,
+            status: 'FAILED',
+            error: 'ข้อมูลไม่ครบถ้วน: ต้องมีชื่อสินค้าและราคาขาย',
+            sku: productInput.sku,
+            product_name: productInput.product_name || 'ไม่ระบุ'
+          });
+          continue;
+        }
+
+        // Sanitize input
+        const sanitizedInput = {
+          product_name: context.security.sanitizeString(productInput.product_name),
+          product_type: productInput.product_type ? context.security.sanitizeString(productInput.product_type) : null,
+          generic_name: productInput.generic_name ? context.security.sanitizeString(productInput.generic_name) : null,
+          short_name: productInput.short_name ? context.security.sanitizeString(productInput.short_name) : null,
+          status: productInput.status || 'active',
+          vat_percent: productInput.vat_percent || 0,
+          expiration_warning_date: productInput.expiration_warning_date,
+          sale_price: productInput.sale_price,
+          unit: productInput.unit ? context.security.sanitizeString(productInput.unit) : null,
+          pack_size: productInput.pack_size ? context.security.sanitizeString(productInput.pack_size) : null,
+          reorder_point: productInput.reorder_point || 0,
+          cost: productInput.cost || 0,
+          sku: productInput.sku ? context.security.sanitizeString(productInput.sku) : null,
+          barcode: productInput.barcode ? context.security.sanitizeString(productInput.barcode) : null,
+          stock_quantity: productInput.stock_quantity || 0,
+          volume: productInput.volume,
+          volume_unit: productInput.volume_unit ? context.security.sanitizeString(productInput.volume_unit) : null,
+          shelf_code: productInput.shelf_code ? context.security.sanitizeString(productInput.shelf_code) : null,
+          shelf_row: productInput.shelf_row ? context.security.sanitizeString(productInput.shelf_row) : null,
+          category: productInput.category ? context.security.sanitizeString(productInput.category) : null,
+          symptom_category: productInput.symptom_category ? context.security.sanitizeString(productInput.symptom_category) : null,
+          license_number: productInput.license_number ? context.security.sanitizeString(productInput.license_number) : null,
+          dosage_unit: productInput.dosage_unit ? context.security.sanitizeString(productInput.dosage_unit) : null,
+          dosage: productInput.dosage ? context.security.sanitizeString(productInput.dosage) : null,
+          times_per_day: productInput.times_per_day,
+          interval_hours: productInput.interval_hours,
+          before_meal: productInput.before_meal,
+          after_meal: productInput.after_meal,
+          after_meal_immediate: productInput.after_meal_immediate,
+          morning: productInput.morning,
+          noon: productInput.noon,
+          evening: productInput.evening,
+          before_bed: productInput.before_bed,
+          properties: productInput.properties ? context.security.sanitizeString(productInput.properties) : null,
+          usage_instruction: productInput.usage_instruction ? context.security.sanitizeString(productInput.usage_instruction) : null,
+          sale_note: productInput.sale_note ? context.security.sanitizeString(productInput.sale_note) : null,
+          purchase_note: productInput.purchase_note ? context.security.sanitizeString(productInput.purchase_note) : null
+        };
+
+        // Check for duplicates
+        const existingProduct = await context.prisma.product.findFirst({
+          where: {
+            OR: [
+              { sku: sanitizedInput.sku },
+              { product_name: sanitizedInput.product_name },
+              { barcode: sanitizedInput.barcode }
+            ].filter(condition => Object.values(condition)[0] != null)
+          }
+        });
+
+        if (existingProduct) {
+          if (settings.skipDuplicates) {
+            skipped++;
+            results.push({
+              product: existingProduct,
+              status: 'SKIPPED',
+              error: 'สินค้านี้มีอยู่แล้วในระบบ',
+              sku: sanitizedInput.sku,
+              product_name: sanitizedInput.product_name
+            });
+            continue;
+          } else if (settings.updateExisting) {
+            // Update existing product
+            const updatedProduct = await context.prisma.product.update({
+              where: { id: existingProduct.id },
+              data: sanitizedInput
+            });
+            
+            imported++;
+            results.push({
+              product: updatedProduct,
+              status: 'UPDATED',
+              error: null,
+              sku: sanitizedInput.sku,
+              product_name: sanitizedInput.product_name
+            });
+
+            await context.security.logSensitiveOperation(
+              context.userId,
+              'UPDATE_PRODUCT_BULK',
+              'Product',
+              updatedProduct.id,
+              { product_name: updatedProduct.product_name },
+              context.redisClient
+            );
+            continue;
+          } else {
+            failed++;
+            results.push({
+              product: null,
+              status: 'FAILED',
+              error: 'สินค้านี้มีอยู่แล้วในระบบ',
+              sku: sanitizedInput.sku,
+              product_name: sanitizedInput.product_name
+            });
+            continue;
+          }
+        }
+
+        // Create new product
+        const newProduct = await context.prisma.product.create({
+          data: sanitizedInput
+        });
+
+        imported++;
+        results.push({
+          product: newProduct,
+          status: 'CREATED',
+          error: null,
+          sku: sanitizedInput.sku,
+          product_name: sanitizedInput.product_name
+        });
+
+        await context.security.logSensitiveOperation(
+          context.userId,
+          'CREATE_PRODUCT_BULK',
+          'Product',
+          newProduct.id,
+          { product_name: newProduct.product_name },
+          context.redisClient
+        );
+
+      } catch (error) {
+        failed++;
+        const errorMessage = error instanceof Error ? error.message : 'เกิดข้อผิดพลาดไม่ทราบสาเหตุ';
+        
+        results.push({
+          product: null,
+          status: 'FAILED',
+          error: errorMessage,
+          sku: productInput.sku,
+          product_name: productInput.product_name || 'ไม่ระบุ'
+        });
+
+        logger.error('Failed to import product', { 
+          error: errorMessage, 
+          productInput 
+        }, 'IMPORT');
+        
+        errors.push(`${productInput.product_name || 'ไม่ระบุ'}: ${errorMessage}`);
+      }
+    }
+
+    // Log summary
+    logger.info('Bulk import completed', {
+      totalProducts: products.length,
+      imported,
+      failed,
+      skipped,
+      userId: context.userId
+    }, 'IMPORT');
+
+    return {
+      success: failed === 0,
+      message: `นำเข้าสำเร็จ ${imported} รายการ, ล้มเหลว ${failed} รายการ, ข้าม ${skipped} รายการ`,
+      imported,
+      failed,
+      skipped,
+      errors,
+      results
+    };
+  },
+
+  // Category Mutations
+  async createCategory(parent: any, args: any, context: any) {
+    const { input } = args;
+    context.security.requireAdmin(context);
+    
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
+    
+    const sanitizedInput = {
+      name: context.security.sanitizeString(input.name),
+      description: input.description ? context.security.sanitizeString(input.description) : null,
+      code: input.code ? context.security.sanitizeString(input.code) : null
+    };
+    
+    try {
+      const category = await context.prisma.category.create({
+        data: sanitizedInput
+      });
+      
+      await context.security.logSensitiveOperation(
+        context.userId,
+        'CREATE_CATEGORY',
+        'Category',
+        category.id,
+        { name: category.name }, context.redisClient
+      );
+      
+      return category;
+    } catch (error: any) {
+      if (error.code === 'P2002') {
+        if (error.meta?.target?.includes('name')) {
+          throw new GraphQLError('Category name already exists');
+        }
+        if (error.meta?.target?.includes('code')) {
+          throw new GraphQLError('Category code already exists');
+        }
+      }
+      throw new GraphQLError('Failed to create category');
+    }
+  },
+
+  async updateCategory(parent: any, args: any, context: any) {
+    const { id, input } = args;
+    context.security.requireAdmin(context);
+    context.security.validateId(id);
+    
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
+    
+    const updateData: any = {};
+    
+    if (input.name) updateData.name = context.security.sanitizeString(input.name);
+    if (input.description !== undefined) {
+      updateData.description = input.description ? context.security.sanitizeString(input.description) : null;
+    }
+    if (input.code !== undefined) {
+      updateData.code = input.code ? context.security.sanitizeString(input.code) : null;
+    }
+    
+    try {
+      const category = await context.prisma.category.update({
+        where: { id },
+        data: updateData
+      });
+      
+      await context.security.logSensitiveOperation(
+        context.userId,
+        'UPDATE_CATEGORY',
+        'Category',
+        category.id,
+        { name: category.name }, context.redisClient
+      );
+      
+      return category;
+    } catch (error: any) {
+      if (error.code === 'P2002') {
+        if (error.meta?.target?.includes('name')) {
+          throw new GraphQLError('Category name already exists');
+        }
+        if (error.meta?.target?.includes('code')) {
+          throw new GraphQLError('Category code already exists');
+        }
+      }
+      if (error.code === 'P2025') {
+        throw new GraphQLError('Category not found');
+      }
+      throw new GraphQLError('Failed to update category');
+    }
+  },
+
+  async deleteCategory(parent: any, args: any, context: any) {
+    const { id } = args;
+    context.security.requireAdmin(context);
+    context.security.validateId(id);
+    
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
+    
+    // Check if category exists and is not already deleted
+    const category = await context.prisma.category.findFirst({
+      where: { 
+        id,
+        isDelete: false
+      }
+    });
+    
+    if (!category) {
+      throw new GraphQLError('Category not found or already deleted');
+    }
+    
+    // Check if category has active products
+    const productsCount = await context.prisma.product.count({
+      where: { 
+        categoryId: id,
+        isDelete: false
+      }
+    });
+    
+    if (productsCount > 0) {
+      throw new GraphQLError(`Cannot delete category. It has ${productsCount} active products associated with it.`);
+    }
+    
+    try {
+      // Soft delete: Update isDelete to true
+      await context.prisma.category.update({
+        where: { id },
+        data: { 
+          isDelete: true,
+          updated_at: new Date()
+        }
+      });
+      
+      await context.security.logSensitiveOperation(
+        context.userId,
+        'SOFT_DELETE_CATEGORY',
+        'Category',
+        id,
+        { name: category.name }, context.redisClient
+      );
+      
+      return true;
+    } catch (error: any) {
+      if (error.code === 'P2025') {
+        throw new GraphQLError('Category not found');
+      }
+      throw new GraphQLError('Failed to delete category');
+    }
+  },
+
+  // Supplier Mutations
+  async updateSupplier(parent: any, args: any, context: any) {
+    const { id, input } = args;
+    context.security.requireAdmin(context);
+    context.security.validateId(id);
+    
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
+    
+    const updateData: any = {};
+    
+    // Sanitize string fields
+    if (input.name) updateData.name = context.security.sanitizeString(input.name);
+    if (input.contact_name) updateData.contact_name = context.security.sanitizeString(input.contact_name);
+    if (input.phone) updateData.phone = context.security.sanitizeString(input.phone);
+    if (input.email) updateData.email = context.security.sanitizeString(input.email);
+    if (input.address) updateData.address = context.security.sanitizeString(input.address);
+    
+    const supplier = await context.prisma.supplier.update({
+      where: { id },
+      data: updateData,
+      include: {
+        purchases: {
+          orderBy: { purchase_date: 'desc' },
+          take: 3
+        }
+      }
+    });
+    
+    await context.security.logSensitiveOperation(
+      context.userId,
+      'UPDATE_SUPPLIER',
+      'Supplier',
+      id,
+      updateData, context.redisClient
+    );
+    
+    return supplier;
+  },
+
+  async deleteSupplier(parent: any, args: any, context: any) {
+    const { id } = args;
+    context.security.requireAdmin(context);
+    context.security.validateId(id);
+    
+    await context.security.checkRateLimit(context.userId, 'sensitive', context.redisClient);
+    
+    // Check if supplier exists and is not already deleted
+    const supplier = await context.prisma.supplier.findFirst({
+      where: { 
+        id,
+        isDelete: false
+      }
+    });
+    
+    if (!supplier) {
+      throw new GraphQLError('Supplier not found or already deleted');
+    }
+    
+    // Check for dependent records
+    const dependencies = await context.prisma.supplier.findUnique({
+      where: { id },
+      include: {
+        _count: {
+          select: {
+            purchases: true
+          }
+        }
+      }
+    });
+    
+    const totalDependencies = (Object.values(dependencies?._count || {}) as number[]).reduce((sum, count) => sum + count, 0);
+    
+    if (totalDependencies > 0) {
+      throw new GraphQLError('Cannot delete supplier with existing purchases');
+    }
+    
+    // Soft delete: Update isDelete to true
+    await context.prisma.supplier.update({
+      where: { id },
+      data: { 
+        isDelete: true,
+        updated_at: new Date()
+      }
+    });
+    
+    await context.security.logSensitiveOperation(
+      context.userId,
+      'SOFT_DELETE_SUPPLIER',
+      'Supplier',
+      id, context.redisClient
+    );
+    
+    return true;
+  },
+
+  // Purchase Mutations
+  async updatePurchase(parent: any, args: any, context: any) {
+    const { id, input } = args;
+    context.security.requireStaff(context);
+    context.security.validateId(id);
+    
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
+    
+    const updateData: any = {};
+    
+    // Sanitize string fields
+    if (input.supplierId) updateData.supplierId = input.supplierId;
+    if (input.total_amount !== undefined) updateData.total_amount = input.total_amount;
+    if (input.status) updateData.status = input.status;
+    
+    const purchase = await context.prisma.purchase.update({
+      where: { id },
+      data: updateData,
+      include: {
+        supplier: true,
+        user: {
+          select: { id: true, username: true }
+        },
+        purchaseItems: {
+          include: {
+            product: {
+              select: { product_name: true, unit: true }
+            }
+          }
+        }
+      }
+    });
+    
+    await context.security.logSensitiveOperation(
+      context.userId,
+      'UPDATE_PURCHASE',
+      'Purchase',
+      id,
+      updateData, context.redisClient
+    );
+    
+    return purchase;
+  },
+
+  async deletePurchase(parent: any, args: any, context: any) {
+    const { id } = args;
+    context.security.requireStaff(context);
+    context.security.validateId(id);
+    
+    await context.security.checkRateLimit(context.userId, 'sensitive', context.redisClient);
+    
+    // Check if purchase exists and is not already deleted
+    const purchase = await context.prisma.purchase.findFirst({
+      where: { 
+        id,
+        isDelete: false
+      }
+    });
+    
+    if (!purchase) {
+      throw new GraphQLError('Purchase not found or already deleted');
+    }
+    
+    // Check for dependent records
+    const dependencies = await context.prisma.purchase.findUnique({
+      where: { id },
+      include: {
+        _count: {
+          select: {
+            purchaseItems: true
+          }
+        }
+      }
+    });
+    
+    const totalDependencies = (Object.values(dependencies?._count || {}) as number[]).reduce((sum, count) => sum + count, 0);
+    
+    if (totalDependencies > 0) {
+      throw new GraphQLError('Cannot delete purchase with existing purchase items');
+    }
+    
+    // Soft delete: Update isDelete to true
+    await context.prisma.purchase.update({
+      where: { id },
+      data: { 
+        isDelete: true,
+        updated_at: new Date()
+      }
+    });
+    
+    await context.security.logSensitiveOperation(
+      context.userId,
+      'SOFT_DELETE_PURCHASE',
+      'Purchase',
+      id, context.redisClient
+    );
+    
+    return true;
+  },
+
+  // Appointment Mutations
+  async updateAppointment(parent: any, args: any, context: any) {
+    const { id, input } = args;
+    context.security.requireStaff(context);
+    context.security.validateId(id);
+    
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
+    
+    const updateData: any = {};
+    
+    if (input.appointment_time) updateData.appointment_time = input.appointment_time;
+    if (input.status) updateData.status = input.status;
+    if (input.reason) updateData.reason = input.reason;
+    
+    const appointment = await context.prisma.appointment.update({
+      where: { id },
+      data: updateData,
+      include: {
+        patient: true,
+        doctor: {
+          select: { id: true, username: true }
+        },
+        medicalRecords: {
+          orderBy: { created_at: 'desc' },
+          take: 5
+        }
+      }
+    });
+    
+    await context.security.logSensitiveOperation(
+      context.userId,
+      'UPDATE_APPOINTMENT',
+      'Appointment',
+      id,
+      updateData, context.redisClient
+    );
+    
+    return appointment;
+  },
+
+  async deleteAppointment(parent: any, args: any, context: any) {
+    const { id } = args;
+    context.security.requireStaff(context);
+    context.security.validateId(id);
+    
+    await context.security.checkRateLimit(context.userId, 'sensitive', context.redisClient);
+    
+    // Check if appointment exists and is not already deleted
+    const appointment = await context.prisma.appointment.findFirst({
+      where: { 
+        id,
+        isDelete: false
+      }
+    });
+    
+    if (!appointment) {
+      throw new GraphQLError('Appointment not found or already deleted');
+    }
+    
+    // Check for dependent records
+    const dependencies = await context.prisma.appointment.findUnique({
+      where: { id },
+      include: {
+        _count: {
+          select: {
+            medicalRecords: true
+          }
+        }
+      }
+    });
+    
+    const totalDependencies = (Object.values(dependencies?._count || {}) as number[]).reduce((sum, count) => sum + count, 0);
+    
+    if (totalDependencies > 0) {
+      throw new GraphQLError('Cannot delete appointment with existing medical records');
+    }
+    
+    // Soft delete: Update isDelete to true
+    await context.prisma.appointment.update({
+      where: { id },
+      data: { 
+        isDelete: true,
+        updated_at: new Date()
+      }
+    });
+    
+    await context.security.logSensitiveOperation(
+      context.userId,
+      'SOFT_DELETE_APPOINTMENT',
+      'Appointment',
+      id, context.redisClient
+    );
+    
+    return true;
+  },
+
+  // MedicalRecord Mutations
+  async updateMedicalRecord(parent: any, args: any, context: any) {
+    const { id, input } = args;
+    context.security.requireStaff(context);
+    context.security.validateId(id);
+    
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
+    
+    const updateData: any = {};
+    
+    if (input.symptoms) updateData.symptoms = input.symptoms;
+    if (input.diagnosis) updateData.diagnosis = input.diagnosis;
+    if (input.treatment) updateData.treatment = input.treatment;
+    if (input.notes) updateData.notes = input.notes;
+    
+    const medicalRecord = await context.prisma.medicalRecord.update({
+      where: { id },
+      data: updateData,
+      include: {
+        patient: true,
+        doctor: {
+          select: { id: true, username: true }
+        },
+        appointment: true,
+        prescriptions: {
+          include: {
+            product: {
+              select: { product_name: true, unit: true }
+            }
+          }
+        }
+      }
+    });
+    
+    await context.security.logSensitiveOperation(
+      context.userId,
+      'UPDATE_MEDICAL_RECORD',
+      'MedicalRecord',
+      id,
+      updateData, context.redisClient
+    );
+    
+    return medicalRecord;
+  },
+
+  async deleteMedicalRecord(parent: any, args: any, context: any) {
+    const { id } = args;
+    context.security.requireStaff(context);
+    context.security.validateId(id);
+    
+    await context.security.checkRateLimit(context.userId, 'sensitive', context.redisClient);
+    
+    // Check if medical record exists and is not already deleted
+    const medicalRecord = await context.prisma.medicalRecord.findFirst({
+      where: { 
+        id,
+        isDelete: false
+      }
+    });
+    
+    if (!medicalRecord) {
+      throw new GraphQLError('Medical record not found or already deleted');
+    }
+    
+    // Check for dependent records
+    const dependencies = await context.prisma.medicalRecord.findUnique({
+      where: { id },
+      include: {
+        _count: {
+          select: {
+            prescriptions: true
+          }
+        }
+      }
+    });
+    
+    const totalDependencies = (Object.values(dependencies?._count || {}) as number[]).reduce((sum, count) => sum + count, 0);
+    
+    if (totalDependencies > 0) {
+      throw new GraphQLError('Cannot delete medical record with existing prescriptions');
+    }
+    
+    // Soft delete: Update isDelete to true
+    await context.prisma.medicalRecord.update({
+      where: { id },
+      data: { 
+        isDelete: true,
+        updated_at: new Date()
+      }
+    });
+    
+    await context.security.logSensitiveOperation(
+      context.userId,
+      'SOFT_DELETE_MEDICAL_RECORD',
+      'MedicalRecord',
+      id, context.redisClient
+    );
+    
+    return true;
+  },
+
+  // TreatmentPlan Mutations
+  async updateTreatmentPlan(parent: any, args: any, context: any) {
+    const { id, input } = args;
+    context.security.requireStaff(context);
+    context.security.validateId(id);
+    
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
+    
+    const updateData: any = {};
+    
+    if (input.plan_details) updateData.plan_details = input.plan_details;
+    if (input.start_date) updateData.start_date = input.start_date;
+    if (input.end_date) updateData.end_date = input.end_date;
+    
+    const treatmentPlan = await context.prisma.treatmentPlan.update({
+      where: { id },
+      data: updateData,
+      include: {
+        patient: true,
+        doctor: {
+          select: { id: true, username: true }
+        }
+      }
+    });
+    
+    await context.security.logSensitiveOperation(
+      context.userId,
+      'UPDATE_TREATMENT_PLAN',
+      'TreatmentPlan',
+      id,
+      updateData, context.redisClient
+    );
+    
+    return treatmentPlan;
+  },
+
+  async deleteTreatmentPlan(parent: any, args: any, context: any) {
+    const { id } = args;
+    context.security.requireStaff(context);
+    context.security.validateId(id);
+    
+    await context.security.checkRateLimit(context.userId, 'sensitive', context.redisClient);
+    
+    // Check if treatment plan exists and is not already deleted
+    const treatmentPlan = await context.prisma.treatmentPlan.findFirst({
+      where: { 
+        id,
+        isDelete: false
+      }
+    });
+    
+    if (!treatmentPlan) {
+      throw new GraphQLError('Treatment plan not found or already deleted');
+    }
+    
+    // Soft delete: Update isDelete to true
+    await context.prisma.treatmentPlan.update({
+      where: { id },
+      data: { 
+        isDelete: true,
+        updated_at: new Date()
+      }
+    });
+    
+    await context.security.logSensitiveOperation(
+      context.userId,
+      'SOFT_DELETE_TREATMENT_PLAN',
+      'TreatmentPlan',
+      id, context.redisClient
+    );
+    
+    return true;
+  },
+
+  // Image upload mutations
+  async updateUserAvatar(parent: any, args: any, context: any) {
+    const { id, avatar_url } = args;
+    
+    context.security.requireAuth(context);
+    context.security.validateId(id);
+    
+    // Check if user exists and is not deleted
+    const existingUser = await context.prisma.user.findFirst({
+      where: { 
+        id,
+        isDelete: false
+      }
+    });
+    
+    if (!existingUser) {
+      throw new GraphQLError('User not found or already deleted');
+    }
+
+    // Only allow users to update their own avatar or admin to update any
+    if (context.userId !== id && context.userRole !== 'admin') {
+      throw new GraphQLError('Unauthorized to update this user avatar');
+    }
+    
+    const user = await context.prisma.user.update({
+      where: { id },
+      data: { 
+        avatar_url,
+        avatar_path: avatar_url, // Store same as URL for now
+        updated_at: new Date()
+      }
+    });
+    
+    await context.security.logSensitiveOperation(
+      context.userId,
+      'UPDATE_USER_AVATAR',
+      'User',
+      id, context.redisClient
+    );
+    
+    return user;
+  },
+
+  async updatePatientPhoto(parent: any, args: any, context: any) {
+    const { id, photo_url } = args;
+    
+    context.security.requireAuth(context);
+    context.security.validateId(id);
+    
+    // Check if patient exists and is not deleted
+    const existingPatient = await context.prisma.patient.findFirst({
+      where: { 
+        id,
+        isDelete: false
+      }
+    });
+    
+    if (!existingPatient) {
+      throw new GraphQLError('Patient not found or already deleted');
+    }
+    
+    const patient = await context.prisma.patient.update({
+      where: { id },
+      data: { 
+        photo_url,
+        photo_path: photo_url, // Store same as URL for now
+        updated_at: new Date()
+      }
+    });
+    
+    await context.security.logSensitiveOperation(
+      context.userId,
+      'UPDATE_PATIENT_PHOTO',
+      'Patient',
+      id, context.redisClient
+    );
+    
+    return patient;
+  },
+
+  async updateProductImage(parent: any, args: any, context: any) {
+    const { id, image_url } = args;
+    
+    context.security.requireAuth(context);
+    context.security.validateId(id);
+    
+    // Check if product exists and is not deleted
+    const existingProduct = await context.prisma.product.findFirst({
+      where: { 
+        id,
+        isDelete: false
+      }
+    });
+    
+    if (!existingProduct) {
+      throw new GraphQLError('Product not found or already deleted');
+    }
+    
+    const product = await context.prisma.product.update({
+      where: { id },
+      data: { 
+        image_url,
+        image_path: image_url, // Store same as URL for now
+        updated_at: new Date()
+      },
+      include: {
+        category: true
+      }
+    });
+    
+    await context.security.logSensitiveOperation(
+      context.userId,
+      'UPDATE_PRODUCT_IMAGE',
+      'Product',
+      id, context.redisClient
+    );
+    
+    return product;
   }
 }; 

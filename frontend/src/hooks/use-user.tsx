@@ -58,6 +58,20 @@ export function UserProvider({ children }: { children: ReactNode }) {
       if (process.env.NODE_ENV === 'development') {
         logger.error('Failed to load user data', err, 'USER')
       }
+      
+      // Check if it's an authentication error - let the AuthProvider handle it
+      if (err instanceof Error && (
+        err.message.includes('Authentication required') ||
+        err.message.includes('Unauthorized') ||
+        err.message.includes('Not authenticated') ||
+        err.message.includes('Invalid token') ||
+        err.message.includes('Token expired')
+      )) {
+        // Don't set error here, let the AuthProvider handle the redirect
+        setUser(null)
+        return
+      }
+      
       setError('Error loading user data')
       setUser(null)
     } finally {

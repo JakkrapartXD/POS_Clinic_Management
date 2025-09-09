@@ -23,8 +23,9 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
       'users',
       'orders',
       'reports',
+      'reports/advanced',
       'settings',
-      'profile',
+      'admin',
       'admin/users'
     ],
     menuItems: [
@@ -44,8 +45,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
     allowedPages: [
       'notifications',
       'pos',
-      'inventory',
-      'profile'
+      'inventory'
     ],
     menuItems: [
       'notifications',
@@ -57,8 +57,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
     allowedPages: [
       'notifications',
       'pos',
-      'inventory',
-      'profile'
+      'inventory'
     ],
     menuItems: [
       'notifications',
@@ -72,8 +71,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
       'pos',
       'inventory',
       'documents',
-      'users',
-      'profile'
+      'users'
     ],
     menuItems: [
       'notifications',
@@ -88,7 +86,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
       'notifications',
       'orders',
       'reports',
-      'profile'
+      'reports/advanced'
     ],
     menuItems: [
       'notifications', 

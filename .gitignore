@@ -18,3 +18,5 @@ mongodata/
 # OS
 .DS_Store
 Thumbs.db
+
+backups/

@@ -1,5 +1,6 @@
 import { GraphQLError } from "graphql";
 import type { PrismaClient } from "@prisma/client";
+import { ReportService } from "../../services/ReportService";
 
 export const medicalMutations = {
   // Order Mutations
@@ -38,13 +39,21 @@ export const medicalMutations = {
       
       // Create order items and update stock
       for (const item of input.orderItems) {
+        // Get product information for historical reference
+        const product = await tx.product.findUnique({
+          where: { id: item.productId },
+          select: { product_name: true, unit: true }
+        });
+        
         await tx.orderItem.create({
           data: {
             orderId: newOrder.id,
             productId: item.productId,
             quantity: item.quantity,
             unit_price: item.unit_price,
-            total_price: item.total_price
+            total_price: item.total_price,
+            product_name: product?.product_name || null,
+            product_unit: product?.unit || null
           }
         });
         
@@ -68,7 +77,9 @@ export const medicalMutations = {
             reference_id: newOrder.id,
             note: `Sale - Order ${newOrder.id}`,
             createdByUserId: context.userId,
-            created_by_username: context.user?.username
+            created_by_username: context.user?.username,
+            product_name: product?.product_name || null,
+            product_unit: product?.unit || null
           }
         });
       }
@@ -731,6 +742,110 @@ export const medicalMutations = {
     );
     
     return dailyReport;
+  },
+
+  async generateSalesReports(parent: any, args: any, context: any) {
+    const { date } = args;
+    context.security.requireStaff(context);
+    
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
+    
+    const reportService = new ReportService(context.prisma);
+    const reportDate = new Date(date);
+    
+    try {
+      const salesReports = await reportService.generateSalesReports(
+        reportDate,
+        context.userId,
+        context.user?.username
+      );
+      
+      await context.security.logSensitiveOperation(
+        context.userId,
+        'GENERATE_SALES_REPORTS',
+        'SalesReport',
+        null,
+        { date: reportDate, count: salesReports.length },
+        context.redisClient
+      );
+      
+      return {
+        success: true,
+        message: `Generated ${salesReports.length} sales reports for ${reportDate.toDateString()}`,
+        reports: salesReports,
+        count: salesReports.length
+      };
+    } catch (error) {
+      throw new GraphQLError(`Failed to generate sales reports: ${error.message}`);
+    }
+  },
+
+  async generateStockAlerts(parent: any, args: any, context: any) {
+    context.security.requireStaff(context);
+    
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
+    
+    const reportService = new ReportService(context.prisma);
+    
+    try {
+      const stockAlerts = await reportService.generateStockAlerts(
+        context.userId,
+        context.user?.username
+      );
+      
+      await context.security.logSensitiveOperation(
+        context.userId,
+        'GENERATE_STOCK_ALERTS',
+        'StockAlert',
+        null,
+        { count: stockAlerts.length },
+        context.redisClient
+      );
+      
+      return {
+        success: true,
+        message: `Generated ${stockAlerts.length} stock alerts`,
+        alerts: stockAlerts,
+        count: stockAlerts.length
+      };
+    } catch (error) {
+      throw new GraphQLError(`Failed to generate stock alerts: ${error.message}`);
+    }
+  },
+
+  async generateComprehensiveDailyReport(parent: any, args: any, context: any) {
+    const { date } = args;
+    context.security.requireStaff(context);
+    
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
+    
+    const reportService = new ReportService(context.prisma);
+    const reportDate = new Date(date);
+    
+    try {
+      const comprehensiveReport = await reportService.generateComprehensiveDailyReport(
+        reportDate,
+        context.userId,
+        context.user?.username
+      );
+      
+      await context.security.logSensitiveOperation(
+        context.userId,
+        'GENERATE_COMPREHENSIVE_REPORT',
+        'DailyReport',
+        comprehensiveReport.dailyReport.id,
+        { 
+          date: reportDate,
+          salesReports: comprehensiveReport.salesReports.length,
+          stockAlerts: comprehensiveReport.stockAlerts.length
+        },
+        context.redisClient
+      );
+      
+      return comprehensiveReport;
+    } catch (error) {
+      throw new GraphQLError(`Failed to generate comprehensive daily report: ${error.message}`);
+    }
   },
 
   // Missing resolvers
