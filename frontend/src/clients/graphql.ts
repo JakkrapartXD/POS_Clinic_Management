@@ -8,7 +8,7 @@ import { handleAuthError } from '@/utils/auth';
 import { cache, CACHE_CONFIG } from '@/lib/cache';
 
 // Product interface for GraphQL operations
-export interface Product {
+interface Product {
   id: string;
   product_name: string;
   product_type?: string;
@@ -48,13 +48,11 @@ export interface Product {
   usage_instruction?: string;
   sale_note?: string;
   purchase_note?: string;
-  image_url?: string;
-  image_path?: string;
   created_at: string;
   updated_at: string;
 }
 
-export interface Category {
+interface Category {
   id: string;
   name: string;
   description?: string;
@@ -116,6 +114,16 @@ interface UserFilterInput {
   status?: string;
   email?: string;
   username?: string;
+}
+
+interface Category {
+  id: string;
+  name: string;
+  description?: string;
+  code?: string;
+  created_at: string;
+  updated_at: string;
+  products?: Product[];
 }
 
 interface CreateCategoryInput {

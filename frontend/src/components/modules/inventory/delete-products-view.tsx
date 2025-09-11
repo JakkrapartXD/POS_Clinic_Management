@@ -11,43 +11,9 @@ import { Trash2, Search, AlertTriangle, Package, Loader2 } from "lucide-react"
 import { GraphQLAPI } from "@/clients/graphql"
 import { logger } from "@/lib/logger"
 
-// Product interface for local use
-interface Product {
-  id: string;
-  product_name: string;
-  product_type?: string;
-  status?: string;
-  stock_quantity?: number;
-  unit?: string;
-  pack_size?: string;
-  cost?: number;
-  sale_price?: number;
-  reorder_point?: number;
-}
-
-// Delete operation result interfaces
-interface DeleteError {
-  productId: string;
-  productName: string;
-  error: string;
-}
-
-interface DeleteOperationResult {
-  productIds: string[];
-  reason: string;
-  action?: 'soft_delete' | 'set_inactive';
-  errors?: DeleteError[];
-}
-
-interface FailedProduct {
-  productId: string;
-  productName: string;
-  error: string;
-}
-
 interface DeleteProductsViewProps {
   onBack: () => void
-  onDelete: (data: DeleteOperationResult) => void
+  onDelete: (data: any) => void
 }
 
 export default function DeleteProductsView({ onBack, onDelete }: DeleteProductsViewProps) {
@@ -55,12 +21,12 @@ export default function DeleteProductsView({ onBack, onDelete }: DeleteProductsV
   const [selectedProducts, setSelectedProducts] = useState<string[]>([])
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleteReason, setDeleteReason] = useState("")
-  const [products, setProducts] = useState<Product[]>([])
+  const [products, setProducts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showAlternativeAction, setShowAlternativeAction] = useState(false)
-  const [failedProducts, setFailedProducts] = useState<FailedProduct[]>([])
+  const [failedProducts, setFailedProducts] = useState<any[]>([])
 
   const filteredProducts = products.filter(product => 
     product.product_name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -112,8 +78,8 @@ export default function DeleteProductsView({ onBack, onDelete }: DeleteProductsV
         setError(null)
         
         // Delete products one by one and collect results
-        const results: { productId: string; success: boolean }[] = []
-        const errors: DeleteError[] = []
+        const results = []
+        const errors = []
         
         for (const productId of selectedProducts) {
           try {
@@ -374,10 +340,10 @@ export default function DeleteProductsView({ onBack, onDelete }: DeleteProductsV
                           <div className="flex-1">
                             <div className="font-medium text-gray-900">{product.product_name}</div>
                             <div className="text-sm text-gray-500">
-                              {product.pack_size || product.unit} • สต็อก: {product.stock_quantity || 0} • ฿{product.sale_price || 0}
+                              {product.pack_size || product.unit} • สต็อก: {product.stock_quantity} • ฿{product.sale_price}
                             </div>
                           </div>
-                          {(product.stock_quantity || 0) > 0 && (
+                          {product.stock_quantity > 0 && (
                             <div className="text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded">
                               มีสต็อก
                             </div>

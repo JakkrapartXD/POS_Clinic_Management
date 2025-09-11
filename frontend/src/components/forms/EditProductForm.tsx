@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { GraphQLAPI, Product, Category } from "@/clients/graphql"
+import { GraphQLAPI } from "@/clients/graphql"
 import { API_CONFIG } from "@/config/api"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -18,8 +18,8 @@ import ProductImageUpload from "@/components/common/ProductImageUpload"
 
 interface EditProductFormProps {
   onBack: () => void
-  onSubmit: (productData: Partial<Product>) => void
-  initialData?: Product // Product data for editing
+  onSubmit: (productData: any) => void
+  initialData: any // Product data for editing
 }
 
 interface ProductFormData {
@@ -81,7 +81,7 @@ export default function EditProductForm({ onBack, onSubmit, initialData }: EditP
   const [hasChanges, setHasChanges] = useState(false)
   const [showExitWarning, setShowExitWarning] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [categories, setCategories] = useState<Category[]>([])
+  const [categories, setCategories] = useState<any[]>([])
   const [isLoadingCategories, setIsLoadingCategories] = useState(true)
   
   // Helper function to parse symptom_category safely
@@ -99,41 +99,9 @@ export default function EditProductForm({ onBack, onSubmit, initialData }: EditP
     return []
   }
 
-  // Helper function to convert ProductFormData to Product format
-  const convertFormDataToProduct = (formData: ProductFormData): Partial<Product> => {
-    return {
-      product_name: formData.product_name,
-      product_type: formData.product_type,
-      generic_name: formData.generic_name,
-      short_name: formData.short_name,
-      status: formData.status,
-      vat_percent: parseFloat(formData.vat_percent) || 0,
-      expiration_warning_date: formData.expiration_warning_days,
-      symptom_category: formData.symptom_category.join(','),
-      license_number: formData.license_number,
-      dosage_unit: formData.dosage_unit,
-      dosage: formData.dosage,
-      times_per_day: parseInt(formData.times_per_day) || undefined,
-      interval_hours: parseInt(formData.interval_hours) || undefined,
-      before_meal: formData.before_meal,
-      after_meal: formData.after_meal,
-      after_meal_immediate: formData.after_meal_immediate,
-      morning: formData.morning === '' ? undefined : Boolean(formData.morning),
-      noon: formData.noon === '' ? undefined : Boolean(formData.noon),
-      evening: formData.evening === '' ? undefined : Boolean(formData.evening),
-      before_bed: formData.before_bed === '' ? undefined : Boolean(formData.before_bed),
-      properties: formData.properties,
-      usage_instruction: formData.usage_instruction,
-      sale_note: formData.sale_note,
-      purchase_note: formData.purchase_note,
-      image_url: formData.image_url,
-      categoryId: formData.categoryId
-    }
-  }
-
   // Separate state for Select components to handle controlled/uncontrolled issues
   const [selectValues, setSelectValues] = useState({
-    category: typeof initialData?.category === 'string' ? initialData.category : initialData?.category?.id || "",
+    category: initialData?.category || "",
     product_type: initialData?.product_type || "ยารักษาโรค",
     status: initialData?.status || "active"
   })
@@ -143,7 +111,7 @@ export default function EditProductForm({ onBack, onSubmit, initialData }: EditP
     product_type: initialData?.product_type || "ยารักษาโรค",
     generic_name: initialData?.generic_name || "",
     short_name: initialData?.short_name || "",
-    category: typeof initialData?.category === 'string' ? initialData.category : initialData?.category?.name || "",
+    category: initialData?.category || "",
     categoryId: initialData?.categoryId || initialData?.category?.id || "",
     status: initialData?.status || "active",
     vat_percent: initialData?.vat_percent?.toString() || "0",
@@ -158,10 +126,10 @@ export default function EditProductForm({ onBack, onSubmit, initialData }: EditP
     before_meal: initialData?.before_meal || false,
     after_meal: initialData?.after_meal || false,
     after_meal_immediate: initialData?.after_meal_immediate || false,
-    morning: typeof initialData?.morning === 'boolean' ? '' : initialData?.morning || "",
-    noon: typeof initialData?.noon === 'boolean' ? '' : initialData?.noon || "",
-    evening: typeof initialData?.evening === 'boolean' ? '' : initialData?.evening || "",
-    before_bed: typeof initialData?.before_bed === 'boolean' ? '' : initialData?.before_bed || "",
+    morning: initialData?.morning || "",
+    noon: initialData?.noon || "",
+    evening: initialData?.evening || "",
+    before_bed: initialData?.before_bed || "",
     properties: initialData?.properties || "",
     usage_instruction: initialData?.usage_instruction || "",
     sale_note: initialData?.sale_note || "",
@@ -232,9 +200,7 @@ export default function EditProductForm({ onBack, onSubmit, initialData }: EditP
         image_url: imageUrl
       }
       
-      // Convert form data to Product format before submitting
-      const productData = convertFormDataToProduct(updatedFormData)
-      await onSubmit(productData)
+      await onSubmit(updatedFormData)
       setHasChanges(false) // Reset changes after successful submit
       
       // Delete old image if exists
@@ -320,7 +286,7 @@ export default function EditProductForm({ onBack, onSubmit, initialData }: EditP
         product_type: initialData.product_type || "ยารักษาโรค",
         generic_name: initialData.generic_name || "",
         short_name: initialData.short_name || "",
-        category: typeof initialData.category === 'string' ? initialData.category : initialData.category?.name || "",
+        category: initialData.category || "",
         categoryId: initialData.categoryId || initialData.category?.id || "",
         status: initialData.status || "active",
         vat_percent: initialData.vat_percent?.toString() || "0",
@@ -335,10 +301,10 @@ export default function EditProductForm({ onBack, onSubmit, initialData }: EditP
         before_meal: initialData.before_meal || false,
         after_meal: initialData.after_meal || false,
         after_meal_immediate: initialData.after_meal_immediate || false,
-        morning: typeof initialData.morning === 'boolean' ? '' : initialData.morning || "",
-        noon: typeof initialData.noon === 'boolean' ? '' : initialData.noon || "",
-        evening: typeof initialData.evening === 'boolean' ? '' : initialData.evening || "",
-        before_bed: typeof initialData.before_bed === 'boolean' ? '' : initialData.before_bed || "",
+        morning: initialData.morning || "",
+        noon: initialData.noon || "",
+        evening: initialData.evening || "",
+        before_bed: initialData.before_bed || "",
         properties: initialData.properties || "",
         usage_instruction: initialData.usage_instruction || "",
         sale_note: initialData.sale_note || "",
