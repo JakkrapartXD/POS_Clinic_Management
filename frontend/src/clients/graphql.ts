@@ -657,6 +657,15 @@ export const GraphQLQueries = {
               product_name
               sku
               unit
+              barcode
+              cost
+              categoryId
+              category {
+                id
+                name
+                description
+                code
+              }
             }
           }
           payments {
