@@ -67,23 +67,69 @@ export const medicalMutations = {
           }
         });
         
-        // Create stock record
-        await tx.stock.create({
-          data: {
+        // Reduce stock records using FIFO (First In, First Out)
+        let remainingQuantity = item.quantity;
+        const stockRecords = await tx.stock.findMany({
+          where: { 
             productId: item.productId,
-            quantity: item.quantity,
-            quantity_in: 0,
-            is_outofstock: false,
-            reference_table: 'Order',
-            reference_id: newOrder.id,
-            note: `Sale - Order ${newOrder.id}`,
-            createdByUserId: context.userId,
-            created_by_username: context.user?.username,
-            product_name: product?.product_name || null,
-            product_unit: product?.unit || null,
-            created_at: new Date()
-          }
+            quantity: { gt: 0 }
+          },
+          orderBy: { created_at: 'asc' } // Oldest first (FIFO)
         });
+        
+        for (const stockRecord of stockRecords) {
+          if (remainingQuantity <= 0) break;
+          
+          const reduceAmount = Math.min(remainingQuantity, stockRecord.quantity);
+          const newQuantity = stockRecord.quantity - reduceAmount;
+          
+          // Update stock record
+          await tx.stock.update({
+            where: { id: stockRecord.id },
+            data: {
+              quantity: newQuantity,
+              is_outofstock: newQuantity <= 0, // Set out of stock if quantity becomes 0
+              note: stockRecord.note ? 
+                `${stockRecord.note}\nSale - Order ${newOrder.id} (${reduceAmount} units)` :
+                `Sale - Order ${newOrder.id} (${reduceAmount} units)`
+            }
+          });
+          
+          remainingQuantity -= reduceAmount;
+        }
+        
+        // If there's still remaining quantity, try to use out-of-stock items
+        if (remainingQuantity > 0) {
+          const outOfStockRecords = await tx.stock.findMany({
+            where: { 
+              productId: item.productId,
+              quantity: { gt: 0 },
+              is_outofstock: true
+            },
+            orderBy: { created_at: 'asc' } // Oldest first (FIFO)
+          });
+          
+          for (const stockRecord of outOfStockRecords) {
+            if (remainingQuantity <= 0) break;
+            
+            const reduceAmount = Math.min(remainingQuantity, stockRecord.quantity);
+            const newQuantity = stockRecord.quantity - reduceAmount;
+            
+            // Update stock record
+            await tx.stock.update({
+              where: { id: stockRecord.id },
+              data: {
+                quantity: newQuantity,
+                is_outofstock: newQuantity <= 0, // Set out of stock if quantity becomes 0
+                note: stockRecord.note ? 
+                  `${stockRecord.note}\nSale - Order ${newOrder.id} (${reduceAmount} units) - Used out of stock` :
+                  `Sale - Order ${newOrder.id} (${reduceAmount} units) - Used out of stock`
+              }
+            });
+            
+            remainingQuantity -= reduceAmount;
+          }
+        }
       }
       
       return newOrder;
@@ -179,37 +225,8 @@ export const medicalMutations = {
           include: { product: true }
         });
         
-        // Reduce stock for each item
-        for (const item of orderItems) {
-          // Update product stock
-          await tx.product.update({
-            where: { id: item.productId },
-            data: {
-              stock_quantity: {
-                decrement: item.quantity
-              },
-              updated_at: new Date()
-            }
-          });
-          
-          // Create stock record for the reduction
-          await tx.stock.create({
-            data: {
-              productId: item.productId,
-              quantity: item.quantity,
-              quantity_in: 0,
-              is_outofstock: false, // Will be updated based on new stock level
-              reference_table: 'Order',
-              reference_id: input.orderId,
-              note: `Stock reduction for order ${input.orderId}`,
-              createdByUserId: context.userId,
-              created_by_username: context.user?.username,
-              product_name: item.product.product_name,
-              product_unit: item.product.unit,
-              created_at: new Date()
-            }
-          });
-        }
+        // Stock has already been reduced in createOrder, no need to reduce again
+        // Just create invoice for completed payment
       });
     }
     

@@ -1236,6 +1236,10 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
     try {
       await GraphQLAPI.deleteStock(selectedDeleteStock.id)
       
+      // Invalidate cache to ensure fresh data
+      await GraphQLAPI.invalidateCachePattern('Products')
+      await GraphQLAPI.invalidateCachePattern('Stocks')
+      
       // Refresh data
       await loadProduct()
       await loadStocks()
@@ -1745,13 +1749,13 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                         )}
                       </div>
                       <div className="flex space-x-2">
-                        <Button 
+                        {/* <Button 
                           variant="ghost" 
                           size="sm"
                           className="text-purple-600 hover:text-purple-700"
                         >
                           จัดเรียงสต๊อกสินค้า
-                        </Button>
+                        </Button> */}
                         <Button 
                           variant="ghost" 
                           size="sm"
