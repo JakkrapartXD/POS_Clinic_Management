@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
-import { Bell, ShoppingCart, Pill, Tag, LayoutGrid, Package, BarChart3, Settings, Users, FileText, Shield, Receipt, ChevronDown, ChevronRight, TrendingUp, LogOut } from "lucide-react"
+import { Bell, ShoppingCart, Pill, Tag, LayoutGrid, Package, BarChart3, Settings, Users, FileText, Shield, Receipt, ChevronDown, ChevronRight, LogOut } from "lucide-react"
 import { useUser } from "@/hooks/use-user"
 import { getMenuItemsForRole } from "@/config/role-permissions"
 import { logger } from "@/lib/logger"
@@ -14,7 +14,7 @@ import { performLogout } from "@/utils/auth"
 export default function Sidebar() {
   const [activeItem, setActiveItem] = useState<string>("pos")
   const [todayReceiptsCount, setTodayReceiptsCount] = useState<number>(0)
-  const [expandedItems, setExpandedItems] = useState<string[]>(["reports"])
+  const [expandedItems, setExpandedItems] = useState<string[]>([])
   const [showLogoutDialog, setShowLogoutDialog] = useState<boolean>(false)
   const { user, loading } = useUser()
   const router = useRouter()
@@ -95,11 +95,7 @@ export default function Sidebar() {
       id: "reports", 
       icon: BarChart3, 
       href: "/dashboard/reports", 
-      label: "รายงาน",
-      submenu: [
-        { id: "reports/basic", href: "/dashboard/reports", label: "รายงานพื้นฐาน" },
-        { id: "reports/advanced", href: "/dashboard/reports/advanced", label: "รายงานขั้นสูง", icon: TrendingUp }
-      ]
+      label: "รายงานการขาย"
     },
     { id: "settings", icon: Settings, href: "/dashboard/settings", label: "ตั้งค่า" },
     { id: "admin/users", icon: Shield, href: "/dashboard/admin/users", label: "จัดการผู้ใช้" },

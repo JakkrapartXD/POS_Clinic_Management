@@ -338,7 +338,23 @@ export const queries = {
           orderItems: {
             include: {
               product: {
-                select: { product_name: true, unit: true }
+                select: {
+                  id: true,
+                  product_name: true,
+                  sku: true,
+                  unit: true,
+                  barcode: true,
+                  cost: true,
+                  categoryId: true,
+                  category: {
+                    select: {
+                      id: true,
+                      name: true,
+                      description: true,
+                      code: true
+                    }
+                  }
+                }
               }
             }
           },

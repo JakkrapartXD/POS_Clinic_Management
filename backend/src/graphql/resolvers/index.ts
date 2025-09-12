@@ -68,6 +68,15 @@ const relationshipResolvers = {
   },
 
   Product: {
+    async category(parent: any, args: any, context: any) {
+      if (!parent.categoryId) return null;
+      return context.prisma.category.findUnique({
+        where: { 
+          id: parent.categoryId,
+          isDelete: false
+        }
+      });
+    },
     async orderItems(parent: any, args: any, context: any) {
       return context.prisma.orderItem.findMany({
         where: { productId: parent.id },
