@@ -52,8 +52,7 @@ export default function InventoryActionsGrid({
       icon: FileExport,
       title: 'ส่งออกยอดสินค้า',
       subtitle: 'Export',
-      onClick: onExportProducts,
-      disabled: true // Disabled as requested
+      onClick: onExportProducts
     },
     {
       id: 'delete-product',

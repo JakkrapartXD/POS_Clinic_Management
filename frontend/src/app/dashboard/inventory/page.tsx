@@ -9,12 +9,13 @@ import InventoryActionsGrid from "@/components/modules/inventory/inventory-actio
 import ImportProductsView from "@/components/modules/inventory/import-products-view"
 import DeleteProductsView from "@/components/modules/inventory/delete-products-view"
 import ProductDetailView from "@/components/modules/inventory/product-detail-view"
+import ExportProductsView from "@/components/modules/inventory/export-products-view"
 import { GraphQLAPI } from "@/clients/graphql"
 import { logger } from "@/lib/logger"
 import { useAuth } from "@/components/providers/auth-provider"
 
 type AlphabetMode = 'english' | 'thai' | 'numbers'
-type ViewMode = 'list' | 'add-product' | 'product-detail' | 'import-products' | 'delete-products'
+type ViewMode = 'list' | 'add-product' | 'product-detail' | 'import-products' | 'delete-products' | 'export-products'
 
 interface TransformedProduct {
   id: string
@@ -30,16 +31,99 @@ interface TransformedProduct {
 interface Product {
   id: string
   product_name: string
-  product_type?: string
+  product_type?: string | { id: string; name: string; description?: string; code?: string }
   short_name?: string
   sale_price: number
   unit?: string
   stock_quantity: number
   sku?: string
   barcode?: string
-  category?: string
+  category?: string | { id: string; name: string; description?: string; code?: string }
   status?: string
   pack_size?: string
+}
+
+// CSV conversion functions
+const convertProductsToCSV = (products: Product[], exportSettings: any): string => {
+  // CSV headers in Thai language
+  const headers = [
+    'รหัสสินค้า', 'ชื่อสินค้า', 'ประเภทสินค้า', 'ชื่อสามัญทางยา', 'ชื่อย่อ', 'สถานะสินค้า', 
+    'ภาษีมูลค่าเพิ่ม', 'วันแจ้งเตือน', 'ราคาขาย', 'หน่วยนับ', 'ขนาดบรรจุ', 'จุดสั่งซื้อ', 
+    'ต้นทุน', 'รหัส SKU', 'บาร์โค้ด', 'คงเหลือ', 'ปริมาณ', 'หน่วยปริมาณ', 'รหัสชั้นวาง', 
+    'แถว', 'หมวดหมู่', 'หมวดหมู่ยาแยกตามอาการที่รักษา', 'ทะเบียนบัญชี', 'หน่วยการทาน', 
+    'การทาน', 'จำนวนครั้งต่อวัน', 'ทานยาทุก ๆ ชั่วโมง', 'ก่อนอาหาร', 'หลังอาหาร', 
+    'หลังอาหารทันที', 'เช้า', 'กลางวัน', 'เย็น', 'ก่อนนอน', 'สรรพคุณ', 'คำแนะนำการใช้', 
+    'หมายเหตุการขาย', 'หมายเหตุการสั่งซื้อ'
+  ]
+
+  // Convert products to CSV rows
+  const rows = products.map(product => [
+    product.id || '', // รหัสสินค้า - Product ID
+    product.product_name || '',
+    typeof product.product_type === 'object' && product.product_type?.name 
+      ? product.product_type.name 
+      : product.product_type || '',
+    '', // generic_name - empty as in sample
+    product.short_name || '',
+    product.status || 'แสดงหน้าร้าน',
+    '', // vat_percent - empty as in sample
+    '90', // expiration_warning_date - default 90 days
+    product.sale_price?.toString() || '0',
+    product.unit || '',
+    product.pack_size || '1',
+    '', // reorder_point - empty as in sample
+    '', // cost - empty as in sample
+    product.sku || '',
+    product.barcode ? `="${product.barcode}"` : '',
+    product.stock_quantity?.toString() || '0',
+    '', // dosage - empty as in sample
+    '', // dosage_unit - empty as in sample
+    '', // shelf_code - empty as in sample
+    '', // shelf_row - empty as in sample
+    typeof product.category === 'object' && product.category?.name 
+      ? product.category.name 
+      : product.category || '',
+    '', // symptom_category - empty as in sample
+    '', // license_number - empty as in sample
+    '', // dosage_unit - empty as in sample
+    '', // dosage - empty as in sample
+    '', // times_per_day - empty as in sample
+    '', // interval_hours - empty as in sample
+    '', // before_meal - empty as in sample
+    '', // after_meal - empty as in sample
+    '', // after_meal_immediate - empty as in sample
+    '', // morning - empty as in sample
+    '', // noon - empty as in sample
+    '', // evening - empty as in sample
+    '', // before_bed - empty as in sample
+    '', // properties - empty as in sample
+    '', // usage_instruction - empty as in sample
+    '', // sale_note - empty as in sample
+    ''  // purchase_note - empty as in sample
+  ])
+
+  // Combine headers and rows
+  const csvContent = [headers, ...rows]
+    .map(row => row.map(field => `"${field}"`).join(','))
+    .join('\n')
+
+  return csvContent
+}
+
+const downloadCSV = (csvContent: string, filename: string) => {
+  // Add UTF-8 BOM for proper Thai character display in Excel
+  const BOM = '\uFEFF'
+  const csvWithBOM = BOM + csvContent
+  
+  const blob = new Blob([csvWithBOM], { type: 'text/csv;charset=utf-8;' })
+  const link = document.createElement('a')
+  const url = URL.createObjectURL(blob)
+  link.setAttribute('href', url)
+  link.setAttribute('download', filename)
+  link.style.visibility = 'hidden'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
 }
 
 function InventoryPage() {
@@ -250,6 +334,7 @@ function InventoryPage() {
   // Action handlers - memoized
   const handleAddProduct = useCallback(() => setViewMode('add-product'), [])
   const handleImportProducts = useCallback(() => setViewMode('import-products'), [])
+  const handleExportProducts = useCallback(() => setViewMode('export-products'), [])
   const handleDeleteProduct = useCallback(() => setViewMode('delete-products'), [])
 
   // Product detail handler - memoized
@@ -383,6 +468,25 @@ function InventoryPage() {
     setViewMode('list')
   }, [loadProducts])
 
+  const handleExportSubmit = useCallback(async (exportData: any) => {
+    try {
+      logger.info('Exporting products', { exportData }, 'INVENTORY')
+      
+      // Convert products to CSV format matching sample_item_data.csv
+      const csvData = convertProductsToCSV(products, exportData)
+      
+      // Create and download CSV file
+      const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-')
+      downloadCSV(csvData, `รายการสินค้า_${timestamp}.csv`)
+      
+      setViewMode('list')
+    } catch (error) {
+      logger.error('Error exporting products', { error, exportData }, 'INVENTORY')
+      const errorMessage = error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการส่งออกข้อมูล'
+      alert(`ไม่สามารถส่งออกข้อมูลได้: ${errorMessage}`)
+    }
+  }, [products])
+
   const handleSaveButtonClick = useCallback(() => {
     setSubmitTrigger(prev => prev + 1)
   }, [])
@@ -392,6 +496,7 @@ function InventoryPage() {
       case 'add-product': return 'เพิ่มสินค้าใหม่'
       case 'product-detail': return 'รายละเอียดสินค้า'
       case 'import-products': return 'เพิ่มชุดสินค้า/นำเข้า/แก้ไข'
+      case 'export-products': return 'ส่งออกยอดสินค้า'
       case 'delete-products': return 'ลบสินค้า'
       default: return 'สต็อกสินค้า'
     }
@@ -490,7 +595,7 @@ function InventoryPage() {
             <InventoryActionsGrid
               onAddProduct={handleAddProduct}
               onImportProducts={handleImportProducts}
-              onExportProducts={() => {}} // Disabled
+              onExportProducts={handleExportProducts}
               onDeleteProduct={handleDeleteProduct}
               onPrintBarcode={() => {}} // Disabled
               onPrintPriceTag={() => {}} // Disabled
@@ -527,6 +632,14 @@ function InventoryPage() {
             <ImportProductsView
               onBack={handleBackToList}
               onImport={handleImportSubmit}
+            />
+          )}
+
+          {viewMode === 'export-products' && (
+            <ExportProductsView
+              onBack={handleBackToList}
+              onExport={handleExportSubmit}
+              products={products}
             />
           )}
 
