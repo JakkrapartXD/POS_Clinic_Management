@@ -414,6 +414,245 @@ export default function ReportsPage() {
   // Chart colors
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8']
 
+  // CSV Export Functions
+  const convertToCSV = (data: any[], headers: string[]) => {
+    const csvContent = [
+      headers.join(','),
+      ...data.map(row => 
+        headers.map(header => {
+          const value = row[header] || ''
+          // Handle values that contain commas or quotes
+          if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
+            return `"${value.replace(/"/g, '""')}"`
+          }
+          return value
+        }).join(',')
+      )
+    ].join('\n')
+    
+    return csvContent
+  }
+
+  const downloadCSV = (csvContent: string, filename: string) => {
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    const url = URL.createObjectURL(blob)
+    link.setAttribute('href', url)
+    link.setAttribute('download', filename)
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
+  const exportSalesDataToCSV = () => {
+    if (salesChartData.length === 0) {
+      toast({
+        title: "ไม่มีข้อมูล",
+        description: "กรุณาเลือกช่วงวันที่และโหลดข้อมูลก่อนส่งออก",
+        variant: "destructive"
+      })
+      return
+    }
+
+    const headers = ['วันที่', 'ยอดขาย (บาท)', 'จำนวนออเดอร์']
+    const csvData = salesChartData.map(item => ({
+      'วันที่': item.date,
+      'ยอดขาย (บาท)': item.sales,
+      'จำนวนออเดอร์': item.orders
+    }))
+
+    const csvContent = convertToCSV(csvData, headers)
+    const filename = `รายงานยอดขาย_${dateFrom}_ถึง_${dateTo}.csv`
+    downloadCSV(csvContent, filename)
+
+    toast({
+      title: "ส่งออกสำเร็จ",
+      description: "ไฟล์ CSV ถูกดาวน์โหลดแล้ว",
+    })
+  }
+
+  const exportPaymentMethodsToCSV = () => {
+    if (periodPaymentMethodsData.length === 0) {
+      toast({
+        title: "ไม่มีข้อมูล",
+        description: "กรุณาเลือกช่วงวันที่และโหลดข้อมูลก่อนส่งออก",
+        variant: "destructive"
+      })
+      return
+    }
+
+    const headers = ['ช่องทางการชำระ', 'ยอดเงิน (บาท)', 'เปอร์เซ็นต์']
+    const csvData = periodPaymentMethodsData.map(item => {
+      const total = periodPaymentMethodsData.reduce((sum, p) => sum + p.value, 0)
+      const percentage = ((item.value / total) * 100).toFixed(2)
+      return {
+        'ช่องทางการชำระ': item.name,
+        'ยอดเงิน (บาท)': item.value,
+        'เปอร์เซ็นต์': `${percentage}%`
+      }
+    })
+
+    const csvContent = convertToCSV(csvData, headers)
+    const filename = `รายงานช่องทางการชำระ_${dateFrom}_ถึง_${dateTo}.csv`
+    downloadCSV(csvContent, filename)
+
+    toast({
+      title: "ส่งออกสำเร็จ",
+      description: "ไฟล์ CSV ถูกดาวน์โหลดแล้ว",
+    })
+  }
+
+  const exportCategorySalesToCSV = () => {
+    if (periodCategorySalesData.length === 0) {
+      toast({
+        title: "ไม่มีข้อมูล",
+        description: "กรุณาเลือกช่วงวันที่และโหลดข้อมูลก่อนส่งออก",
+        variant: "destructive"
+      })
+      return
+    }
+
+    const headers = ['หมวดหมู่สินค้า', 'ยอดขาย (บาท)', 'ต้นทุน (บาท)', 'กำไร (บาท)', 'จำนวน']
+    const csvData = periodCategorySalesData.map(item => ({
+      'หมวดหมู่สินค้า': item.name,
+      'ยอดขาย (บาท)': item.sales,
+      'ต้นทุน (บาท)': item.cost,
+      'กำไร (บาท)': item.profit,
+      'จำนวน': item.quantity
+    }))
+
+    const csvContent = convertToCSV(csvData, headers)
+    const filename = `รายงานการขายตามหมวดหมู่_${dateFrom}_ถึง_${dateTo}.csv`
+    downloadCSV(csvContent, filename)
+
+    toast({
+      title: "ส่งออกสำเร็จ",
+      description: "ไฟล์ CSV ถูกดาวน์โหลดแล้ว",
+    })
+  }
+
+  const exportTopProductsToCSV = () => {
+    if (periodTopSellingProducts.length === 0) {
+      toast({
+        title: "ไม่มีข้อมูล",
+        description: "กรุณาเลือกช่วงวันที่และโหลดข้อมูลก่อนส่งออก",
+        variant: "destructive"
+      })
+      return
+    }
+
+    const headers = ['ชื่อสินค้า', 'หน่วยนับ', 'บาร์โค้ด', 'หมวดหมู่', 'จำนวนขาย', 'ยอดขาย (บาท)', 'ต้นทุน (บาท)', 'กำไร (บาท)']
+    const csvData = periodTopSellingProducts.map(item => ({
+      'ชื่อสินค้า': item.product?.product_name || 'ไม่ระบุ',
+      'หน่วยนับ': item.product?.unit || '-',
+      'บาร์โค้ด': item.product?.barcode || '-',
+      'หมวดหมู่': item.product?.category?.name || 'ไม่ระบุหมวดหมู่',
+      'จำนวนขาย': item.quantity,
+      'ยอดขาย (บาท)': item.sales,
+      'ต้นทุน (บาท)': item.cost,
+      'กำไร (บาท)': item.profit
+    }))
+
+    const csvContent = convertToCSV(csvData, headers)
+    const filename = `รายงานสินค้าขายดี_${dateFrom}_ถึง_${dateTo}.csv`
+    downloadCSV(csvContent, filename)
+
+    toast({
+      title: "ส่งออกสำเร็จ",
+      description: "ไฟล์ CSV ถูกดาวน์โหลดแล้ว",
+    })
+  }
+
+  const exportAllDataToCSV = () => {
+    if (salesChartData.length === 0 && periodPaymentMethodsData.length === 0 && 
+        periodCategorySalesData.length === 0 && periodTopSellingProducts.length === 0) {
+      toast({
+        title: "ไม่มีข้อมูล",
+        description: "กรุณาเลือกช่วงวันที่และโหลดข้อมูลก่อนส่งออก",
+        variant: "destructive"
+      })
+      return
+    }
+
+    let csvContent = ''
+    const filename = `รายงานการขายทั้งหมด_${dateFrom}_ถึง_${dateTo}.csv`
+
+    // 1. Summary Statistics
+    csvContent += '=== สรุปภาพรวม ===\n'
+    csvContent += 'รายการ,จำนวน\n'
+    csvContent += `ยอดขายรวม (บาท),${periodSummaryStats.totalSales}\n`
+    csvContent += `จำนวนออเดอร์,${periodSummaryStats.totalOrders}\n`
+    csvContent += `กำไร/ขาดทุน (บาท),${periodSummaryStats.totalProfit}\n`
+    csvContent += `ต้นทุนรวม (บาท),${periodSummaryStats.totalCost}\n\n`
+
+    // 2. Daily Sales Data
+    if (salesChartData.length > 0) {
+      csvContent += '=== ยอดขายรายวัน ===\n'
+      const salesHeaders = ['วันที่', 'ยอดขาย (บาท)', 'จำนวนออเดอร์']
+      const salesCsvData = salesChartData.map(item => ({
+        'วันที่': item.date,
+        'ยอดขาย (บาท)': item.sales,
+        'จำนวนออเดอร์': item.orders
+      }))
+      csvContent += convertToCSV(salesCsvData, salesHeaders) + '\n\n'
+    }
+
+    // 3. Payment Methods Data
+    if (periodPaymentMethodsData.length > 0) {
+      csvContent += '=== ยอดชำระตามช่องทาง ===\n'
+      const paymentHeaders = ['ช่องทางการชำระ', 'ยอดเงิน (บาท)', 'เปอร์เซ็นต์']
+      const paymentCsvData = periodPaymentMethodsData.map(item => {
+        const total = periodPaymentMethodsData.reduce((sum, p) => sum + p.value, 0)
+        const percentage = ((item.value / total) * 100).toFixed(2)
+        return {
+          'ช่องทางการชำระ': item.name,
+          'ยอดเงิน (บาท)': item.value,
+          'เปอร์เซ็นต์': `${percentage}%`
+        }
+      })
+      csvContent += convertToCSV(paymentCsvData, paymentHeaders) + '\n\n'
+    }
+
+    // 4. Category Sales Data
+    if (periodCategorySalesData.length > 0) {
+      csvContent += '=== การขายตามหมวดหมู่ ===\n'
+      const categoryHeaders = ['หมวดหมู่สินค้า', 'ยอดขาย (บาท)', 'ต้นทุน (บาท)', 'กำไร (บาท)', 'จำนวน']
+      const categoryCsvData = periodCategorySalesData.map(item => ({
+        'หมวดหมู่สินค้า': item.name,
+        'ยอดขาย (บาท)': item.sales,
+        'ต้นทุน (บาท)': item.cost,
+        'กำไร (บาท)': item.profit,
+        'จำนวน': item.quantity
+      }))
+      csvContent += convertToCSV(categoryCsvData, categoryHeaders) + '\n\n'
+    }
+
+    // 5. Top Selling Products Data
+    if (periodTopSellingProducts.length > 0) {
+      csvContent += '=== สินค้าขายดี ===\n'
+      const productHeaders = ['ชื่อสินค้า', 'หน่วยนับ', 'บาร์โค้ด', 'หมวดหมู่', 'จำนวนขาย', 'ยอดขาย (บาท)', 'ต้นทุน (บาท)', 'กำไร (บาท)']
+      const productCsvData = periodTopSellingProducts.map(item => ({
+        'ชื่อสินค้า': item.product?.product_name || 'ไม่ระบุ',
+        'หน่วยนับ': item.product?.unit || '-',
+        'บาร์โค้ด': item.product?.barcode || '-',
+        'หมวดหมู่': item.product?.category?.name || 'ไม่ระบุหมวดหมู่',
+        'จำนวนขาย': item.quantity,
+        'ยอดขาย (บาท)': item.sales,
+        'ต้นทุน (บาท)': item.cost,
+        'กำไร (บาท)': item.profit
+      }))
+      csvContent += convertToCSV(productCsvData, productHeaders)
+    }
+
+    downloadCSV(csvContent, filename)
+
+    toast({
+      title: "ส่งออกสำเร็จ",
+      description: "ไฟล์ CSV ข้อมูลทั้งหมดถูกดาวน์โหลดแล้ว",
+    })
+  }
+
   return (
     <PageGuard requiredPermission="reports">
       <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -834,14 +1073,25 @@ export default function ReportsPage() {
                       className="w-full"
                     />
                   </div>
-                  <Button 
-                    onClick={loadSalesData}
-                    disabled={loading || !dateFrom || !dateTo}
-                    className="flex items-center gap-2"
-                  >
-                    {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <TrendingUp className="h-4 w-4" />}
-                    ดูรายงาน
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button 
+                      onClick={loadSalesData}
+                      disabled={loading || !dateFrom || !dateTo}
+                      className="flex items-center gap-2"
+                    >
+                      {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <TrendingUp className="h-4 w-4" />}
+                      ดูรายงาน
+                    </Button>
+                    <Button 
+                      onClick={exportAllDataToCSV}
+                      disabled={loading || !dateFrom || !dateTo}
+                      variant="outline"
+                      className="flex items-center gap-2"
+                    >
+                      <Download className="h-4 w-4" />
+                      ส่งออก CSV
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
