@@ -110,7 +110,7 @@ model Product {
   orderItems               OrderItem[]
   purchaseItems           PurchaseItem[]
   prescriptions           Prescription[]
-  stockMovements          StockMovement[]
+  stocks                  Stock[]
   salesReports            SalesReport[]
   stockAlerts             StockAlert[]
 
@@ -224,19 +224,21 @@ model PurchaseItem {
   product_unit String?
 }
 
-model StockMovement {
+model Stock {
   id              String   @id @default(cuid())
   product         Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
   productId       String
-  movement_type   String // in, out, adjustment
   quantity        Int
+  quantity_in     Int?
+  is_outofstock   Boolean  @default(false)
+  production_date DateTime?
+  expiration_date DateTime?
   reference_table String?
   reference_id    String?
   note            String?
   created_at      DateTime @default(now())
   createdByUserId String?
   created_by_username String?
-  // Store product name and unit for historical reference
   product_name String?
   product_unit String?
 }
