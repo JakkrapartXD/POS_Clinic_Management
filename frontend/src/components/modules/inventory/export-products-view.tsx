@@ -8,15 +8,46 @@ interface Product {
   id: string
   product_name: string
   product_type?: string | { id: string; name: string; description?: string; code?: string }
+  generic_name?: string
   short_name?: string
+  status?: string
+  vat_percent?: number
+  expiration_warning_date?: number
   sale_price: number
   unit?: string
-  stock_quantity: number
+  pack_size?: string
+  reorder_point?: number
+  cost?: number
   sku?: string
   barcode?: string
+  stock_quantity: number
+  volume?: number
+  volume_unit?: string
+  shelf_code?: string
+  shelf_row?: string
+  categoryId?: string
   category?: string | { id: string; name: string; description?: string; code?: string }
-  status?: string
-  pack_size?: string
+  symptom_category?: string
+  license_number?: string
+  dosage_unit?: string
+  dosage?: string
+  times_per_day?: number
+  interval_hours?: number
+  before_meal?: boolean
+  after_meal?: boolean
+  after_meal_immediate?: boolean
+  morning?: string
+  noon?: string
+  evening?: string
+  before_bed?: string
+  properties?: string
+  usage_instruction?: string
+  sale_note?: string
+  purchase_note?: string
+  image_url?: string
+  image_path?: string
+  created_at?: string
+  updated_at?: string
 }
 
 interface ExportProductsViewProps {

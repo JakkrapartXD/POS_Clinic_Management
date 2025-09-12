@@ -460,6 +460,65 @@ export const GraphQLQueries = {
     }
   `,
 
+  // Complete product data for export (single page)
+  EXPORT_PRODUCTS_PAGE: `
+    query ExportProductsPage($pagination: PaginationInput) {
+      products(filter: { status: "active" }, pagination: $pagination) {
+        total
+        products {
+          id
+          product_name
+          product_type
+          generic_name
+          short_name
+          status
+          vat_percent
+          expiration_warning_date
+          sale_price
+          unit
+          pack_size
+          reorder_point
+          cost
+          sku
+          barcode
+          stock_quantity
+          volume
+          volume_unit
+          shelf_code
+          shelf_row
+          categoryId
+          category {
+            id
+            name
+            description
+            code
+          }
+          symptom_category
+          license_number
+          dosage_unit
+          dosage
+          times_per_day
+          interval_hours
+          before_meal
+          after_meal
+          after_meal_immediate
+          morning
+          noon
+          evening
+          before_bed
+          properties
+          usage_instruction
+          sale_note
+          purchase_note
+          image_url
+          image_path
+          created_at
+          updated_at
+        }
+      }
+    }
+  `,
+
   SEARCH_PRODUCTS: `
     query SearchProducts($query: String!) {
       searchProducts(query: $query) {
@@ -1436,6 +1495,42 @@ export const GraphQLAPI = {
     return {
       products: {
         products: allProducts
+      }
+    }
+  },
+
+  // Export all products with complete data (with pagination)
+  exportProducts: async (): Promise<{ products: { products: any[], total: number } }> => {
+    const allProducts: any[] = []
+    let skip = 0
+    const take = 100 // Maximum allowed per request
+    let hasMore = true
+
+    while (hasMore) {
+      const result = await graphqlClient.query<{ products: { products: any[], total: number } }>(
+        GraphQLQueries.EXPORT_PRODUCTS_PAGE, 
+        {
+          variables: { 
+            pagination: { take, skip }
+          }
+        }
+      )
+      
+      const products = result.products.products
+      allProducts.push(...products)
+      
+      // Check if there are more products to fetch
+      hasMore = products.length === take
+      skip += take
+      
+      // Safety break to prevent infinite loop
+      if (skip > 10000) break
+    }
+
+    return {
+      products: {
+        products: allProducts,
+        total: allProducts.length
       }
     }
   },

@@ -43,8 +43,54 @@ interface Product {
   pack_size?: string
 }
 
+interface ExportProduct {
+  id: string
+  product_name: string
+  product_type?: string | { id: string; name: string; description?: string; code?: string }
+  generic_name?: string
+  short_name?: string
+  status?: string
+  vat_percent?: number
+  expiration_warning_date?: number | string
+  sale_price: number
+  unit?: string
+  pack_size?: string
+  reorder_point?: number
+  cost?: number
+  sku?: string
+  barcode?: string
+  stock_quantity?: number
+  volume?: number
+  volume_unit?: string
+  shelf_code?: string
+  shelf_row?: string
+  categoryId?: string
+  category?: string | { id: string; name: string; description?: string; code?: string }
+  symptom_category?: string
+  license_number?: string
+  dosage_unit?: string
+  dosage?: string
+  times_per_day?: number
+  interval_hours?: number
+  before_meal?: boolean
+  after_meal?: boolean
+  after_meal_immediate?: boolean
+  morning?: string
+  noon?: string
+  evening?: string
+  before_bed?: string
+  properties?: string
+  usage_instruction?: string
+  sale_note?: string
+  purchase_note?: string
+  image_url?: string
+  image_path?: string
+  created_at?: string
+  updated_at?: string
+}
+
 // CSV conversion functions
-const convertProductsToCSV = (products: Product[], exportSettings: any): string => {
+const convertProductsToCSV = (products: ExportProduct[], exportSettings: any): string => {
   // CSV headers in Thai language
   const headers = [
     'รหัสสินค้า', 'ชื่อสินค้า', 'ประเภทสินค้า', 'ชื่อสามัญทางยา', 'ชื่อย่อ', 'สถานะสินค้า', 
@@ -63,43 +109,43 @@ const convertProductsToCSV = (products: Product[], exportSettings: any): string 
     typeof product.product_type === 'object' && product.product_type?.name 
       ? product.product_type.name 
       : product.product_type || '',
-    '', // generic_name - empty as in sample
+    product.generic_name || '', // ชื่อสามัญทางยา
     product.short_name || '',
     product.status || 'แสดงหน้าร้าน',
-    '', // vat_percent - empty as in sample
-    '90', // expiration_warning_date - default 90 days
+    product.vat_percent?.toString() || '', // ภาษีมูลค่าเพิ่ม
+    product.expiration_warning_date?.toString() || '90', // วันแจ้งเตือน
     product.sale_price?.toString() || '0',
     product.unit || '',
     product.pack_size || '1',
-    '', // reorder_point - empty as in sample
-    '', // cost - empty as in sample
+    product.reorder_point?.toString() || '', // จุดสั่งซื้อ
+    product.cost?.toString() || '', // ต้นทุน
     product.sku || '',
     product.barcode ? `="${product.barcode}"` : '',
     product.stock_quantity?.toString() || '0',
-    '', // dosage - empty as in sample
-    '', // dosage_unit - empty as in sample
-    '', // shelf_code - empty as in sample
-    '', // shelf_row - empty as in sample
+    product.volume?.toString() || '', // ปริมาณ
+    product.volume_unit || '', // หน่วยปริมาณ
+    product.shelf_code || '', // รหัสชั้นวาง
+    product.shelf_row || '', // แถว
     typeof product.category === 'object' && product.category?.name 
       ? product.category.name 
       : product.category || '',
-    '', // symptom_category - empty as in sample
-    '', // license_number - empty as in sample
-    '', // dosage_unit - empty as in sample
-    '', // dosage - empty as in sample
-    '', // times_per_day - empty as in sample
-    '', // interval_hours - empty as in sample
-    '', // before_meal - empty as in sample
-    '', // after_meal - empty as in sample
-    '', // after_meal_immediate - empty as in sample
-    '', // morning - empty as in sample
-    '', // noon - empty as in sample
-    '', // evening - empty as in sample
-    '', // before_bed - empty as in sample
-    '', // properties - empty as in sample
-    '', // usage_instruction - empty as in sample
-    '', // sale_note - empty as in sample
-    ''  // purchase_note - empty as in sample
+    product.symptom_category || '', // หมวดหมู่ยาแยกตามอาการที่รักษา
+    product.license_number || '', // ทะเบียนบัญชี
+    product.dosage_unit || '', // หน่วยการทาน
+    product.dosage || '', // การทาน
+    product.times_per_day?.toString() || '', // จำนวนครั้งต่อวัน
+    product.interval_hours?.toString() || '', // ทานยาทุก ๆ ชั่วโมง
+    product.before_meal ? 'true' : '', // ก่อนอาหาร
+    product.after_meal ? 'true' : '', // หลังอาหาร
+    product.after_meal_immediate ? 'true' : '', // หลังอาหารทันที
+    product.morning || '', // เช้า
+    product.noon || '', // กลางวัน
+    product.evening || '', // เย็น
+    product.before_bed || '', // ก่อนนอน
+    product.properties || '', // สรรพคุณ
+    product.usage_instruction || '', // คำแนะนำการใช้
+    product.sale_note || '', // หมายเหตุการขาย
+    product.purchase_note || ''  // หมายเหตุการสั่งซื้อ
   ])
 
   // Combine headers and rows
@@ -388,12 +434,12 @@ function InventoryPage() {
         status: productData.status || 'active',
         vat_percent: parseInt(productData.vat_percent) || 0,
         expiration_warning_date: parseInt(productData.expiration_warning_days) || 90,
-        sale_price: parseFloat(productData.sale_price) || 0,
-        unit: productData.unit || '',
+        sale_price: 0, // Default value since field is removed
+        unit: '', // Default value since field is removed
         pack_size: productData.pack_size || '',
         reorder_point: parseInt(productData.reorder_point) || 0,
-        cost: parseFloat(productData.cost) || 0,
-        stock_quantity: parseInt(productData.stock_quantity) || 0,
+        cost: 0, // Default value since field is removed
+        stock_quantity: 0, // Default value since field is removed
         shelf_code: productData.shelf_code || '',
         shelf_row: productData.shelf_row || '',
         symptom_category: Array.isArray(productData.symptom_category) && productData.symptom_category.length > 0 
@@ -470,22 +516,48 @@ function InventoryPage() {
 
   const handleExportSubmit = useCallback(async (exportData: any) => {
     try {
-      logger.info('Exporting products', { exportData }, 'INVENTORY')
+      logger.info('Exporting products with complete data', { exportData }, 'INVENTORY')
       
-      // Convert products to CSV format matching sample_item_data.csv
-      const csvData = convertProductsToCSV(products, exportData)
+      // Fetch complete product data using the new export API
+      const response = await GraphQLAPI.exportProducts()
       
-      // Create and download CSV file
-      const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-')
-      downloadCSV(csvData, `รายการสินค้า_${timestamp}.csv`)
+      if (response.products && response.products.products) {
+        const allProducts = response.products.products
+        
+        // Convert products to CSV format matching sample_item_data.csv
+        const csvData = convertProductsToCSV(allProducts, exportData)
+        
+        // Create and download CSV file
+        const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-')
+        downloadCSV(csvData, `รายการสินค้า_${timestamp}.csv`)
+        
+        logger.info('Products exported successfully', { 
+          count: allProducts.length 
+        }, 'INVENTORY')
+      } else {
+        throw new Error('No products data received from server')
+      }
       
       setViewMode('list')
     } catch (error) {
       logger.error('Error exporting products', { error, exportData }, 'INVENTORY')
+      
+      // Check if it's an authentication error
+      if (error instanceof Error && (
+        error.message.includes('Authentication required') ||
+        error.message.includes('Unauthorized') ||
+        error.message.includes('Not authenticated') ||
+        error.message.includes('Invalid token') ||
+        error.message.includes('Token expired')
+      )) {
+        handleAuthError(error)
+        return
+      }
+      
       const errorMessage = error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการส่งออกข้อมูล'
       alert(`ไม่สามารถส่งออกข้อมูลได้: ${errorMessage}`)
     }
-  }, [products])
+  }, [handleAuthError])
 
   const handleSaveButtonClick = useCallback(() => {
     setSubmitTrigger(prev => prev + 1)

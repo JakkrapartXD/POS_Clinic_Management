@@ -30,15 +30,9 @@ interface ProductFormData {
   category: string
   status: string
   
-  // Pricing and Units
-  sale_price: string
-  cost: string
-  unit: string
+  // Basic fields
   pack_size: string
   vat_percent: string
-  
-  // Inventory
-  stock_quantity: string
   reorder_point: string
   sku: string
   barcode: string
@@ -101,12 +95,8 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
     short_name: "",
     category: "",
     status: "active",
-    sale_price: "",
-    cost: "",
-    unit: "",
     pack_size: "",
     vat_percent: "0",
-    stock_quantity: "0",
     reorder_point: "",
     sku: "",
     barcode: "",
@@ -161,8 +151,8 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
 
   const handleSubmit = async () => {
     // Validate required fields
-    if (!formData.product_name || !formData.sale_price) {
-      alert('กรุณากรอกข้อมูลที่จำเป็น')
+    if (!formData.product_name) {
+      alert('กรุณากรอกชื่อสินค้า')
       return
     }
     
@@ -231,7 +221,7 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
           <CardContent className="p-6">
             <h2 className="text-lg font-semibold text-gray-700 mb-4">ข้อมูลทั่วไป</h2>
             <p className="text-sm text-gray-500 mb-6">โปรดระบุข้อมูลสินค้า</p>
-
+            
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div>
                 <Label className="text-sm font-medium text-gray-700">หมวดหมู่สินค้า</Label>
@@ -399,89 +389,6 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
           </CardContent>
         </Card>
 
-        {/* Unit and Sales Information */}
-        <Card>
-          <CardContent className="p-6">
-            <h2 className="text-lg font-semibold text-gray-700 mb-4">ข้อมูลหน่วยนับ และการขาย</h2>
-            
-            {/* Product Image Upload */}
-            <div className="mb-6">
-              <ProductImageUpload
-                value={formData.image}
-                onChange={handleImageChange}
-                currentImageUrl={formData.image_url ? `${API_CONFIG.BASE_URL}${formData.image_url}` : ''}
-                label="รูปภาพสินค้า"
-                description="ขนาดรูปภาพแนะนำ 160x160 หรือ 1:1 และขนาดไม่เกิน 2MB"
-              />
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4 mb-4">
-              <div>
-                <Label className="text-sm font-medium text-gray-700">ชื่อหน่วยนับ ภาษาไทย, อังกฤษ และตัวเลข</Label>
-                <Input
-                  value={formData.unit}
-                  onChange={(e) => handleInputChange('unit', e.target.value)}
-                  className="mt-2 h-12 px-4 rounded-xl border-2 border-gray-200 bg-gray-50 focus:bg-white focus:border-purple-300 focus:ring-2 focus:ring-purple-100 transition-all duration-200 shadow-sm"
-                  placeholder="โปรดระบุหน่วยนับ"
-                />
-              </div>
-              <div>
-                <Label className="text-sm font-medium text-gray-700">ขนาดแพ็ค</Label>
-                <Input
-                  value={formData.pack_size}
-                  onChange={(e) => handleInputChange('pack_size', e.target.value)}
-                  className="mt-2 h-12 px-4 rounded-xl border-2 border-gray-200 bg-gray-50 focus:bg-white focus:border-purple-300 focus:ring-2 focus:ring-purple-100 transition-all duration-200 shadow-sm"
-                  placeholder="ขนาดแพ็ค"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 mb-4">
-              <div>
-                <Label className="text-sm font-medium text-gray-700">ราคาขายต่อหน่วย ค่าเริ่มต้น</Label>
-                <Input
-                  type="number"
-                  value={formData.sale_price}
-                  onChange={(e) => handleInputChange('sale_price', e.target.value)}
-                  className="mt-2 h-12 px-4 rounded-xl border-2 border-gray-200 bg-gray-50 focus:bg-white focus:border-purple-300 focus:ring-2 focus:ring-purple-100 transition-all duration-200 shadow-sm"
-                  placeholder="0.00"
-                  required
-                />
-              </div>
-              <div>
-                <Label className="text-sm font-medium text-gray-700">ต้นทุนต่อหน่วย ค่าเริ่มต้น</Label>
-                <Input
-                  type="number"
-                  value={formData.cost}
-                  onChange={(e) => handleInputChange('cost', e.target.value)}
-                  className="mt-2 h-12 px-4 rounded-xl border-2 border-gray-200 bg-gray-50 focus:bg-white focus:border-purple-300 focus:ring-2 focus:ring-purple-100 transition-all duration-200 shadow-sm"
-                  placeholder="0.00"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label className="text-sm font-medium text-gray-700">บาร์โค้ด ผูกกับหน่วยนับ</Label>
-                <Input
-                  value={formData.barcode}
-                  onChange={(e) => handleInputChange('barcode', e.target.value)}
-                  className="mt-2 h-12 px-4 rounded-xl border-2 border-gray-200 bg-gray-50 focus:bg-white focus:border-purple-300 focus:ring-2 focus:ring-purple-100 transition-all duration-200 shadow-sm"
-                  placeholder="บาร์โค้ด"
-                />
-              </div>
-              <div>
-                <Label className="text-sm font-medium text-gray-700">SKU รหัสสินค้า</Label>
-                <Input
-                  value={formData.sku}
-                  onChange={(e) => handleInputChange('sku', e.target.value)}
-                  className="mt-2 h-12 px-4 rounded-xl border-2 border-gray-200 bg-gray-50 focus:bg-white focus:border-purple-300 focus:ring-2 focus:ring-purple-100 transition-all duration-200 shadow-sm"
-                  placeholder="SKU"
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
 
         {/* Registration Reports */}
         <Card>
@@ -782,6 +689,22 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
                 />
               </div>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Product Image Upload */}
+        <Card>
+          <CardContent className="p-6">
+            <h2 className="text-lg font-semibold text-gray-700 mb-4">รูปภาพสินค้า</h2>
+            <p className="text-sm text-gray-500 mb-6">โปรดระบุข้อมูลสินค้า</p>
+            
+            <ProductImageUpload
+              value={formData.image}
+              onChange={handleImageChange}
+              currentImageUrl={formData.image_url ? `${API_CONFIG.BASE_URL}${formData.image_url}` : ''}
+              label="รูปภาพสินค้า"
+              description="ขนาดรูปภาพแนะนำ 160x160 หรือ 1:1 และขนาดไม่เกิน 2MB"
+            />
           </CardContent>
         </Card>
 
