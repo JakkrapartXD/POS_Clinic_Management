@@ -599,5 +599,153 @@ export const productMutations = {
       }, 'GRAPHQL');
       throw new GraphQLError('Failed to create stock');
     }
+  },
+
+  // Update stock record
+  async updateStock(parent: any, args: any, context: any) {
+    const { id, input } = args;
+    context.security.requireStaff(context);
+    
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
+    
+    // Validate required fields
+    if (!id) {
+      throw new GraphQLError('Stock ID is required');
+    }
+    
+    // Check if stock exists
+    const existingStock = await context.prisma.stock.findUnique({
+      where: { id },
+      include: { product: true }
+    });
+    
+    if (!existingStock) {
+      throw new GraphQLError('Stock not found');
+    }
+    
+    try {
+      // Calculate quantity difference before transaction
+      const quantityDifference = input.quantity ? input.quantity - existingStock.quantity : 0;
+      
+      // Use transaction to ensure data consistency
+      const result = await context.prisma.$transaction(async (tx: any) => {
+        // Update stock record
+        const updatedStock = await tx.stock.update({
+          where: { id },
+          data: {
+            quantity: input.quantity || existingStock.quantity,
+            quantity_in: input.quantity_in !== undefined ? input.quantity_in : existingStock.quantity_in,
+            is_outofstock: input.is_outofstock !== undefined ? input.is_outofstock : existingStock.is_outofstock,
+            production_date: input.production_date !== undefined ? input.production_date : existingStock.production_date,
+            expiration_date: input.expiration_date !== undefined ? input.expiration_date : existingStock.expiration_date,
+            reference_table: input.reference_table !== undefined ? input.reference_table : existingStock.reference_table,
+            reference_id: input.reference_id !== undefined ? input.reference_id : existingStock.reference_id,
+            note: input.note !== undefined ? input.note : existingStock.note
+          }
+        });
+        
+        // Update product stock quantity if quantity changed
+        if (quantityDifference !== 0) {
+          await tx.product.update({
+            where: { id: existingStock.productId },
+            data: {
+              stock_quantity: {
+                increment: quantityDifference
+              }
+            }
+          });
+        }
+        
+        return { stock: updatedStock };
+      });
+      
+      // Log audit trail
+      await context.security.logSensitiveOperation(
+        context.userId,
+        'UPDATE_STOCK',
+        'Stock',
+        result.stock.id,
+        { 
+          product_name: existingStock.product.product_name,
+          old_quantity: existingStock.quantity,
+          new_quantity: input.quantity,
+          quantity_difference: quantityDifference
+        },
+        context.redisClient
+      );
+      
+      return result.stock;
+    } catch (error) {
+      logger.error('Failed to update stock', { 
+        id, 
+        input, 
+        error: error instanceof Error ? error.message : error 
+      }, 'GRAPHQL');
+      throw new GraphQLError('Failed to update stock');
+    }
+  },
+
+  async deleteStock(parent: any, args: any, context: any) {
+    const { id } = args;
+    context.security.requireStaff(context);
+
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
+
+    if (!id) {
+      throw new GraphQLError('Stock ID is required');
+    }
+
+    const existingStock = await context.prisma.stock.findUnique({
+      where: { id },
+      include: { product: true }
+    });
+
+    if (!existingStock) {
+      throw new GraphQLError('Stock not found');
+    }
+
+    try {
+      // Use transaction to ensure data consistency
+      const result = await context.prisma.$transaction(async (tx: any) => {
+        // Delete stock record
+        const deletedStock = await tx.stock.delete({
+          where: { id }
+        });
+
+        // Update product stock quantity by subtracting the deleted stock quantity
+        await tx.product.update({
+          where: { id: existingStock.productId },
+          data: {
+            stock_quantity: {
+              decrement: existingStock.quantity
+            }
+          }
+        });
+
+        return { stock: deletedStock };
+      });
+
+      // Log audit trail
+      await context.security.logSensitiveOperation(
+        context.userId,
+        'DELETE_STOCK',
+        'Stock',
+        result.stock.id,
+        { 
+          product_name: existingStock.product.product_name,
+          deleted_quantity: existingStock.quantity,
+          product_id: existingStock.productId
+        },
+        context.redisClient
+      );
+
+      return true;
+    } catch (error) {
+      logger.error('Failed to delete stock', { 
+        id, 
+        error: error instanceof Error ? error.message : error 
+      }, 'GRAPHQL');
+      throw new GraphQLError('Failed to delete stock');
+    }
   }
 };

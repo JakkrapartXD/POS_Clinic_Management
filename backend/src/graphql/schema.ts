@@ -459,6 +459,17 @@ export const typeDefs = /* GraphQL */ `
     note: String
   }
 
+  input UpdateStockInput {
+    quantity: Int
+    quantity_in: Int
+    is_outofstock: Boolean
+    production_date: DateTime
+    expiration_date: DateTime
+    reference_table: String
+    reference_id: String
+    note: String
+  }
+
   # Medical Types
   type Appointment {
     id: String!
@@ -744,6 +755,8 @@ export const typeDefs = /* GraphQL */ `
     deleteProduct(id: String!): Boolean!
     adjustStock(productId: String!, quantity: Int!, note: String): Stock!
     createStock(input: CreateStockInput!): Stock!
+    updateStock(id: String!, input: UpdateStockInput!): Stock!
+    deleteStock(id: String!): Boolean!
     
     # Bulk import
     bulkImportProducts(input: BulkImportProductsInput!): ImportResult!

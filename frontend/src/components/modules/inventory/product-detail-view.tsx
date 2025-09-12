@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
-import { Edit2, ArrowLeft, Upload, Package, Edit } from "lucide-react"
+import { Edit2, ArrowLeft, Upload, Edit, Check, X, Calendar, MoreHorizontal, Trash2 } from "lucide-react"
 import ProductImageUpload from "@/components/common/ProductImageUpload"
 import { GraphQLAPI } from "@/clients/graphql"
 import { logger } from "@/lib/logger"
@@ -116,6 +116,45 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
     image_url: ''
   })
   const [isCreatingNewUnit, setIsCreatingNewUnit] = useState(false)
+  
+  // Stock modal states
+  const [showAddStockModal, setShowAddStockModal] = useState(false)
+  const [selectedUnitData, setSelectedUnitData] = useState<any>(null)
+  const [stockFormData, setStockFormData] = useState({
+    quantity: '',
+    sale_price: '',
+    production_lot: '',
+    production_date: '',
+    stock_entry_date: new Date().toISOString().split('T')[0],
+    cost_per_unit: '',
+    expiration_date: ''
+  })
+  const [stockLoading, setStockLoading] = useState(false)
+
+  // Adjust stock modal states
+  const [showAdjustStockModal, setShowAdjustStockModal] = useState(false)
+  const [selectedStockData, setSelectedStockData] = useState<any>(null)
+  const [adjustFormData, setAdjustFormData] = useState({
+    quantity: '',
+    note: '',
+    operation: 'add' // 'add' or 'subtract'
+  })
+  const [adjustLoading, setAdjustLoading] = useState(false)
+
+  // Manage stock modal states
+  const [showManageStockModal, setShowManageStockModal] = useState(false)
+  const [selectedManageStock, setSelectedManageStock] = useState<any>(null)
+  const [manageFormData, setManageFormData] = useState({
+    production_date: '',
+    expiration_date: '',
+    note: ''
+  })
+  const [manageLoading, setManageLoading] = useState(false)
+
+  // Delete stock modal states
+  const [showDeleteStockModal, setShowDeleteStockModal] = useState(false)
+  const [selectedDeleteStock, setSelectedDeleteStock] = useState<any>(null)
+  const [deleteLoading, setDeleteLoading] = useState(false)
 
   // Image upload handler for unit edit
   const handleUnitImageChange = (file: File | null, imageUrl?: string) => {
@@ -157,42 +196,43 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
     setProductVariants(updatedVariants)
   }
 
-  useEffect(() => {
-    const loadProduct = async () => {
-      try {
-        setLoading(true)
-        setError(null)
+  // Load product function
+  const loadProduct = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      
+      logger.info('Loading product details', { productId }, 'INVENTORY')
+      
+      const response = await GraphQLAPI.getProduct(productId)
+      
+      if (response.product) {
+        setProduct(response.product)
         
-        logger.info('Loading product details', { productId }, 'INVENTORY')
-        
-        const response = await GraphQLAPI.getProduct(productId)
-        
-        if (response.product) {
-          setProduct(response.product)
-          
-          // If we have initial product variants, use them, otherwise create a single variant from the main product
-          if (initialProductVariants && initialProductVariants.length > 0) {
-            setProductVariants(initialProductVariants)
-          } else {
-            // Create a single variant from the main product
-            setProductVariants([response.product])
-          }
-          
-          logger.info('Product loaded successfully', { 
-            productId,
-            productName: response.product.product_name 
-          }, 'INVENTORY')
+        // If we have initial product variants, use them, otherwise create a single variant from the main product
+        if (initialProductVariants && initialProductVariants.length > 0) {
+          setProductVariants(initialProductVariants)
         } else {
-          setError('ไม่พบข้อมูลสินค้า')
+          // Create a single variant from the main product
+          setProductVariants([response.product])
         }
-      } catch (err) {
-        logger.error('Failed to load product', err, 'INVENTORY')
-        setError(err instanceof Error ? err.message : 'ไม่สามารถโหลดข้อมูลสินค้าได้')
-      } finally {
-        setLoading(false)
+        
+        logger.info('Product loaded successfully', { 
+          productId,
+          productName: response.product.product_name 
+        }, 'INVENTORY')
+      } else {
+        setError('ไม่พบข้อมูลสินค้า')
       }
+    } catch (err) {
+      logger.error('Failed to load product', err, 'INVENTORY')
+      setError(err instanceof Error ? err.message : 'ไม่สามารถโหลดข้อมูลสินค้าได้')
+    } finally {
+      setLoading(false)
     }
+  }
 
+  useEffect(() => {
     if (productId) {
       loadProduct()
     }
@@ -222,12 +262,14 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
             // Add product info to each stock record
             const stocksWithProductInfo = stocksResponse.stocks.map(stock => ({
               ...stock,
+              productId: prod.id,
               product_name: prod.product_name,
               product_unit: prod.unit,
               product_sale_price: prod.sale_price,
               product_cost: prod.cost,
               product_sku: prod.sku,
-              product_pack_size: prod.pack_size
+              product_pack_size: prod.pack_size,
+              product_stock_quantity: prod.stock_quantity
             }))
             allStocks.push(...stocksWithProductInfo)
           }
@@ -277,6 +319,9 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
         salePrice: firstStock.product_sale_price || 0,
         cost: firstStock.product_cost || 0,
         totalQuantity: unitStocks.reduce((sum, stock) => sum + stock.quantity, 0),
+        productId: firstStock.productId,
+        productName: firstStock.product_name,
+        stockQuantity: firstStock.product_stock_quantity || 0,
         stocks: unitStocks.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
       }
     })
@@ -914,6 +959,302 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
     }
   }
 
+  // Stock modal handlers
+  const handleAddStockClick = (unitData: any) => {
+    logger.info('Opening add stock modal for unit', { unitData }, 'INVENTORY')
+    
+    if (!unitData.productId) {
+      alert('ไม่พบ productId ในข้อมูลหน่วยนับ')
+      return
+    }
+    
+    setSelectedUnitData(unitData)
+    setStockFormData({
+      quantity: '',
+      sale_price: unitData.salePrice?.toString() || '',
+      production_lot: '',
+      production_date: '',
+      stock_entry_date: new Date().toISOString().split('T')[0],
+      cost_per_unit: unitData.cost?.toString() || '',
+      expiration_date: ''
+    })
+    setShowAddStockModal(true)
+  }
+
+  const handleStockFormChange = (field: string, value: string) => {
+    setStockFormData(prev => ({
+      ...prev,
+      [field]: value
+    }))
+  }
+
+  const handleAddStockSubmit = async () => {
+    if (!selectedUnitData || !stockFormData.quantity) {
+      alert('กรุณากรอกจำนวนสต๊อก')
+      return
+    }
+
+    if (!selectedUnitData.productId) {
+      alert('ไม่พบ productId ของหน่วยนับที่เลือก')
+      return
+    }
+
+    try {
+      setStockLoading(true)
+      
+      logger.info('Adding stock for unit', { 
+        selectedUnitData, 
+        stockFormData 
+      }, 'INVENTORY')
+      
+      // Create stock record using the selected unit's productId
+      const stockInput = {
+        productId: selectedUnitData.productId,
+        quantity: parseInt(stockFormData.quantity),
+        quantity_in: parseInt(stockFormData.quantity),
+        is_outofstock: false,
+        production_date: stockFormData.production_date ? new Date(stockFormData.production_date).toISOString() : undefined,
+        expiration_date: stockFormData.expiration_date ? new Date(stockFormData.expiration_date).toISOString() : undefined,
+        note: `เพิ่มสต๊อก - ล็อต: ${stockFormData.production_lot || 'ไม่ระบุ'}`
+      }
+
+      logger.info('Stock input data', { stockInput }, 'INVENTORY')
+
+      // Create stock using GraphQL mutation
+      const response = await GraphQLAPI.createStock(stockInput)
+      
+      if (response.createStock) {
+        // Update the specific product variant's stock_quantity
+        const newStockQuantity = selectedUnitData.stockQuantity + parseInt(stockFormData.quantity)
+        
+        const updateProductInput = {
+          stock_quantity: newStockQuantity
+        }
+        
+        await GraphQLAPI.updateProduct(selectedUnitData.productId, updateProductInput)
+        
+        // Refresh product data and stocks
+        await loadProduct()
+        await loadStocks()
+        
+        // Close modal and reset form
+        setShowAddStockModal(false)
+        setSelectedUnitData(null)
+        setStockFormData({
+          quantity: '',
+          sale_price: '',
+          production_lot: '',
+          production_date: '',
+          stock_entry_date: new Date().toISOString().split('T')[0],
+          cost_per_unit: '',
+          expiration_date: ''
+        })
+        
+        alert('เพิ่มสต๊อกสำเร็จ')
+      }
+    } catch (error) {
+      logger.error('Failed to add stock', error, 'INVENTORY')
+      const errorMessage = error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการเพิ่มสต๊อก'
+      alert(`ไม่สามารถเพิ่มสต๊อกได้: ${errorMessage}`)
+    } finally {
+      setStockLoading(false)
+    }
+  }
+
+  const handleCloseStockModal = () => {
+    setShowAddStockModal(false)
+    setSelectedUnitData(null)
+    setStockFormData({
+      quantity: '',
+      sale_price: '',
+      production_lot: '',
+      production_date: '',
+      stock_entry_date: new Date().toISOString().split('T')[0],
+      cost_per_unit: '',
+      expiration_date: ''
+    })
+  }
+
+  // Adjust stock modal handlers
+  const handleAdjustStockClick = (unitData: any, stock: any) => {
+    logger.info('Opening adjust stock modal', { unitData, stock }, 'INVENTORY')
+    
+    setSelectedStockData({ unitData, stock })
+    setAdjustFormData({
+      quantity: '',
+      note: '',
+      operation: 'add'
+    })
+    setShowAdjustStockModal(true)
+  }
+
+  const handleAdjustFormChange = (field: string, value: string) => {
+    setAdjustFormData(prev => ({
+      ...prev,
+      [field]: value
+    }))
+  }
+
+  const handleAdjustStockSubmit = async () => {
+    if (!selectedStockData || !adjustFormData.quantity) {
+      alert('กรุณากรอกจำนวนที่ต้องการปรับ')
+      return
+    }
+
+    const adjustQuantity = parseInt(adjustFormData.quantity)
+    if (adjustQuantity <= 0) {
+      alert('จำนวนต้องมากกว่า 0')
+      return
+    }
+
+    try {
+      setAdjustLoading(true)
+      
+      const { unitData, stock } = selectedStockData
+      const operation = adjustFormData.operation
+      
+      // Calculate new quantity based on operation
+      const newQuantity = operation === 'add' 
+        ? stock.quantity + adjustQuantity 
+        : stock.quantity - adjustQuantity
+      
+      if (newQuantity < 0) {
+        alert('ไม่สามารถลดสต๊อกได้มากกว่าจำนวนที่มี')
+        return
+      }
+      
+      logger.info('Adjusting stock', { 
+        stockId: stock.id,
+        currentQuantity: stock.quantity,
+        newQuantity,
+        operation,
+        note: adjustFormData.note
+      }, 'INVENTORY')
+
+      // Update existing stock record
+      const stockInput = {
+        quantity: newQuantity,
+        note: `${stock.note || ''}\nปรับสต๊อก (${operation === 'add' ? 'เพิ่ม' : 'ลด'} ${adjustQuantity} หน่วย) - ${adjustFormData.note || 'ไม่ระบุเหตุผล'}`
+      }
+
+      // Update stock using GraphQL mutation
+      const response = await GraphQLAPI.updateStock(stock.id, stockInput)
+      
+      if (response.updateStock) {
+        // Refresh product data and stocks
+        await loadProduct()
+        await loadStocks()
+        
+        // Close modal and reset form
+        setShowAdjustStockModal(false)
+        setSelectedStockData(null)
+        setAdjustFormData({
+          quantity: '',
+          note: '',
+          operation: 'add'
+        })
+        
+        alert(`ปรับสต๊อกสำเร็จ (${operation === 'add' ? 'เพิ่ม' : 'ลด'} ${adjustQuantity} หน่วย)`)
+      }
+    } catch (error) {
+      logger.error('Failed to adjust stock', error, 'INVENTORY')
+      const errorMessage = error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการปรับสต๊อก'
+      alert(`ไม่สามารถปรับสต๊อกได้: ${errorMessage}`)
+    } finally {
+      setAdjustLoading(false)
+    }
+  }
+
+  const handleCloseAdjustStockModal = () => {
+    setShowAdjustStockModal(false)
+    setSelectedStockData(null)
+    setAdjustFormData({
+      quantity: '',
+      note: '',
+      operation: 'add'
+    })
+  }
+
+  // Manage stock handlers
+  const handleManageStockClick = (stock: any) => {
+    setSelectedManageStock(stock)
+    setManageFormData({
+      production_date: stock.production_date ? new Date(stock.production_date).toISOString().split('T')[0] : '',
+      expiration_date: stock.expiration_date ? new Date(stock.expiration_date).toISOString().split('T')[0] : '',
+      note: stock.note || ''
+    })
+    setShowManageStockModal(true)
+  }
+
+  const handleManageStockSubmit = async () => {
+    if (!selectedManageStock) return
+
+    setManageLoading(true)
+    try {
+      const stockInput = {
+        production_date: manageFormData.production_date || undefined,
+        expiration_date: manageFormData.expiration_date || undefined,
+        note: manageFormData.note || undefined
+      }
+
+      await GraphQLAPI.updateStock(selectedManageStock.id, stockInput)
+      
+      // Refresh data
+      await loadProduct()
+      await loadStocks()
+      
+      setShowManageStockModal(false)
+      alert('แก้ไขสต๊อกสำเร็จ')
+    } catch (error) {
+      console.error('Error updating stock:', error)
+      alert('เกิดข้อผิดพลาดในการแก้ไขสต๊อก')
+    } finally {
+      setManageLoading(false)
+    }
+  }
+
+  const handleCloseManageStockModal = () => {
+    setShowManageStockModal(false)
+    setSelectedManageStock(null)
+    setManageFormData({
+      production_date: '',
+      expiration_date: '',
+      note: ''
+    })
+  }
+
+  // Delete stock handlers
+  const handleDeleteStockClick = (stock: any) => {
+    setSelectedDeleteStock(stock)
+    setShowDeleteStockModal(true)
+  }
+
+  const handleDeleteStockSubmit = async () => {
+    if (!selectedDeleteStock) return
+
+    setDeleteLoading(true)
+    try {
+      await GraphQLAPI.deleteStock(selectedDeleteStock.id)
+      
+      // Refresh data
+      await loadProduct()
+      await loadStocks()
+      
+      setShowDeleteStockModal(false)
+      alert('ลบสต๊อกสำเร็จ')
+    } catch (error) {
+      console.error('Error deleting stock:', error)
+      alert('เกิดข้อผิดพลาดในการลบสต๊อก')
+    } finally {
+      setDeleteLoading(false)
+    }
+  }
+
+  const handleCloseDeleteStockModal = () => {
+    setShowDeleteStockModal(false)
+    setSelectedDeleteStock(null)
+  }
+
   const getProductTypeLabel = (type: string) => {
     const types: Record<string, string> = {
       'medicine': 'ยารักษาโรค',
@@ -1109,12 +1450,10 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="general">ข้อมูลทั่วไป</TabsTrigger>
             <TabsTrigger value="units">หน่วยนับ</TabsTrigger>
-            <TabsTrigger value="pricing">ราคาขาย</TabsTrigger>
             <TabsTrigger value="stock">สต๊อกสินค้า</TabsTrigger>
-            <TabsTrigger value="history">ประวัติ</TabsTrigger>
           </TabsList>
 
           {/* ข้อมูลทั่วไป */}
@@ -1361,66 +1700,6 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
             </Card>
           </TabsContent>
 
-          {/* ราคาขาย */}
-          <TabsContent value="pricing" className="space-y-6">
-            <Card>
-              <CardContent className="p-6">
-                <h3 className="text-lg font-semibold mb-4">ข้อมูลราคา</h3>
-                <div className="grid grid-cols-2 gap-6">
-                  <div>
-                    <label className="text-sm font-medium text-gray-600">ราคาขายต่อหน่วย</label>
-                    <div className="mt-1 text-2xl font-bold text-purple-600">฿{product.sale_price?.toLocaleString() || 0}</div>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-600">ต้นทุนต่อหน่วย</label>
-                    <div className="mt-1 text-xl text-gray-900">฿{product.cost?.toLocaleString() || 0}</div>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-600">กำไรต่อหน่วย</label>
-                    <div className="mt-1 text-xl text-green-600">
-                      ฿{((product.sale_price || 0) - (product.cost || 0)).toLocaleString()}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-600">อัตราภาษีมูลค่าเพิ่ม</label>
-                    <div className="mt-1 text-gray-900">{getVatLabel(product.vat_percent)}</div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="p-6">
-                <h3 className="text-lg font-semibold mb-4">รหัสสินค้า</h3>
-                <div className="grid grid-cols-2 gap-6">
-                  <div>
-                    <label className="text-sm font-medium text-gray-600">SKU รหัสสินค้า</label>
-                    <div className="mt-1 text-gray-900 font-mono">{product.sku || '-'}</div>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-600">บาร์โค้ด</label>
-                    <div className="mt-1 text-gray-900 font-mono">{product.barcode || '-'}</div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="p-6">
-                <h3 className="text-lg font-semibold mb-4">หมายเหตุ</h3>
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-sm font-medium text-gray-600">หมายเหตุการขาย</label>
-                    <div className="mt-1 text-gray-900 whitespace-pre-wrap">{product.sale_note || '-'}</div>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-600">หมายเหตุการสั่งซื้อ</label>
-                    <div className="mt-1 text-gray-900 whitespace-pre-wrap">{product.purchase_note || '-'}</div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
 
           {/* สต๊อกสินค้า */}
           <TabsContent value="stock" className="space-y-6">
@@ -1435,44 +1714,9 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                 >
                   {stocksLoading ? 'กำลังโหลด...' : 'รีเฟรช'}
                 </Button>
-                <Button 
-                  onClick={() => {/* TODO: Add stock dialog */}}
-                  className="bg-purple-600 hover:bg-purple-700"
-                >
-                  <Package className="h-4 w-4 mr-2" />
-                  เพิ่มสต๊อก
-                </Button>
               </div>
             </div>
 
-            {/* สรุปข้อมูลสต๊อกทั้งหมด */}
-            <Card>
-              <CardContent className="p-6">
-                <h3 className="text-lg font-semibold mb-4">สรุปข้อมูลสต๊อกทั้งหมด - {product.product_name}</h3>
-                <div className="grid grid-cols-2 gap-6">
-                  <div>
-                    <label className="text-sm font-medium text-gray-600">จำนวนสต๊อกรวมทั้งหมด</label>
-                    <div className="mt-1 text-2xl font-bold text-blue-600">
-                      {stocks.reduce((sum, stock) => sum + stock.quantity, 0).toLocaleString()} หน่วย
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-600">จำนวนรูปแบบสินค้า</label>
-                    <div className="mt-1 text-xl text-purple-600">
-                      {groupStocksByUnit().length} รูปแบบ
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-600">ตำแหน่งเก็บ - ชั้น</label>
-                    <div className="mt-1 text-gray-900">{product.shelf_code || '-'}</div>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-600">ตำแหน่งเก็บ - แถว</label>
-                    <div className="mt-1 text-gray-900">{product.shelf_row || '-'}</div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
 
             {/* สต๊อกแยกตามหน่วยนับ */}
             {stocksLoading ? (
@@ -1486,8 +1730,8 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                   </div>
                 </CardContent>
               </Card>
-            ) : (
-              groupStocksByUnit().map((unitData) => (
+            ) : groupStocksByUnit().filter(unitData => unitData.stocks.some(stock => stock.quantity > 0)).length > 0 ? (
+              groupStocksByUnit().filter(unitData => unitData.stocks.some(stock => stock.quantity > 0)).map((unitData) => (
                 <Card key={unitData.unit}>
                   <CardHeader>
                     <div className="flex items-center justify-between">
@@ -1512,6 +1756,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                           variant="ghost" 
                           size="sm"
                           className="text-purple-600 hover:text-purple-700"
+                          onClick={() => handleAddStockClick(unitData)}
                         >
                           เพิ่มสต๊อกสินค้าใหม่
                         </Button>
@@ -1536,113 +1781,98 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                           </tr>
                         </thead>
                         <tbody>
-                          {unitData.stocks.map((stock) => (
-                            <tr key={stock.id} className="border-b hover:bg-gray-50">
-                              <td className="py-3 px-4">
-                                <div>
-                                  <div className="font-medium">{formatDate(stock.created_at)}</div>
-                                  <div className="text-sm text-blue-600">
-                                    <button className="hover:underline">
-                                      แก้ไข
-                                    </button>
+                          {unitData.stocks.filter(stock => stock.quantity > 0).length > 0 ? (
+                            unitData.stocks.filter(stock => stock.quantity > 0).map((stock) => (
+                              <tr key={stock.id} className="border-b hover:bg-gray-50">
+                                <td className="py-3 px-4">
+                                  <div>
+                                    <div className="font-medium">{formatDate(stock.created_at)}</div>
+                                    <div className="text-sm text-blue-600">
+                                    </div>
+                                    {/* <div className="text-xs text-gray-500 mt-1">
+                                      {stock.note || 'เพิ่มสต๊อกสินค้าจากการนำเข้าข้อมูลสินค้า (IMPORT)'}
+                                    </div> */}
                                   </div>
-                                  <div className="text-xs text-gray-500 mt-1">
-                                    {stock.note || 'เพิ่มสต๊อกสินค้าจากการนำเข้าข้อมูลสินค้า (IMPORT)'}
+                                </td>
+                                <td className="py-3 px-4 text-gray-500">-</td>
+                                <td className="py-3 px-4 text-gray-500">{formatDate(stock.production_date)}</td>
+                                <td className="py-3 px-4 text-gray-500">{formatDate(stock.expiration_date)}</td>
+                                <td className="py-3 px-4 text-gray-500">{stock.product_cost ? `฿${stock.product_cost.toFixed(2)}` : '-'}</td>
+                                <td className="py-3 px-4 font-medium">฿{stock.product_sale_price?.toFixed(2) || '0.00'}</td>
+                                <td className="py-3 px-4 font-medium">{stock.quantity_in?.toLocaleString() || stock.quantity.toLocaleString()}x</td>
+                                <td className="py-3 px-4">
+                                  <div>
+                                    <div className="font-medium">{stock.quantity.toLocaleString()}x</div>
+                                    <div className="text-sm text-blue-600">
+                                      <button 
+                                        className="hover:underline"
+                                        onClick={() => handleAdjustStockClick(unitData, stock)}
+                                      >
+                                        ปรับเพิ่ม/ลดสต๊อก
+                                      </button>
+                                    </div>
                                   </div>
-                                </div>
-                              </td>
-                              <td className="py-3 px-4 text-gray-500">-</td>
-                              <td className="py-3 px-4 text-gray-500">{formatDate(stock.production_date)}</td>
-                              <td className="py-3 px-4 text-gray-500">{formatDate(stock.expiration_date)}</td>
-                              <td className="py-3 px-4 text-gray-500">{stock.product_cost ? `฿${stock.product_cost.toFixed(2)}` : '-'}</td>
-                              <td className="py-3 px-4 font-medium">฿{stock.product_sale_price?.toFixed(2) || '0.00'}</td>
-                              <td className="py-3 px-4 font-medium">{stock.quantity_in?.toLocaleString() || stock.quantity.toLocaleString()}x</td>
-                              <td className="py-3 px-4">
-                                <div>
-                                  <div className="font-medium">{stock.quantity.toLocaleString()}x</div>
-                                  <div className="text-sm text-blue-600">
-                                    <button className="hover:underline">
-                                      ปรับ/ย้ายสต๊อก
-                                    </button>
+                                </td>
+                                <td className="py-3 px-4">
+                                  {getStatusBadge(stock)}
+                                </td>
+                                <td className="py-3 px-4">
+                                  <div className="flex space-x-2">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handleManageStockClick(stock)}
+                                      className="text-blue-600 hover:text-blue-700"
+                                      title="แก้ไขสต๊อก"
+                                    >
+                                      <Edit className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handleDeleteStockClick(stock)}
+                                      className="text-red-600 hover:text-red-700"
+                                      title="ลบสต๊อก"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
                                   </div>
-                                </div>
-                              </td>
-                              <td className="py-3 px-4">
-                                {getStatusBadge(stock)}
-                              </td>
-                              <td className="py-3 px-4">
-                                <div className="flex space-x-2">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                  >
-                                    <Edit className="h-4 w-4" />
-                                  </Button>
+                                </td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td colSpan={10} className="py-8 px-4 text-center text-gray-500">
+                                <div className="flex flex-col items-center space-y-2">
+                                  <div className="text-lg">📦</div>
+                                  <div>ไม่มีสต๊อกให้แสดง</div>
+                                  <div className="text-sm">สต๊อกที่มีจำนวน = 0 จะไม่แสดงในรายการ</div>
                                 </div>
                               </td>
                             </tr>
-                          ))}
+                          )}
                         </tbody>
                       </table>
                     </div>
                   </CardContent>
                 </Card>
               ))
+            ) : (
+              <Card>
+                <CardContent className="p-8 text-center">
+                  <div className="flex flex-col items-center space-y-4">
+                    <div className="text-4xl">📦</div>
+                    <div className="text-xl font-medium text-gray-600">ไม่มีสต๊อกให้แสดง</div>
+                    <div className="text-sm text-gray-500">
+                      สต๊อกที่มีจำนวน = 0 จะไม่แสดงในรายการ<br/>
+                      กดปุ่ม "เพิ่มสต๊อกสินค้าใหม่" เพื่อเพิ่มสต๊อก
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             )}
           </TabsContent>
 
-          {/* ประวัติ */}
-          <TabsContent value="history" className="space-y-6">
-            <Card>
-              <CardContent className="p-6">
-                <h3 className="text-lg font-semibold mb-4">ประวัติการเปลี่ยนแปลง</h3>
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center p-4 bg-gray-50 rounded-lg">
-                    <div>
-                      <div className="font-medium">สร้างสินค้า</div>
-                      <div className="text-sm text-gray-600">
-                        {new Date(product.created_at).toLocaleDateString('th-TH', {
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {product.updated_at !== product.created_at && (
-                    <div className="flex justify-between items-center p-4 bg-gray-50 rounded-lg">
-                      <div>
-                        <div className="font-medium">แก้ไขล่าสุด</div>
-                        <div className="text-sm text-gray-600">
-                          {new Date(product.updated_at).toLocaleDateString('th-TH', {
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          })}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="p-6">
-                <h3 className="text-lg font-semibold mb-4">ประวัติการขาย (Mockup)</h3>
-                <div className="text-center text-gray-500 py-8">
-                  <div className="text-4xl mb-2">📊</div>
-                  <div>ฟีเจอร์นี้กำลังอยู่ในระหว่างการพัฒนา</div>
-                  <div className="text-sm mt-2">ประวัติการขาย การรับเข้าสินค้า และการเปลี่ยนแปลงสต๊อก</div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
         </Tabs>
       </div>
 
@@ -1927,6 +2157,424 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                   {isCreatingNewUnit ? 'เพิ่มหน่วยนับ' : 'บันทึก'}
                 </Button>
               </div>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Stock Modal */}
+      <Dialog open={showAddStockModal} onOpenChange={setShowAddStockModal}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleCloseStockModal}
+                  className="p-1"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                </Button>
+                <DialogTitle className="text-lg font-semibold">
+                  ข้อมูลสต๊อกสินค้า - {selectedUnitData?.unit || 'แผง'}
+                </DialogTitle>
+              </div>
+            </div>
+            <p className="text-sm text-gray-600">โปรดระบุข้อมูลสต๊อกสินค้า</p>
+          </DialogHeader>
+          
+          <div className="grid grid-cols-2 gap-6 py-4">
+            {/* Left Column */}
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="quantity">จำนวนสต๊อก</Label>
+                <Input
+                  id="quantity"
+                  type="number"
+                  value={stockFormData.quantity}
+                  onChange={(e) => handleStockFormChange('quantity', e.target.value)}
+                  placeholder="กรอกจำนวนสต๊อก"
+                  className="border-purple-300 focus:border-purple-500"
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="sale_price">ราคาขายต่อหน่วย</Label>
+                <Input
+                  id="sale_price"
+                  type="number"
+                  step="0.01"
+                  value={stockFormData.sale_price}
+                  onChange={(e) => handleStockFormChange('sale_price', e.target.value)}
+                  placeholder="฿0.00"
+                />
+                <p className="text-xs text-gray-500 mt-1">฿{stockFormData.sale_price || '0.00'} จากหน่วยนับ</p>
+              </div>
+              
+              <div>
+                <Label htmlFor="production_lot">ล็อตผลิต</Label>
+                <Input
+                  id="production_lot"
+                  value={stockFormData.production_lot}
+                  onChange={(e) => handleStockFormChange('production_lot', e.target.value)}
+                  placeholder="กรอกรหัสล็อต"
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="production_date">วันที่ผลิต</Label>
+                <div className="relative">
+                  <Input
+                    id="production_date"
+                    type="date"
+                    value={stockFormData.production_date}
+                    onChange={(e) => handleStockFormChange('production_date', e.target.value)}
+                    placeholder="DD/MM/YYYY"
+                  />
+                  <Calendar className="absolute right-3 top-3 h-4 w-4 text-gray-400" />
+                </div>
+              </div>
+            </div>
+
+            {/* Right Column */}
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="stock_entry_date">วันที่เข้าสต๊อก</Label>
+                <div className="relative">
+                  <Input
+                    id="stock_entry_date"
+                    type="date"
+                    value={stockFormData.stock_entry_date}
+                    onChange={(e) => handleStockFormChange('stock_entry_date', e.target.value)}
+                  />
+                  <Calendar className="absolute right-3 top-3 h-4 w-4 text-gray-400" />
+                </div>
+              </div>
+              
+              <div>
+                <Label htmlFor="cost_per_unit">ต้นทุนต่อหน่วย</Label>
+                <Input
+                  id="cost_per_unit"
+                  type="number"
+                  step="0.01"
+                  value={stockFormData.cost_per_unit}
+                  onChange={(e) => handleStockFormChange('cost_per_unit', e.target.value)}
+                  placeholder="฿0.00"
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="expiration_date">วันหมดอายุ</Label>
+                <div className="relative">
+                  <Input
+                    id="expiration_date"
+                    type="date"
+                    value={stockFormData.expiration_date}
+                    onChange={(e) => handleStockFormChange('expiration_date', e.target.value)}
+                    placeholder="DD/MM/YYYY"
+                  />
+                  <Calendar className="absolute right-3 top-3 h-4 w-4 text-gray-400" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <div className="flex space-x-2">
+              <Button
+                variant="outline"
+                onClick={handleCloseStockModal}
+                className="border-gray-300 text-gray-700 hover:bg-gray-50"
+              >
+                <X className="h-4 w-4 mr-2" />
+                ปิด
+              </Button>
+              <Button
+                onClick={handleAddStockSubmit}
+                disabled={stockLoading}
+                className="bg-purple-600 hover:bg-purple-700"
+              >
+                <Check className="h-4 w-4 mr-2" />
+                {stockLoading ? 'กำลังเพิ่ม...' : 'เพิ่มสต๊อก'}
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Adjust Stock Modal */}
+      <Dialog open={showAdjustStockModal} onOpenChange={setShowAdjustStockModal}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleCloseAdjustStockModal}
+                  className="p-1"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                </Button>
+                <DialogTitle className="text-lg font-semibold">
+                  ปรับเพิ่ม/ลดสต๊อก
+                </DialogTitle>
+              </div>
+            </div>
+            <p className="text-sm text-gray-600">
+              สต๊อกปัจจุบัน: {selectedStockData?.stock?.quantity?.toLocaleString() || 0} หน่วย
+            </p>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            {/* Operation Selection */}
+            <div>
+              <Label>การดำเนินการ</Label>
+              <div className="flex space-x-4 mt-2">
+                <label className="flex items-center space-x-2">
+                  <input
+                    type="radio"
+                    name="operation"
+                    value="add"
+                    checked={adjustFormData.operation === 'add'}
+                    onChange={(e) => handleAdjustFormChange('operation', e.target.value)}
+                    className="text-green-600"
+                  />
+                  <span className="text-green-600 font-medium">เพิ่มสต๊อก</span>
+                </label>
+                <label className="flex items-center space-x-2">
+                  <input
+                    type="radio"
+                    name="operation"
+                    value="subtract"
+                    checked={adjustFormData.operation === 'subtract'}
+                    onChange={(e) => handleAdjustFormChange('operation', e.target.value)}
+                    className="text-red-600"
+                  />
+                  <span className="text-red-600 font-medium">ลดสต๊อก</span>
+                </label>
+              </div>
+            </div>
+
+            {/* Quantity Input */}
+            <div>
+              <Label htmlFor="adjust_quantity">จำนวนที่ต้องการ{adjustFormData.operation === 'add' ? 'เพิ่ม' : 'ลด'}</Label>
+              <Input
+                id="adjust_quantity"
+                type="number"
+                min="1"
+                value={adjustFormData.quantity}
+                onChange={(e) => handleAdjustFormChange('quantity', e.target.value)}
+                placeholder="กรอกจำนวน"
+                className="border-purple-300 focus:border-purple-500"
+              />
+            </div>
+
+            {/* Note Input */}
+            <div>
+              <Label htmlFor="adjust_note">หมายเหตุ (ไม่บังคับ)</Label>
+              <Input
+                id="adjust_note"
+                value={adjustFormData.note}
+                onChange={(e) => handleAdjustFormChange('note', e.target.value)}
+                placeholder="ระบุเหตุผลในการปรับสต๊อก"
+              />
+            </div>
+
+            {/* Preview */}
+            {adjustFormData.quantity && (
+              <div className="bg-gray-50 p-3 rounded-lg">
+                <p className="text-sm text-gray-600">
+                  สต๊อกปัจจุบัน: {selectedStockData?.stock?.quantity?.toLocaleString() || 0} หน่วย
+                </p>
+                <p className="text-sm text-gray-600">
+                  {adjustFormData.operation === 'add' ? 'เพิ่ม' : 'ลด'}: {parseInt(adjustFormData.quantity) || 0} หน่วย
+                </p>
+                <p className="font-medium text-gray-800">
+                  สต๊อกหลังปรับ: {
+                    adjustFormData.operation === 'add' 
+                      ? (selectedStockData?.stock?.quantity || 0) + (parseInt(adjustFormData.quantity) || 0)
+                      : (selectedStockData?.stock?.quantity || 0) - (parseInt(adjustFormData.quantity) || 0)
+                  } หน่วย
+                </p>
+                {(adjustFormData.operation === 'subtract' && 
+                  (selectedStockData?.stock?.quantity || 0) - (parseInt(adjustFormData.quantity) || 0) < 0) && (
+                  <p className="text-sm text-red-600 font-medium">
+                    ⚠️ ไม่สามารถลดสต๊อกได้มากกว่าจำนวนที่มี
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <div className="flex space-x-2">
+              <Button
+                variant="outline"
+                onClick={handleCloseAdjustStockModal}
+                className="border-gray-300 text-gray-700 hover:bg-gray-50"
+              >
+                <X className="h-4 w-4 mr-2" />
+                ยกเลิก
+              </Button>
+              <Button
+                onClick={handleAdjustStockSubmit}
+                disabled={adjustLoading || !adjustFormData.quantity}
+                className={`${
+                  adjustFormData.operation === 'add' 
+                    ? 'bg-green-600 hover:bg-green-700' 
+                    : 'bg-red-600 hover:bg-red-700'
+                }`}
+              >
+                <Check className="h-4 w-4 mr-2" />
+                {adjustLoading ? 'กำลังปรับ...' : `ปรับสต๊อก (${adjustFormData.operation === 'add' ? 'เพิ่ม' : 'ลด'})`}
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Manage Stock Modal */}
+      <Dialog open={showManageStockModal} onOpenChange={setShowManageStockModal}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleCloseManageStockModal}
+                  className="p-1"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                </Button>
+                <DialogTitle className="text-lg font-semibold">
+                  แก้ไขสต๊อก
+                </DialogTitle>
+              </div>
+            </div>
+            <p className="text-sm text-gray-600">
+              สต๊อก ID: {selectedManageStock?.id}
+            </p>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            {/* Dates */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="manage_production_date">วันที่ผลิต</Label>
+                <Input
+                  id="manage_production_date"
+                  type="date"
+                  value={manageFormData.production_date}
+                  onChange={(e) => setManageFormData(prev => ({ ...prev, production_date: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label htmlFor="manage_expiration_date">วันที่หมดอายุ</Label>
+                <Input
+                  id="manage_expiration_date"
+                  type="date"
+                  value={manageFormData.expiration_date}
+                  onChange={(e) => setManageFormData(prev => ({ ...prev, expiration_date: e.target.value }))}
+                />
+              </div>
+            </div>
+
+            {/* Note */}
+            <div>
+              <Label htmlFor="manage_note">หมายเหตุ</Label>
+              <Input
+                id="manage_note"
+                value={manageFormData.note}
+                onChange={(e) => setManageFormData(prev => ({ ...prev, note: e.target.value }))}
+                placeholder="หมายเหตุเพิ่มเติม"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <div className="flex space-x-2">
+              <Button
+                variant="outline"
+                onClick={handleCloseManageStockModal}
+                className="border-gray-300 text-gray-700 hover:bg-gray-50"
+              >
+                <X className="h-4 w-4 mr-2" />
+                ยกเลิก
+              </Button>
+              <Button
+                onClick={handleManageStockSubmit}
+                disabled={manageLoading}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                <Check className="h-4 w-4 mr-2" />
+                {manageLoading ? 'กำลังบันทึก...' : 'บันทึกการแก้ไข'}
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Stock Modal */}
+      <Dialog open={showDeleteStockModal} onOpenChange={setShowDeleteStockModal}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleCloseDeleteStockModal}
+                  className="p-1"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                </Button>
+                <DialogTitle className="text-lg font-semibold text-red-600">
+                  ลบสต๊อก
+                </DialogTitle>
+              </div>
+            </div>
+            <p className="text-sm text-gray-600">
+              สต๊อก ID: {selectedDeleteStock?.id}
+            </p>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <div className="flex items-center space-x-2">
+                <Trash2 className="h-5 w-5 text-red-600" />
+                <h4 className="font-medium text-red-800">ยืนยันการลบสต๊อก</h4>
+              </div>
+              <p className="text-sm text-red-700 mt-2">
+                คุณแน่ใจหรือไม่ที่จะลบสต๊อกนี้? การดำเนินการนี้จะตั้งจำนวนสต๊อกเป็น 0 และไม่สามารถย้อนกลับได้
+              </p>
+              <div className="mt-3 text-sm text-gray-600">
+                <p><strong>จำนวนสต๊อก:</strong> {selectedDeleteStock?.quantity?.toLocaleString() || 0} หน่วย</p>
+                <p><strong>หมายเหตุ:</strong> {selectedDeleteStock?.note || 'ไม่ระบุ'}</p>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <div className="flex space-x-2">
+              <Button
+                variant="outline"
+                onClick={handleCloseDeleteStockModal}
+                className="border-gray-300 text-gray-700 hover:bg-gray-50"
+              >
+                <X className="h-4 w-4 mr-2" />
+                ยกเลิก
+              </Button>
+              <Button
+                onClick={handleDeleteStockSubmit}
+                disabled={deleteLoading}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                {deleteLoading ? 'กำลังลบ...' : 'ลบสต๊อก'}
+              </Button>
             </div>
           </DialogFooter>
         </DialogContent>

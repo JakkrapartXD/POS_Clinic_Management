@@ -1259,6 +1259,40 @@ export const GraphQLMutations = {
     }
   `,
 
+  // Update stock mutation
+  UPDATE_STOCK: `
+    mutation UpdateStock($id: String!, $input: UpdateStockInput!) {
+      updateStock(id: $id, input: $input) {
+        id
+        quantity
+        quantity_in
+        is_outofstock
+        production_date
+        expiration_date
+        reference_table
+        reference_id
+        note
+        created_at
+        createdByUserId
+        created_by_username
+        product_name
+        product_unit
+        product {
+          id
+          product_name
+          stock_quantity
+        }
+      }
+    }
+  `,
+
+  // Delete stock mutation
+  DELETE_STOCK: `
+    mutation DeleteStock($id: String!) {
+      deleteStock(id: $id)
+    }
+  `,
+
   // Report Mutations
   GENERATE_DAILY_REPORT: `
     mutation GenerateDailyReport($date: DateTime!) {
@@ -1438,6 +1472,25 @@ export const GraphQLAPI = {
   }): Promise<{ createStock: any }> =>
     graphqlClient.mutation(GraphQLMutations.CREATE_STOCK, {
       variables: { input }
+    }),
+
+  updateStock: (id: string, input: {
+    quantity?: number
+    quantity_in?: number
+    is_outofstock?: boolean
+    production_date?: string
+    expiration_date?: string
+    reference_table?: string
+    reference_id?: string
+    note?: string
+  }): Promise<{ updateStock: any }> =>
+    graphqlClient.mutation(GraphQLMutations.UPDATE_STOCK, {
+      variables: { id, input }
+    }),
+
+  deleteStock: (id: string): Promise<{ deleteStock: boolean }> =>
+    graphqlClient.mutation(GraphQLMutations.DELETE_STOCK, {
+      variables: { id }
     }),
 
   // Category operations
