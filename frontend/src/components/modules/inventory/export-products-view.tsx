@@ -8,25 +8,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox"
 import { Download, FileText, Filter } from "lucide-react"
 
-// Export configuration interface
-export interface ExportSettings {
-  format: 'xlsx' | 'csv' | 'pdf';
-  includeImages: boolean;
-  includeStock: boolean;
-  includePrices: boolean;
-  includeSuppliers: boolean;
-  dateRange: 'all' | 'today' | 'week' | 'month' | 'quarter' | 'year';
-  category: string; // 'all' or specific category ID
-  stockStatus: 'all' | 'in-stock' | 'low-stock' | 'out-of-stock';
-}
-
 interface ExportProductsViewProps {
   onBack: () => void
-  onExport: (data: ExportSettings) => void
+  onExport: (data: any) => void
 }
 
 export default function ExportProductsView({ onBack, onExport }: ExportProductsViewProps) {
-  const [exportSettings, setExportSettings] = useState<ExportSettings>({
+  const [exportSettings, setExportSettings] = useState({
     format: 'xlsx',
     includeImages: false,
     includeStock: true,
@@ -63,7 +51,7 @@ export default function ExportProductsView({ onBack, onExport }: ExportProductsV
               <Label>เลือกรูปแบบไฟล์</Label>
               <Select
                 value={exportSettings.format}
-                onValueChange={(value) => setExportSettings(prev => ({ ...prev, format: value as ExportSettings['format'] }))}
+                onValueChange={(value) => setExportSettings(prev => ({ ...prev, format: value }))}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -162,7 +150,7 @@ export default function ExportProductsView({ onBack, onExport }: ExportProductsV
               <Label>สถานะสต็อก</Label>
               <Select
                 value={exportSettings.stockStatus}
-                onValueChange={(value) => setExportSettings(prev => ({ ...prev, stockStatus: value as ExportSettings['stockStatus'] }))}
+                onValueChange={(value) => setExportSettings(prev => ({ ...prev, stockStatus: value }))}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -180,7 +168,7 @@ export default function ExportProductsView({ onBack, onExport }: ExportProductsV
               <Label>ช่วงเวลา</Label>
               <Select
                 value={exportSettings.dateRange}
-                onValueChange={(value) => setExportSettings(prev => ({ ...prev, dateRange: value as ExportSettings['dateRange'] }))}
+                onValueChange={(value) => setExportSettings(prev => ({ ...prev, dateRange: value }))}
               >
                 <SelectTrigger>
                   <SelectValue />

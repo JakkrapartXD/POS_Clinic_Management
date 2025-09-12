@@ -36,8 +36,6 @@ import { logger } from "@/lib/logger"
 import { BackupAPI, type GoogleDriveConfig, type BackupFile, type GoogleDriveStatus, type SchedulerConfig, type SchedulerStatus } from "@/clients/backup"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { Textarea } from "@/components/ui/textarea"
-import toast from "react-hot-toast"
-import { GraphQLAPI } from "@/clients/graphql"
 
 interface BackupStatus {
   id: string
@@ -181,101 +179,6 @@ export default function DataBackupPage() {
       logger.error('Failed to load scheduler status', error as Error, 'SETTINGS')
     }
   }
-
-  // Quick Actions Functions with Toast Notifications
-  const generateStockAlert = async () => {
-    const loadingToast = toast.loading('กำลังตรวจสอบสต็อก...')
-    
-    try {
-      // ดึงข้อมูลสินค้าจาก GraphQL
-      const response = await GraphQLAPI.getAllProducts()
-      const products = response.products || response || []
-      
-      // ตรวจสอบสินค้าที่ใกล้หมด (stock_quantity <= reorder_point)
-      const lowStockItems = products.filter((product: any) => 
-        product.stock_quantity <= (product.reorder_point || 10)
-      )
-      
-      toast.dismiss(loadingToast)
-      
-      if (lowStockItems.length > 0) {
-        toast.error(
-          `🚨 พบสินค้า ${lowStockItems.length} รายการที่ใกล้หมด`, 
-          { duration: 6000 }
-        )
-        
-        // แสดงรายละเอียดใน console สำหรับ debug
-        console.log('Low stock items:', lowStockItems.map((item: any) => ({
-          name: item.product_name,
-          current: item.stock_quantity,
-          reorder: item.reorder_point,
-          unit: item.unit
-        })))
-        
-        return lowStockItems
-      } else {
-        toast.success('✅ สต็อกสินค้าปกติทั้งหมด')
-        return []
-      }
-    } catch (error) {
-      toast.dismiss(loadingToast)
-      toast.error('❌ ไม่สามารถตรวจสอบสต็อกได้')
-      console.error('Stock check error:', error)
-      return []
-    }
-  }
-
-  const generateDailyReport = async () => {
-    const loadingToast = toast.loading('กำลังสร้างรายงานประจำวัน...')
-    
-    try {
-      const today = new Date().toISOString().split('T')[0]
-      
-      // ดึงข้อมูลสินค้าทั้งหมด
-      const response = await GraphQLAPI.getAllProducts()
-      const products = response.products || response || []
-      
-      // คำนวณสถิติ
-      const totalProducts = products.length
-      const activeProducts = products.filter((p: any) => p.status === 'active').length
-      const lowStockCount = products.filter((p: any) => p.stock_quantity <= (p.reorder_point || 10)).length
-      const totalStockValue = products.reduce((sum: number, p: any) => sum + (p.stock_quantity * p.cost), 0)
-      
-      toast.dismiss(loadingToast)
-      
-      toast.success(
-        `📊 รายงานประจำวัน (${new Date().toLocaleDateString('th-TH')})\n` +
-        `• สินค้าทั้งหมด: ${totalProducts} รายการ\n` +
-        `• สินค้าที่ใช้งาน: ${activeProducts} รายการ\n` +
-        `• สินค้าใกล้หมด: ${lowStockCount} รายการ\n` +
-        `• มูลค่าสต็อก: ${totalStockValue.toLocaleString()} บาท`,
-        { duration: 8000 }
-      )
-      
-      return {
-        totalProducts,
-        activeProducts, 
-        lowStockCount,
-        totalStockValue
-      }
-    } catch (error) {
-      toast.dismiss(loadingToast)
-      toast.error('❌ ไม่สามารถสร้างรายงานได้')
-      console.error('Report generation error:', error)
-      return null
-    }
-  }
-
-  const generateSalesReport = async () => {
-    toast('📈 ฟีเจอร์รายงานยอดขายจะพร้อมใช้งานเร็วๆ นี้', { 
-      duration: 3000,
-      icon: '📈',
-      style: {
-        background: '#3b82f6',
-        color: '#fff',
-      }
-    })
-  }
   
   const handleSaveSettings = async () => {
     try {
@@ -291,14 +194,14 @@ export default function DataBackupPage() {
       const response = await BackupAPI.updateSchedulerConfig(newConfig)
       
       if (response.success) {
-        toast.success('✅ บันทึกการตั้งค่าเสร็จสิ้น!')
+        alert('บันทึกการตั้งค่าเสร็จสิ้น!')
         await loadSchedulerStatus()
       } else {
         throw new Error(response.error || 'Failed to save settings')
       }
     } catch (error) {
       logger.error('Failed to save settings', error as Error, 'SETTINGS')
-      toast.error(`❌ การบันทึกการตั้งค่าล้มเหลว: ${(error as Error).message}`)
+      alert(`การบันทึกการตั้งค่าล้มเหลว: ${(error as Error).message}`)
     }
   }
 
@@ -323,7 +226,7 @@ export default function DataBackupPage() {
       setBackupProgress(100)
       
       if (response.success) {
-        toast.success(`✅ การสำรองข้อมูลเสร็จสิ้น! ${uploadToGoogleDrive ? '(อัพโหลดไป Google Drive แล้ว)' : ''}`)
+        alert(`การสำรองข้อมูลเสร็จสิ้น! ${uploadToGoogleDrive ? '(อัพโหลดไป Google Drive แล้ว)' : ''}`)
         await loadBackupData() // Reload backup list
       } else {
         throw new Error(response.error || 'Backup failed')
@@ -331,7 +234,7 @@ export default function DataBackupPage() {
       
     } catch (error) {
       logger.error('Manual backup failed', error as Error, 'BACKUP')
-      toast.error(`❌ การสำรองข้อมูลล้มเหลว: ${(error as Error).message}`)
+      alert(`การสำรองข้อมูลล้มเหลว: ${(error as Error).message}`)
     } finally {
       setIsBackupRunning(false)
       setBackupProgress(0)
@@ -349,13 +252,13 @@ export default function DataBackupPage() {
       const response = await BackupAPI.restoreBackup(type, backupId)
       
       if (response.success) {
-        toast.success('✅ กู้คืนข้อมูลเสร็จสิ้น!')
+        alert('กู้คืนข้อมูลเสร็จสิ้น!')
       } else {
         throw new Error(response.error || 'Restore failed')
       }
     } catch (error) {
       logger.error('Data restore failed', error as Error, 'BACKUP')
-      toast.error(`❌ การกู้คืนข้อมูลล้มเหลว: ${(error as Error).message}`)
+      alert(`การกู้คืนข้อมูลล้มเหลว: ${(error as Error).message}`)
     }
   }
 
@@ -365,7 +268,7 @@ export default function DataBackupPage() {
       await BackupAPI.triggerDownload(filename)
     } catch (error) {
       logger.error('Backup download failed', error as Error, 'BACKUP')
-      toast.error(`❌ การดาวน์โหลดล้มเหลว: ${(error as Error).message}`)
+      alert(`การดาวน์โหลดล้มเหลว: ${(error as Error).message}`)
     }
   }
   
@@ -378,14 +281,14 @@ export default function DataBackupPage() {
       const response = await BackupAPI.deleteBackup(type, backupId)
       
       if (response.success) {
-        toast.success('✅ ลบไฟล์สำรองข้อมูลเสร็จสิ้น')
+        alert('ลบไฟล์สำรองข้อมูลเสร็จสิ้น')
         await loadBackupData()
       } else {
         throw new Error(response.error || 'Delete failed')
       }
       } catch (error) {
         logger.error('Delete backup failed', error as Error, 'BACKUP')
-        toast.error(`❌ การลบไฟล์ล้มเหลว: ${(error as Error).message}`)
+        alert(`การลบไฟล์ล้มเหลว: ${(error as Error).message}`)
     }
   }
   
@@ -404,7 +307,7 @@ export default function DataBackupPage() {
         throw new Error(response.message || 'Configuration failed')
       }
     } catch (error) {
-      toast.error(`❌ การตั้งค่า Google Drive ล้มเหลว: ${(error as Error).message}`)
+      alert(`การตั้งค่า Google Drive ล้มเหลว: ${(error as Error).message}`)
     } finally {
       setIsConfiguring(false)
     }
@@ -869,45 +772,6 @@ export default function DataBackupPage() {
                   <p>• ไฟล์สำรอง Google Drive: {backupStats.totalGoogleDriveBackups} ไฟล์</p>
                   <p>• ขนาดรวม Local: {BackupAPI.formatBytes(backupStats.totalLocalSize)}</p>
                 </div>
-              </CardContent>
-            </Card>
-
-            {/* System Alerts & Reports */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <AlertCircle className="h-5 w-5" />
-                  <span>การแจ้งเตือนและรายงาน</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="w-full justify-start"
-                  onClick={generateStockAlert}
-                >
-                  <AlertCircle className="h-4 w-4 mr-2 text-orange-500" />
-                  ตรวจสอบสต็อกใกล้หมด
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="w-full justify-start"
-                  onClick={generateDailyReport}
-                >
-                  <FileText className="h-4 w-4 mr-2 text-blue-500" />
-                  สร้างรายงานประจำวัน
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="w-full justify-start"
-                  onClick={generateSalesReport}
-                >
-                  <Calendar className="h-4 w-4 mr-2 text-green-500" />
-                  รายงานยอดขาย
-                </Button>
               </CardContent>
             </Card>
           </div>

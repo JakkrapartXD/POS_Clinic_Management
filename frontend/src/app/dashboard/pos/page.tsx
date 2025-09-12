@@ -66,6 +66,7 @@ export default function POSPage() {
   const [paymentMethod, setPaymentMethod] = useState("cash")
   const [isProcessingPayment, setIsProcessingPayment] = useState(false)
   const [showPromptPayScan, setShowPromptPayScan] = useState(false)
+  const [promptPayAmount, setPromptPayAmount] = useState(0)
   const [showPaymentSuccess, setShowPaymentSuccess] = useState(false)
   const [completedOrder, setCompletedOrder] = useState<any>(null)
   const barcodeRef = useRef<SVGSVGElement>(null)
@@ -90,7 +91,8 @@ export default function POSPage() {
         handleNumberInput('X')
       } else if (key === 'Enter') {
         event.preventDefault()
-        if (paymentAmount >= calculateTotal() && !isProcessingPayment) {
+        const currentAmount = getTotalPaymentAmount()
+        if (currentAmount >= calculateTotal() && !isProcessingPayment) {
           handlePaymentConfirm()
         }
       }
@@ -103,7 +105,7 @@ export default function POSPage() {
     return () => {
       document.removeEventListener('keydown', handleKeyPress)
     }
-  }, [showPaymentDialog, paymentAmount, isProcessingPayment])
+  }, [showPaymentDialog, paymentAmount, promptPayAmount, paymentMethod, isProcessingPayment])
 
   // ดึงข้อมูลสินค้าจาก API
   const fetchProducts = async () => {
@@ -206,7 +208,17 @@ export default function POSPage() {
   }
 
   const calculateChange = () => {
+    if (paymentMethod === "promptpay") {
+      return 0 // PromptPay doesn't have change
+    }
     return paymentAmount - calculateTotal()
+  }
+
+  const getTotalPaymentAmount = () => {
+    if (paymentMethod === "promptpay") {
+      return promptPayAmount
+    }
+    return paymentAmount
   }
 
 
@@ -215,6 +227,7 @@ export default function POSPage() {
     
     // ตั้งค่าจำนวนเงินเริ่มต้นเป็นยอดรวมพอดี
     setPaymentAmount(calculateTotal())
+    setPromptPayAmount(calculateTotal())
     setShowPaymentDialog(true)
   }
 
@@ -292,9 +305,9 @@ export default function POSPage() {
       // สร้าง Payment
       const paymentInput = {
         orderId: orderId,
-        payment_type: paymentMethod,
+        payment_type: paymentMethod === "promptpay" ? "promptpay" : paymentMethod,
         amount: calculateTotal(), // ใช้ยอดรวมที่แท้จริงแทน paymentAmount
-        details: `ชำระด้วย${paymentMethod === 'cash' ? 'เงินสด' : paymentMethod === 'credit_card' ? 'บัตรเครดิต' : 'พร้อมเพย์'} รับเงิน ฿${paymentAmount.toFixed(2)} เงินทอน ฿${change.toFixed(2)}`
+        details: `ชำระด้วย${paymentMethod === 'cash' ? 'เงินสด' : paymentMethod === 'credit_card' ? 'บัตรเครดิต' : 'พร้อมเพย์'} รับเงิน ฿${getTotalPaymentAmount().toFixed(2)} เงินทอน ฿${change.toFixed(2)}`
       }
 
       logger.info('Creating payment', { 
@@ -332,7 +345,7 @@ export default function POSPage() {
         id: orderId,
         receiptNumber: receiptNumber,
         total_amount: calculateTotal(),
-        payment_amount: paymentAmount,
+        payment_amount: getTotalPaymentAmount(),
         change: change,
         payment_method: paymentMethod,
         orderItems: cartItems.map(item => ({
@@ -351,6 +364,7 @@ export default function POSPage() {
       // รีเซ็ตตะกร้า
       setCartItems([])
       setPaymentAmount(0)
+      setPromptPayAmount(0)
       
       // ส่ง event เพื่ออัพเดตจำนวนใบเสร็จรับเงินวันนี้ใน sidebar
       window.dispatchEvent(new CustomEvent('receiptsUpdated'))
@@ -443,6 +457,7 @@ export default function POSPage() {
     switch (method) {
       case 'cash': return 'เงินสด'
       case 'credit_card': return 'บัตรเครดิต'
+      case 'promptpay': return 'พร้อมเพย์'
       case 'qr': return 'พร้อมเพย์'
       default: return 'เงินสด'
     }
@@ -451,16 +466,30 @@ export default function POSPage() {
   const handleNumberInput = (number: string) => {
     if (number === 'X') {
       // ลบตัวเลขหลังสุด
-      setPaymentAmount(prev => Math.floor(prev / 10))
+      if (paymentMethod === "promptpay") {
+        setPromptPayAmount(prev => Math.floor(prev / 10))
+      } else {
+        setPaymentAmount(prev => Math.floor(prev / 10))
+      }
     } else if (number === '.') {
       // ไม่ต้องทำอะไรสำหรับจุดทศนิยม
     } else {
-      // ถ้าเป็นยอดรวมพอดี (เริ่มต้น) ให้รีเซตก่อน แล้วค่อยต่อข้างหลัง
-      if (paymentAmount === calculateTotal()) {
-        setPaymentAmount(parseInt(number))
+      if (paymentMethod === "promptpay") {
+        // ถ้าเป็นยอดรวมพอดี (เริ่มต้น) ให้รีเซตก่อน แล้วค่อยต่อข้างหลัง
+        if (promptPayAmount === calculateTotal()) {
+          setPromptPayAmount(parseInt(number))
+        } else {
+          // ต่อข้างหลังตามปกติ
+          setPromptPayAmount(prev => prev * 10 + parseInt(number))
+        }
       } else {
-        // ต่อข้างหลังตามปกติ
-        setPaymentAmount(prev => prev * 10 + parseInt(number))
+        // ถ้าเป็นยอดรวมพอดี (เริ่มต้น) ให้รีเซตก่อน แล้วค่อยต่อข้างหลัง
+        if (paymentAmount === calculateTotal()) {
+          setPaymentAmount(parseInt(number))
+        } else {
+          // ต่อข้างหลังตามปกติ
+          setPaymentAmount(prev => prev * 10 + parseInt(number))
+        }
       }
     }
   }
@@ -660,9 +689,17 @@ export default function POSPage() {
           <div className="grid grid-cols-2 gap-6 p-6">
             {/* Payment Summary */}
             <div className="space-y-4">
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <div className="text-sm text-gray-600 mb-2">ชำระด้วย เงินสด</div>
-                <div className="text-2xl font-bold text-blue-600">฿{paymentAmount.toFixed(2)}</div>
+              <div className={`p-4 rounded-lg ${
+                paymentMethod === 'cash' ? 'bg-blue-50' : 'bg-green-50'
+              }`}>
+                <div className="text-sm text-gray-600 mb-2">
+                  ชำระด้วย {getPaymentMethodThai(paymentMethod)}
+                </div>
+                <div className={`text-2xl font-bold ${
+                  paymentMethod === 'cash' ? 'text-blue-600' : 'text-green-600'
+                }`}>
+                  ฿{getTotalPaymentAmount().toFixed(2)}
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -670,9 +707,15 @@ export default function POSPage() {
                   <div className="text-sm text-gray-600">ยอดที่ต้องชำระ</div>
                   <div className="text-xl font-bold text-blue-700">฿{calculateTotal().toFixed(2)}</div>
                 </div>
-                <div className="bg-orange-100 p-4 rounded-lg">
+                <div className={`p-4 rounded-lg ${
+                  paymentMethod === 'promptpay' ? 'bg-gray-100' : 'bg-orange-100'
+                }`}>
                   <div className="text-sm text-gray-600">เงินทอน</div>
-                  <div className="text-xl font-bold text-orange-700">฿{calculateChange().toFixed(2)}</div>
+                  <div className={`text-xl font-bold ${
+                    paymentMethod === 'promptpay' ? 'text-gray-500' : 'text-orange-700'
+                  }`}>
+                    {paymentMethod === 'promptpay' ? 'ไม่มี' : `฿${calculateChange().toFixed(2)}`}
+                  </div>
                 </div>
               </div>
 
@@ -680,35 +723,59 @@ export default function POSPage() {
 
               {/* Payment Methods */}
               <div className="space-y-3">
-                <h3 className="font-medium text-gray-900">สามารถแบ่งชำระได้หลายช่องทาง</h3>
+                <h3 className="font-medium text-gray-900">เลือกช่องทางการชำระเงิน</h3>
                 
                 <div className="space-y-2">
-                  <div className={`flex items-center justify-between p-3 rounded-lg border-2 ${
-                    paymentMethod === 'cash' ? 'border-purple-500 bg-purple-50' : 'border-gray-200'
-                  }`}>
+                  <div 
+                    className={`flex items-center justify-between p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                      paymentMethod === 'cash' 
+                        ? 'border-purple-500 bg-purple-50' 
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                    onClick={() => setPaymentMethod('cash')}
+                  >
                     <div className="flex items-center">
                       <div className={`w-4 h-4 rounded-full border-2 mr-3 ${
                         paymentMethod === 'cash' ? 'border-purple-500 bg-purple-500' : 'border-gray-300'
                       }`}>
                         {paymentMethod === 'cash' && <Check className="w-3 h-3 text-white" />}
                       </div>
-                      <span className="font-medium">เงินสด</span>
+                      <span className={`font-medium ${
+                        paymentMethod === 'cash' ? 'text-gray-900' : 'text-gray-700'
+                      }`}>เงินสด</span>
                     </div>
-                    <span className="text-purple-600 font-medium">฿{paymentAmount.toFixed(2)}</span>
+                    <span className={`font-medium ${
+                      paymentMethod === 'cash' ? 'text-purple-600' : 'text-gray-500'
+                    }`}>฿{paymentAmount.toFixed(2)}</span>
                   </div>
 
-                  <div className="flex items-center justify-between p-3 rounded-lg border-2 border-gray-200 bg-gray-50">
+                  <div 
+                    className={`flex items-center justify-between p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                      paymentMethod === 'promptpay' 
+                        ? 'border-green-500 bg-green-50' 
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                    onClick={() => setPaymentMethod('promptpay')}
+                  >
                     <div className="flex items-center">
-                      <div className="w-4 h-4 rounded-full border-2 border-gray-300 mr-3"></div>
-                      <span className="text-gray-500">บัตรเครดิต</span>
+                      <div className={`w-4 h-4 rounded-full border-2 mr-3 ${
+                        paymentMethod === 'promptpay' ? 'border-green-500 bg-green-500' : 'border-gray-300'
+                      }`}>
+                        {paymentMethod === 'promptpay' && <Check className="w-3 h-3 text-white" />}
+                      </div>
+                      <span className={`font-medium ${
+                        paymentMethod === 'promptpay' ? 'text-gray-900' : 'text-gray-700'
+                      }`}>พร้อมเพย์</span>
                     </div>
-                    <span className="text-gray-400">฿0.00</span>
+                    <span className={`font-medium ${
+                      paymentMethod === 'promptpay' ? 'text-green-600' : 'text-gray-500'
+                    }`}>฿{promptPayAmount.toFixed(2)}</span>
                   </div>
 
-                  <div className="flex items-center justify-between p-3 rounded-lg border-2 border-gray-200 bg-gray-50">
+                  <div className="flex items-center justify-between p-3 rounded-lg border-2 border-gray-200 bg-gray-100 opacity-50">
                     <div className="flex items-center">
                       <div className="w-4 h-4 rounded-full border-2 border-gray-300 mr-3"></div>
-                      <span className="text-gray-500">พร้อมเพย์</span>
+                      <span className="text-gray-400">บัตรเครดิต</span>
                     </div>
                     <span className="text-gray-400">฿0.00</span>
                   </div>
@@ -771,10 +838,18 @@ export default function POSPage() {
 
               <Button 
                 onClick={handlePaymentConfirm}
-                className="w-full h-12 bg-purple-500 hover:bg-purple-600 text-lg font-medium"
-                disabled={paymentAmount < calculateTotal() || isProcessingPayment}
+                className={`w-full h-12 text-lg font-medium ${
+                  paymentMethod === 'cash' 
+                    ? 'bg-purple-500 hover:bg-purple-600' 
+                    : 'bg-green-500 hover:bg-green-600'
+                }`}
+                disabled={getTotalPaymentAmount() < calculateTotal() || isProcessingPayment}
               >
-                {isProcessingPayment ? 'กำลังประมวลผล...' : `รับชำระ ฿${paymentAmount.toFixed(2)} (เงินทอน ฿${calculateChange().toFixed(2)})`}
+                {isProcessingPayment ? 'กำลังประมวลผล...' : 
+                  paymentMethod === 'promptpay' 
+                    ? `ชำระพร้อมเพย์ ฿${getTotalPaymentAmount().toFixed(2)}`
+                    : `รับชำระ ฿${getTotalPaymentAmount().toFixed(2)} (เงินทอน ฿${calculateChange().toFixed(2)})`
+                }
               </Button>
             </div>
           </div>

@@ -1,58 +1,124 @@
-# Backend Initialization Guide
+# Pharmacy Management System
 
-This guide helps you set up the backend environment for development.
+ระบบจัดการร้านขายยาแบบครบวงจร พร้อมระบบ POS, จัดการสินค้า, และการสำรองข้อมูล
 
-## 1. Environment Variables
+## 🚀 ขั้นตอนการรันโปรเจค
 
-Set up environment variables for both backend and frontend. Use different `.env` files for Docker, development, and production.
-
-### Backend `.env` Example
-
-```env
-JWT_SECRET=your_jwt_secret
-DATABASE_URL=your_database_url
-SNADMIN_USERNAME=your_admin_username
-SNADMIN_PASSWORD=your_admin_password
+### 1. Clone Repository
+```bash
+git clone <repository-url>
+cd final_project
 ```
 
-## 2. Database Setup (Development)
+### 2. ตั้งค่า Environment Variables
 
-Run the database container for development:
+#### ไฟล์ `.env` (Root Directory)
+```env
+POSTGRES_DB=your_database_name
+POSTGRES_USER=your_postgres_user
+POSTGRES_PASSWORD=your_postgres_password
+PGADMIN_DEFAULT_EMAIL=your_pgadmin_email
+PGADMIN_DEFAULT_PASSWORD=your_pgadmin_password
+```
 
-```sh
+#### ไฟล์ `.env.development` (Root Directory)
+```env
+NODE_ENV=development
+JWT_SECRET=your_jwt_secret_key
+DATABASE_URL=postgresql://user:password@localhost:5432/database
+REDIS_URL=redis://localhost:6379
+FRONTEND_URL=http://localhost:3000
+```
+
+#### ไฟล์ `.env.production` (Root Directory)
+```env
+NODE_ENV=production
+JWT_SECRET=your_secure_jwt_secret_key
+DATABASE_URL=postgresql://user:password@localhost:5432/database
+REDIS_URL=redis://localhost:6379
+FRONTEND_URL=https://your-domain.com
+```
+
+#### ไฟล์ `backend/.env`
+```env
+JWT_SECRET=your_jwt_secret_key
+DATABASE_URL=postgresql://user:password@postgres:5432/database
+REDIS_URL=redis://redis:6379
+FRONTEND_URL=http://localhost:3000
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=admin1234
+```
+
+### 3. รันด้วย Docker Compose
+
+#### Development Mode
+```bash
+# รันทุก services
+docker-compose up -d
+
+# หรือรันเฉพาะ database
 docker-compose up -d postgres redis
 ```
 
-## 3. Backend Setup
-
-Navigate to the backend directory:
-
-```sh
-cd backend
+#### Production Mode
+```bash
+# รันในโหมด production
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
-Install dependencies (if needed):
+### 4. Database Setup
 
-```sh
-bun install
+```bash
+# เข้าไปใน backend container
+docker-compose exec backend bash
+
+# รัน database migration
+bun run prisma:migrate
+
+# รัน seed data (สร้าง admin user และ categories)
+bun run prisma:seed
 ```
 
-Run the database setup script:
+### 5. เข้าถึงระบบ
 
-```sh
-bun run setup-db
+- **Frontend**: http://localhost:3000
+- **Backend API**: http://localhost:4000
+- **PgAdmin**: http://localhost:5050
+- **GraphQL Playground**: http://localhost:4000/graphql
+
+### 6. ข้อมูลเข้าสู่ระบบเริ่มต้น
+
+- **Username**: admin (หรือตามที่ตั้งใน ADMIN_USERNAME)
+- **Password**: admin1234 (หรือตามที่ตั้งใน ADMIN_PASSWORD)
+
+## 📁 โครงสร้างโปรเจค
+
+```
+final_project/
+├── frontend/          # Next.js Frontend
+├── backend/           # Elysia.js Backend
+├── docker-compose.yml # Docker Configuration
+├── .env              # Environment Variables
+└── README.md         # Documentation
 ```
 
-Start the backend in development mode:
+## 🛠️ เทคโนโลยีที่ใช้
 
-```sh
-bun run dev
-```
-The backend API should now be running at http://localhost:4000
+- **Frontend**: Next.js, React, TypeScript, Tailwind CSS
+- **Backend**: Elysia.js, GraphQL, Prisma ORM
+- **Database**: PostgreSQL
+- **Cache**: Redis
+- **Container**: Docker & Docker Compose
+
+## 📋 ฟีเจอร์หลัก
+
+- ✅ ระบบจัดการสินค้า (CRUD)
+- ✅ ระบบ POS (Point of Sale)
+- ✅ ระบบจัดการผู้ใช้และสิทธิ์
+- ✅ ระบบสำรองข้อมูล (Local & Google Drive)
+- ✅ ระบบรายงานและสถิติ
+- ✅ ระบบจัดการหมวดหมู่สินค้า
 
 ---
 
-**Note:**  
-- Ensure all environment variables are set before running the backend.
-- Adjust variable values as needed for your environment.
-- For production, use secure values and proper Docker configuration.
+**หมายเหตุ**: ตรวจสอบให้แน่ใจว่าได้ตั้งค่า environment variables ทั้งหมดก่อนรันระบบ
