@@ -221,7 +221,7 @@ export const queries = {
       },
       include: {
         category: true,
-        stockMovements: {
+        stocks: {
           orderBy: { created_at: 'desc' },
           take: 10
         },

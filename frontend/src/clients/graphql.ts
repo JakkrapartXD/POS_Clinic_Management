@@ -760,18 +760,23 @@ export const GraphQLQueries = {
     }
   `,
 
-  STOCK_MOVEMENTS: `
-    query StockMovements($productId: String, $pagination: PaginationInput) {
-      stockMovements(productId: $productId, pagination: $pagination) {
+  STOCKS: `
+    query Stocks($productId: String, $pagination: PaginationInput) {
+      stocks(productId: $productId, pagination: $pagination) {
         id
-        movement_type
         quantity
+        quantity_in
+        is_outofstock
+        production_date
+        expiration_date
         reference_table
         reference_id
         note
         created_at
         createdByUserId
         created_by_username
+        product_name
+        product_unit
         product {
           id
           product_name
@@ -1154,10 +1159,38 @@ export const GraphQLMutations = {
     mutation AdjustStock($productId: String!, $quantity: Int!, $note: String) {
       adjustStock(productId: $productId, quantity: $quantity, note: $note) {
         id
-        movement_type
         quantity
+        quantity_in
+        is_outofstock
         note
         created_at
+        product {
+          id
+          product_name
+          stock_quantity
+        }
+      }
+    }
+  `,
+
+  // Create stock mutation
+  CREATE_STOCK: `
+    mutation CreateStock($input: CreateStockInput!) {
+      createStock(input: $input) {
+        id
+        quantity
+        quantity_in
+        is_outofstock
+        production_date
+        expiration_date
+        reference_table
+        reference_id
+        note
+        created_at
+        createdByUserId
+        created_by_username
+        product_name
+        product_unit
         product {
           id
           product_name
@@ -1333,6 +1366,21 @@ export const GraphQLAPI = {
       variables: { productId, quantity, note }
     }),
 
+  createStock: (input: {
+    productId: string
+    quantity: number
+    quantity_in?: number
+    is_outofstock?: boolean
+    production_date?: string
+    expiration_date?: string
+    reference_table?: string
+    reference_id?: string
+    note?: string
+  }): Promise<{ createStock: any }> =>
+    graphqlClient.mutation(GraphQLMutations.CREATE_STOCK, {
+      variables: { input }
+    }),
+
   // Category operations
   getAllCategories: (): Promise<{ categories: Category[] }> =>
     graphqlClient.query(GraphQLQueries.ALL_CATEGORIES),
@@ -1410,8 +1458,8 @@ export const GraphQLAPI = {
   getSalesReports: (variables?: { date_from?: string; date_to?: string; productId?: string }): Promise<{ salesReports: any[] }> =>
     graphqlClient.query(GraphQLQueries.SALES_REPORTS, { variables }),
 
-  getStockMovements: (variables?: { productId?: string; pagination?: any }): Promise<{ stockMovements: any[] }> =>
-    graphqlClient.query(GraphQLQueries.STOCK_MOVEMENTS, { variables }),
+  getStocks: (variables?: { productId?: string; pagination?: any }): Promise<{ stocks: any[] }> =>
+    graphqlClient.query(GraphQLQueries.STOCKS, { variables }),
 
   getStockAlerts: (variables?: { acknowledged?: boolean; pagination?: any }): Promise<{ stockAlerts: any[] }> =>
     graphqlClient.query(GraphQLQueries.STOCK_ALERTS, { variables }),

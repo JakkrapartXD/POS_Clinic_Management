@@ -147,7 +147,7 @@ export const typeDefs = /* GraphQL */ `
     orderItems: [OrderItem!]!
     purchaseItems: [PurchaseItem!]!
     prescriptions: [Prescription!]!
-    stockMovements: [StockMovement!]!
+    stocks: [Stock!]!
     salesReports: [SalesReport!]!
     stockAlerts: [StockAlert!]!
   }
@@ -191,6 +191,8 @@ export const typeDefs = /* GraphQL */ `
     sale_note: String
     purchase_note: String
     image_url: String
+    production_date: DateTime
+    expiration_date: DateTime
   }
 
   # Bulk import types
@@ -404,6 +406,8 @@ export const typeDefs = /* GraphQL */ `
     quantity: Int!
     unit_cost: Float!
     total_cost: Float!
+    production_date: DateTime
+    expiration_date: DateTime
   }
 
   input UpdatePurchaseInput {
@@ -413,17 +417,22 @@ export const typeDefs = /* GraphQL */ `
   }
 
   # Stock Management Types
-  type StockMovement {
+  type Stock {
     id: String!
     product: Product!
-    movement_type: String!
     quantity: Int!
+    quantity_in: Int
+    is_outofstock: Boolean!
+    production_date: DateTime
+    expiration_date: DateTime
     reference_table: String
     reference_id: String
     note: String
     created_at: DateTime!
     createdByUserId: String
     created_by_username: String
+    product_name: String
+    product_unit: String
   }
 
   type StockAlert {
@@ -438,10 +447,13 @@ export const typeDefs = /* GraphQL */ `
     acknowledged_at: DateTime
   }
 
-  input CreateStockMovementInput {
+  input CreateStockInput {
     productId: String!
-    movement_type: String!
     quantity: Int!
+    quantity_in: Int
+    is_outofstock: Boolean = false
+    production_date: DateTime
+    expiration_date: DateTime
     reference_table: String
     reference_id: String
     note: String
@@ -699,7 +711,7 @@ export const typeDefs = /* GraphQL */ `
     treatmentPlan(id: String!): TreatmentPlan
 
     # Stock & Reports
-    stockMovements(productId: String, pagination: PaginationInput): [StockMovement!]!
+    stocks(productId: String, pagination: PaginationInput): [Stock!]!
     stockAlerts(acknowledged: Boolean, pagination: PaginationInput): [StockAlert!]!
     
     dailyReports(date_from: DateTime, date_to: DateTime): [DailyReport!]!
@@ -730,7 +742,8 @@ export const typeDefs = /* GraphQL */ `
     updateProduct(id: String!, input: UpdateProductInput!): Product!
     updateProductImage(id: String!, image_url: String!): Product!
     deleteProduct(id: String!): Boolean!
-    adjustStock(productId: String!, quantity: Int!, note: String): StockMovement!
+    adjustStock(productId: String!, quantity: Int!, note: String): Stock!
+    createStock(input: CreateStockInput!): Stock!
     
     # Bulk import
     bulkImportProducts(input: BulkImportProductsInput!): ImportResult!

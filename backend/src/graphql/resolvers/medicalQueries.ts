@@ -320,7 +320,7 @@ export const medicalQueries = {
   },
 
   // Stock & Report Queries
-  async stockMovements(parent: any, args: any, context: any) {
+  async stocks(parent: any, args: any, context: any) {
     const { productId, pagination } = args;
     context.security.requireStaff(context);
     
@@ -333,7 +333,7 @@ export const medicalQueries = {
       where.productId = productId;
     }
     
-    const stockMovements = await context.prisma.stockMovement.findMany({
+    const stocks = await context.prisma.stock.findMany({
       where,
       skip: pagination?.skip || 0,
       take: pagination?.take || 10,
@@ -348,7 +348,7 @@ export const medicalQueries = {
       orderBy: { created_at: 'desc' }
     });
     
-    return stockMovements;
+    return stocks;
   },
 
   async stockAlerts(parent: any, args: any, context: any) {

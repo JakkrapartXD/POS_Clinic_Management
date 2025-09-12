@@ -67,19 +67,21 @@ export const medicalMutations = {
           }
         });
         
-        // Create stock movement
-        await tx.stockMovement.create({
+        // Create stock record
+        await tx.stock.create({
           data: {
             productId: item.productId,
-            movement_type: 'out',
             quantity: item.quantity,
-            reference_table: 'order',
+            quantity_in: 0,
+            is_outofstock: false,
+            reference_table: 'Order',
             reference_id: newOrder.id,
             note: `Sale - Order ${newOrder.id}`,
             createdByUserId: context.userId,
             created_by_username: context.user?.username,
             product_name: product?.product_name || null,
-            product_unit: product?.unit || null
+            product_unit: product?.unit || null,
+            created_at: new Date()
           }
         });
       }
@@ -153,18 +155,60 @@ export const medicalMutations = {
       }
     });
     
-    // Generate invoice if payment completes the order
+    // Generate invoice and reduce stock if payment completes the order
     if (input.amount >= remainingAmount) {
       const invoiceNumber = `INV-${Date.now()}-${order.id.slice(-6)}`;
       
-      await context.prisma.invoice.create({
-        data: {
-          orderId: input.orderId,
-          paymentId: payment.id,
-          invoice_number: invoiceNumber,
-          total_amount: order.total_amount || 0,
-          createdByUserId: context.userId,
-          created_by_username: context.user?.username
+      // Use transaction to ensure data consistency
+      await context.prisma.$transaction(async (tx: any) => {
+        // Create invoice
+        await tx.invoice.create({
+          data: {
+            orderId: input.orderId,
+            paymentId: payment.id,
+            invoice_number: invoiceNumber,
+            total_amount: order.total_amount || 0,
+            createdByUserId: context.userId,
+            created_by_username: context.user?.username
+          }
+        });
+        
+        // Get order items to reduce stock
+        const orderItems = await tx.orderItem.findMany({
+          where: { orderId: input.orderId },
+          include: { product: true }
+        });
+        
+        // Reduce stock for each item
+        for (const item of orderItems) {
+          // Update product stock
+          await tx.product.update({
+            where: { id: item.productId },
+            data: {
+              stock_quantity: {
+                decrement: item.quantity
+              },
+              updated_at: new Date()
+            }
+          });
+          
+          // Create stock record for the reduction
+          await tx.stock.create({
+            data: {
+              productId: item.productId,
+              quantity: item.quantity,
+              quantity_in: 0,
+              is_outofstock: false, // Will be updated based on new stock level
+              reference_table: 'Order',
+              reference_id: input.orderId,
+              note: `Stock reduction for order ${input.orderId}`,
+              createdByUserId: context.userId,
+              created_by_username: context.user?.username,
+              product_name: item.product.product_name,
+              product_unit: item.product.unit,
+              created_at: new Date()
+            }
+          });
         }
       });
     }
@@ -586,17 +630,29 @@ export const medicalMutations = {
             }
           });
           
-          // Create stock movement
-          await tx.stockMovement.create({
+          // Get product details for stock record
+          const product = await tx.product.findUnique({
+            where: { id: item.productId },
+            select: { product_name: true, unit: true }
+          });
+          
+          // Create stock record
+          await tx.stock.create({
             data: {
               productId: item.productId,
-              movement_type: 'in',
               quantity: item.quantity,
-              reference_table: 'purchase',
+              quantity_in: item.quantity,
+              is_outofstock: false,
+              production_date: item.production_date || null,
+              expiration_date: item.expiration_date || null,
+              reference_table: 'Purchase',
               reference_id: newPurchase.id,
               note: `Purchase from supplier - ${newPurchase.id}`,
               createdByUserId: context.userId,
-              created_by_username: context.user?.username
+              created_by_username: context.user?.username,
+              product_name: product?.product_name,
+              product_unit: product?.unit,
+              created_at: new Date()
             }
           });
         }
@@ -776,7 +832,8 @@ export const medicalMutations = {
         count: salesReports.length
       };
     } catch (error) {
-      throw new GraphQLError(`Failed to generate sales reports: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      throw new GraphQLError(`Failed to generate sales reports: ${errorMessage}`);
     }
   },
 
@@ -809,7 +866,8 @@ export const medicalMutations = {
         count: stockAlerts.length
       };
     } catch (error) {
-      throw new GraphQLError(`Failed to generate stock alerts: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      throw new GraphQLError(`Failed to generate stock alerts: ${errorMessage}`);
     }
   },
 
@@ -844,7 +902,8 @@ export const medicalMutations = {
       
       return comprehensiveReport;
     } catch (error) {
-      throw new GraphQLError(`Failed to generate comprehensive daily report: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      throw new GraphQLError(`Failed to generate comprehensive daily report: ${errorMessage}`);
     }
   },
 
