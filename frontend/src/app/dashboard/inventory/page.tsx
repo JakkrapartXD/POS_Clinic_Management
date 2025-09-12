@@ -220,9 +220,9 @@ function InventoryPage() {
       
       logger.info('Loading all products from GraphQL', {}, 'INVENTORY')
       
-      // Load all products without pagination
+      // Load all products without pagination (including inactive but not deleted)
       const response = await GraphQLAPI.getAllProducts({
-        filter: { status: 'active' } // Only load active products
+        // No filter - load all products (backend will handle excluding deleted ones)
       })
       
       if (response.products && response.products.products) {
