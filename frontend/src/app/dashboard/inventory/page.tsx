@@ -7,7 +7,6 @@ import ProductListSidebar from "@/components/modules/inventory/product-list-side
 import AlphabetIndex from "@/components/modules/inventory/alphabet-index"
 import InventoryActionsGrid from "@/components/modules/inventory/inventory-actions-grid"
 import ImportProductsView from "@/components/modules/inventory/import-products-view"
-import ExportProductsView from "@/components/modules/inventory/export-products-view"
 import DeleteProductsView from "@/components/modules/inventory/delete-products-view"
 import ProductDetailView from "@/components/modules/inventory/product-detail-view"
 import { GraphQLAPI } from "@/clients/graphql"
@@ -15,7 +14,7 @@ import { logger } from "@/lib/logger"
 import { useAuth } from "@/components/providers/auth-provider"
 
 type AlphabetMode = 'english' | 'thai' | 'numbers'
-type ViewMode = 'list' | 'add-product' | 'product-detail' | 'import-products' | 'export-products' | 'delete-products' | 'print-barcode' | 'print-price-tag' | 'print-medicine-label' | 'product-report'
+type ViewMode = 'list' | 'add-product' | 'product-detail' | 'import-products' | 'delete-products'
 
 interface TransformedProduct {
   id: string
@@ -251,12 +250,7 @@ function InventoryPage() {
   // Action handlers - memoized
   const handleAddProduct = useCallback(() => setViewMode('add-product'), [])
   const handleImportProducts = useCallback(() => setViewMode('import-products'), [])
-  const handleExportProducts = useCallback(() => setViewMode('export-products'), [])
   const handleDeleteProduct = useCallback(() => setViewMode('delete-products'), [])
-  const handlePrintBarcode = useCallback(() => setViewMode('print-barcode'), [])
-  const handlePrintPriceTag = useCallback(() => setViewMode('print-price-tag'), [])
-  const handlePrintMedicineLabel = useCallback(() => setViewMode('print-medicine-label'), [])
-  const handleProductReport = useCallback(() => setViewMode('product-report'), [])
 
   // Product detail handler - memoized
   const handleProductClick = useCallback((productId: string) => {
@@ -381,9 +375,6 @@ function InventoryPage() {
     setViewMode('list')
   }, [loadProducts])
 
-  const handleExportSubmit = useCallback((exportSettings: any) => {
-    // Handle export logic here
-  }, [])
 
   const handleDeleteSubmit = useCallback((deleteData: any) => {
     // Invalidate product cache before reloading
@@ -401,12 +392,7 @@ function InventoryPage() {
       case 'add-product': return 'เพิ่มสินค้าใหม่'
       case 'product-detail': return 'รายละเอียดสินค้า'
       case 'import-products': return 'เพิ่มชุดสินค้า/นำเข้า/แก้ไข'
-      case 'export-products': return 'ส่งออกยอดสินค้า'
       case 'delete-products': return 'ลบสินค้า'
-      case 'print-barcode': return 'พิมพ์บาร์โค้ด'
-      case 'print-price-tag': return 'พิมพ์ป้ายราคาสินค้า'
-      case 'print-medicine-label': return 'พิมพ์ฉลากยา'
-      case 'product-report': return 'รายงานรับเข้า/ออกของสินค้า'
       default: return 'สต็อกสินค้า'
     }
   }, [viewMode])
@@ -504,12 +490,12 @@ function InventoryPage() {
             <InventoryActionsGrid
               onAddProduct={handleAddProduct}
               onImportProducts={handleImportProducts}
-              onExportProducts={handleExportProducts}
+              onExportProducts={() => {}} // Disabled
               onDeleteProduct={handleDeleteProduct}
-              onPrintBarcode={handlePrintBarcode}
-              onPrintPriceTag={handlePrintPriceTag}
-              onPrintMedicineLabel={handlePrintMedicineLabel}
-              onProductReport={handleProductReport}
+              onPrintBarcode={() => {}} // Disabled
+              onPrintPriceTag={() => {}} // Disabled
+              onPrintMedicineLabel={() => {}} // Disabled
+              onProductReport={() => {}} // Disabled
             />
           )}
 
@@ -544,34 +530,11 @@ function InventoryPage() {
             />
           )}
 
-          {viewMode === 'export-products' && (
-            <ExportProductsView
-              onBack={handleBackToList}
-              onExport={handleExportSubmit}
-            />
-          )}
-
           {viewMode === 'delete-products' && (
             <DeleteProductsView
               onBack={handleBackToList}
               onDelete={handleDeleteSubmit}
             />
-          )}
-
-          {(viewMode === 'print-barcode' || viewMode === 'print-price-tag' || viewMode === 'print-medicine-label' || viewMode === 'product-report') && (
-            <div className="p-6 text-center">
-              <div className="max-w-md mx-auto">
-                <div className="text-lg font-medium text-gray-700 mb-2">
-                  {getViewTitle()}
-                </div>
-                <div className="text-gray-500 mb-6">
-                  ฟีเจอร์นี้กำลังอยู่ในระหว่างการพัฒนา
-                </div>
-                <Button onClick={handleBackToList}>
-                  ย้อนกลับ
-                </Button>
-              </div>
-            </div>
           )}
         </div>
       </div>
