@@ -2,14 +2,14 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
-import { Edit2, ArrowLeft, Upload } from "lucide-react"
+import { Edit2, ArrowLeft, Upload, Package, Edit } from "lucide-react"
 import ProductImageUpload from "@/components/common/ProductImageUpload"
 import { GraphQLAPI } from "@/clients/graphql"
 import { logger } from "@/lib/logger"
@@ -77,6 +77,8 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
   const [product, setProduct] = useState<ProductData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [stocks, setStocks] = useState<any[]>([])
+  const [stocksLoading, setStocksLoading] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [activeTab, setActiveTab] = useState("general")
   const [showUnitEditDialog, setShowUnitEditDialog] = useState(false)
@@ -195,6 +197,123 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
       loadProduct()
     }
   }, [productId])
+
+  // Load stocks data for all products with the same name
+  const loadStocks = async () => {
+    if (!product?.product_name) return
+    
+    try {
+      setStocksLoading(true)
+      // Get all products with the same name
+      const productsResponse = await GraphQLAPI.searchProducts(product.product_name)
+      
+      if (productsResponse.searchProducts) {
+        // Filter products that have the exact same name
+        const sameNameProducts = productsResponse.searchProducts.filter(
+          (prod: any) => prod.product_name === product.product_name
+        )
+        
+        // Get stocks for all products with the same name
+        const allStocks: any[] = []
+        
+        for (const prod of sameNameProducts) {
+          const stocksResponse = await GraphQLAPI.getStocks({ productId: prod.id })
+          if (stocksResponse.stocks) {
+            // Add product info to each stock record
+            const stocksWithProductInfo = stocksResponse.stocks.map(stock => ({
+              ...stock,
+              product_name: prod.product_name,
+              product_unit: prod.unit,
+              product_sale_price: prod.sale_price,
+              product_cost: prod.cost,
+              product_sku: prod.sku,
+              product_pack_size: prod.pack_size
+            }))
+            allStocks.push(...stocksWithProductInfo)
+          }
+        }
+        
+        setStocks(allStocks)
+      }
+    } catch (err) {
+      logger.error('Failed to load stocks for all products with same name', err, 'PRODUCT_DETAIL')
+    } finally {
+      setStocksLoading(false)
+    }
+  }
+
+  // Load stocks when stock tab is active and product is loaded
+  useEffect(() => {
+    if (activeTab === 'stock' && product?.product_name) {
+      loadStocks()
+    }
+  }, [activeTab, product?.product_name])
+
+  // Group stocks by unit and product variant
+  const groupStocksByUnit = () => {
+    const grouped: { [key: string]: any[] } = {}
+    
+    stocks.forEach(stock => {
+      // Create a unique key combining unit and pack_size to separate different product variants
+      const unit = stock.product_unit || 'หน่วย'
+      const packSize = stock.product_pack_size || ''
+      const sku = stock.product_sku || ''
+      const key = `${unit}${packSize ? ` (${packSize})` : ''}${sku ? ` - ${sku}` : ''}`
+      
+      if (!grouped[key]) {
+        grouped[key] = []
+      }
+      grouped[key].push(stock)
+    })
+
+    return Object.entries(grouped).map(([unitKey, unitStocks]) => {
+      // Get product info from the first stock record
+      const firstStock = unitStocks[0]
+      return {
+        unit: unitKey,
+        unitName: firstStock.product_unit || 'หน่วย',
+        packSize: firstStock.product_pack_size || '',
+        sku: firstStock.product_sku || '',
+        salePrice: firstStock.product_sale_price || 0,
+        cost: firstStock.product_cost || 0,
+        totalQuantity: unitStocks.reduce((sum, stock) => sum + stock.quantity, 0),
+        stocks: unitStocks.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      }
+    })
+  }
+
+  // Format date helper
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return '-'
+    try {
+      return new Date(dateString).toLocaleDateString('th-TH', {
+        day: '2-digit',
+        month: '2-digit',
+        year: '2-digit'
+      })
+    } catch {
+      return '-'
+    }
+  }
+
+  // Get status badge
+  const getStatusBadge = (stock: any) => {
+    if (stock.is_outofstock) {
+      return <Badge variant="destructive">หมดสต๊อก</Badge>
+    }
+    if (stock.expiration_date && new Date(stock.expiration_date) < new Date()) {
+      return <Badge variant="destructive">หมดอายุ</Badge>
+    }
+    if (stock.expiration_date) {
+      const expDate = new Date(stock.expiration_date)
+      const today = new Date()
+      const daysUntilExpiry = Math.ceil((expDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+      if (daysUntilExpiry <= 30) {
+        return <Badge variant="secondary">ใกล้หมดอายุ</Badge>
+      }
+    }
+    return <Badge variant="default">ปกติ</Badge>
+  }
 
   const handleEditClick = () => {
     logger.debug('ProductDetailView: Switching to edit mode', {}, 'INVENTORY')
@@ -948,6 +1067,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
     )
   }
 
+
   return (
     <div className="p-6">
       <div className="max-w-4xl mx-auto">
@@ -1304,20 +1424,42 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
 
           {/* สต๊อกสินค้า */}
           <TabsContent value="stock" className="space-y-6">
+            <div className="flex justify-between items-center">
+              <h3 className="text-lg font-semibold">ข้อมูลสต๊อก</h3>
+              <div className="flex space-x-2">
+                <Button 
+                  onClick={loadStocks}
+                  variant="outline"
+                  size="sm"
+                  disabled={stocksLoading}
+                >
+                  {stocksLoading ? 'กำลังโหลด...' : 'รีเฟรช'}
+                </Button>
+                <Button 
+                  onClick={() => {/* TODO: Add stock dialog */}}
+                  className="bg-purple-600 hover:bg-purple-700"
+                >
+                  <Package className="h-4 w-4 mr-2" />
+                  เพิ่มสต๊อก
+                </Button>
+              </div>
+            </div>
+
+            {/* สรุปข้อมูลสต๊อกทั้งหมด */}
             <Card>
               <CardContent className="p-6">
-                <h3 className="text-lg font-semibold mb-4">ข้อมูลสต๊อก</h3>
+                <h3 className="text-lg font-semibold mb-4">สรุปข้อมูลสต๊อกทั้งหมด - {product.product_name}</h3>
                 <div className="grid grid-cols-2 gap-6">
                   <div>
-                    <label className="text-sm font-medium text-gray-600">จำนวนสต๊อกปัจจุบัน</label>
+                    <label className="text-sm font-medium text-gray-600">จำนวนสต๊อกรวมทั้งหมด</label>
                     <div className="mt-1 text-2xl font-bold text-blue-600">
-                      {product.stock_quantity?.toLocaleString() || 0} {product.unit}
+                      {stocks.reduce((sum, stock) => sum + stock.quantity, 0).toLocaleString()} หน่วย
                     </div>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-600">จุดสั่งซื้อใหม่</label>
-                    <div className="mt-1 text-xl text-orange-600">
-                      {product.reorder_point?.toLocaleString() || 0} {product.unit}
+                    <label className="text-sm font-medium text-gray-600">จำนวนรูปแบบสินค้า</label>
+                    <div className="mt-1 text-xl text-purple-600">
+                      {groupStocksByUnit().length} รูปแบบ
                     </div>
                   </div>
                   <div>
@@ -1332,29 +1474,121 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
               </CardContent>
             </Card>
 
-            <Card>
-              <CardContent className="p-6">
-                <h3 className="text-lg font-semibold mb-4">สถานะสต๊อก</h3>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div>
-                      <div className="font-medium">สถานะสต๊อก</div>
-                      <div className="text-sm text-gray-600">
-                        {(product.stock_quantity || 0) <= (product.reorder_point || 0) 
-                          ? 'ต้องสั่งซื้อเพิ่ม' 
-                          : 'สต๊อกเพียงพอ'
-                        }
+            {/* สต๊อกแยกตามหน่วยนับ */}
+            {stocksLoading ? (
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-center h-32">
+                    <div className="text-center">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto mb-4"></div>
+                      <p className="text-gray-600">กำลังโหลดข้อมูลสต๊อก...</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              groupStocksByUnit().map((unitData) => (
+                <Card key={unitData.unit}>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle className="text-xl font-bold">{unitData.unit}</CardTitle>
+                        <p className="text-purple-600 font-medium">
+                          คงเหลือทั้งหมด {unitData.totalQuantity.toLocaleString()} {unitData.unitName}
+                        </p>
+                        {unitData.sku && (
+                          <p className="text-sm text-gray-500">SKU: {unitData.sku}</p>
+                        )}
+                      </div>
+                      <div className="flex space-x-2">
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          className="text-purple-600 hover:text-purple-700"
+                        >
+                          จัดเรียงสต๊อกสินค้า
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          className="text-purple-600 hover:text-purple-700"
+                        >
+                          เพิ่มสต๊อกสินค้าใหม่
+                        </Button>
                       </div>
                     </div>
-                    <Badge 
-                      variant={(product.stock_quantity || 0) <= (product.reorder_point || 0) ? 'destructive' : 'default'}
-                    >
-                      {(product.stock_quantity || 0) <= (product.reorder_point || 0) ? 'สต๊อกต่ำ' : 'ปกติ'}
-                    </Badge>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="overflow-x-auto">
+                      <table className="w-full border-collapse">
+                        <thead>
+                          <tr className="border-b">
+                            <th className="text-left py-3 px-4 font-medium text-gray-700">นำเข้าเมื่อ</th>
+                            <th className="text-left py-3 px-4 font-medium text-gray-700">ใบรับสินค้า</th>
+                            <th className="text-left py-3 px-4 font-medium text-gray-700">วันที่ผลิต</th>
+                            <th className="text-left py-3 px-4 font-medium text-gray-700">วันหมดอายุ</th>
+                            <th className="text-left py-3 px-4 font-medium text-gray-700">ต้นทุน</th>
+                            <th className="text-left py-3 px-4 font-medium text-gray-700">ราคาขาย</th>
+                            <th className="text-left py-3 px-4 font-medium text-gray-700">นำเข้า</th>
+                            <th className="text-left py-3 px-4 font-medium text-gray-700">คงเหลือ</th>
+                            <th className="text-left py-3 px-4 font-medium text-gray-700">สถานะ</th>
+                            <th className="text-left py-3 px-4 font-medium text-gray-700">จัดการ</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {unitData.stocks.map((stock) => (
+                            <tr key={stock.id} className="border-b hover:bg-gray-50">
+                              <td className="py-3 px-4">
+                                <div>
+                                  <div className="font-medium">{formatDate(stock.created_at)}</div>
+                                  <div className="text-sm text-blue-600">
+                                    <button className="hover:underline">
+                                      แก้ไข
+                                    </button>
+                                  </div>
+                                  <div className="text-xs text-gray-500 mt-1">
+                                    {stock.note || 'เพิ่มสต๊อกสินค้าจากการนำเข้าข้อมูลสินค้า (IMPORT)'}
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="py-3 px-4 text-gray-500">-</td>
+                              <td className="py-3 px-4 text-gray-500">{formatDate(stock.production_date)}</td>
+                              <td className="py-3 px-4 text-gray-500">{formatDate(stock.expiration_date)}</td>
+                              <td className="py-3 px-4 text-gray-500">{stock.product_cost ? `฿${stock.product_cost.toFixed(2)}` : '-'}</td>
+                              <td className="py-3 px-4 font-medium">฿{stock.product_sale_price?.toFixed(2) || '0.00'}</td>
+                              <td className="py-3 px-4 font-medium">{stock.quantity_in?.toLocaleString() || stock.quantity.toLocaleString()}x</td>
+                              <td className="py-3 px-4">
+                                <div>
+                                  <div className="font-medium">{stock.quantity.toLocaleString()}x</div>
+                                  <div className="text-sm text-blue-600">
+                                    <button className="hover:underline">
+                                      ปรับ/ย้ายสต๊อก
+                                    </button>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="py-3 px-4">
+                                {getStatusBadge(stock)}
+                              </td>
+                              <td className="py-3 px-4">
+                                <div className="flex space-x-2">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
+            )}
           </TabsContent>
 
           {/* ประวัติ */}
