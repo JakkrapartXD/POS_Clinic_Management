@@ -13,6 +13,7 @@ import ExportProductsView from "@/components/modules/inventory/export-products-v
 import { GraphQLAPI } from "@/clients/graphql"
 import { logger } from "@/lib/logger"
 import { useAuth } from "@/components/providers/auth-provider"
+import toast from "react-hot-toast"
 
 type AlphabetMode = 'english' | 'thai' | 'numbers'
 type ViewMode = 'list' | 'add-product' | 'product-detail' | 'import-products' | 'delete-products' | 'export-products'
@@ -434,8 +435,8 @@ function InventoryPage() {
         status: productData.status || 'active',
         vat_percent: parseInt(productData.vat_percent) || 0,
         expiration_warning_date: parseInt(productData.expiration_warning_days) || 90,
-        sale_price: 0, // Default value since field is removed
-        unit: '', // Default value since field is removed
+        sale_price: parseFloat(productData.sale_price) || 0,
+        unit: productData.unit || '',
         pack_size: productData.pack_size || '',
         reorder_point: parseInt(productData.reorder_point) || 0,
         cost: 0, // Default value since field is removed
@@ -480,6 +481,9 @@ function InventoryPage() {
       const result = await GraphQLAPI.createProduct(input)
       logger.info('Product created successfully', { result }, 'INVENTORY')
       
+      // Show success message
+      toast.success('สร้างสินค้าสำเร็จ')
+      
       // Invalidate product cache before reloading
       GraphQLAPI.invalidateCachePattern('Products')
       
@@ -491,7 +495,7 @@ function InventoryPage() {
     } catch (error) {
       logger.error('Error creating product', { error, productData }, 'INVENTORY')
       const errorMessage = error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการสร้างสินค้า'
-      alert(`ไม่สามารถสร้างสินค้าได้: ${errorMessage}`)
+      toast.error(`ไม่สามารถสร้างสินค้าได้: ${errorMessage}`)
     }
   }, [loadProducts])
 
@@ -555,7 +559,7 @@ function InventoryPage() {
       }
       
       const errorMessage = error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการส่งออกข้อมูล'
-      alert(`ไม่สามารถส่งออกข้อมูลได้: ${errorMessage}`)
+      toast.error(`ไม่สามารถส่งออกข้อมูลได้: ${errorMessage}`)
     }
   }, [handleAuthError])
 

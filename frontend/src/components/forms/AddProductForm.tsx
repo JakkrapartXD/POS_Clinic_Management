@@ -13,6 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Switch } from "@/components/ui/switch"
 import { Card, CardContent } from "@/components/ui/card"
 import ProductImageUpload from "@/components/common/ProductImageUpload"
+import toast from "react-hot-toast"
 
 
 interface AddProductFormProps {
@@ -38,6 +39,8 @@ interface ProductFormData {
   barcode: string
   shelf_code: string
   shelf_row: string
+  unit: string
+  sale_price: string
   
   // Expiry
   expiration_warning_days: string
@@ -85,7 +88,8 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
   const [selectValues, setSelectValues] = useState({
     category: "",
     product_type: "medicine",
-    status: "active"
+    status: "active",
+    unit: ""
   })
   
   const [formData, setFormData] = useState<ProductFormData>({
@@ -102,6 +106,8 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
     barcode: "",
     shelf_code: "",
     shelf_row: "",
+    unit: "",
+    sale_price: "",
     expiration_warning_days: "90",
     symptom_category: [],
     license_number: "",
@@ -152,7 +158,17 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
   const handleSubmit = async () => {
     // Validate required fields
     if (!formData.product_name) {
-      alert('กรุณากรอกชื่อสินค้า')
+      toast.error('กรุณากรอกชื่อสินค้า')
+      return
+    }
+    
+    if (!formData.sale_price) {
+      toast.error('กรุณากรอกราคาขาย')
+      return
+    }
+    
+    if (!formData.unit) {
+      toast.error('กรุณาเลือกหน่วยนับ')
       return
     }
     
@@ -165,7 +181,7 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
           imageUrl = uploadResult.url
         } catch (error) {
           console.error('Failed to upload image:', error)
-          alert('ไม่สามารถอัพโหลดรูปภาพได้ กรุณาลองใหม่')
+          toast.error('ไม่สามารถอัพโหลดรูปภาพได้ กรุณาลองใหม่')
           return
         }
       }
@@ -198,6 +214,7 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
       }
     } catch (error) {
       console.error('Error submitting form:', error)
+      toast.error('เกิดข้อผิดพลาดในการบันทึกข้อมูล กรุณาลองใหม่')
     }
   }
 
@@ -285,6 +302,62 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
                   placeholder="โปรดระบุชื่อสินค้า"
                   required
                 />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-sm font-medium text-gray-700">
+                    ราคาขาย <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={formData.sale_price}
+                    onChange={(e) => handleInputChange('sale_price', e.target.value)}
+                    className="mt-2 h-12 px-4 rounded-xl border-2 border-gray-200 bg-gray-50 focus:bg-white focus:border-purple-300 focus:ring-2 focus:ring-purple-100 transition-all duration-200 shadow-sm"
+                    placeholder="0.00"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <Label className="text-sm font-medium text-gray-700">
+                    หน่วยนับ <span className="text-red-500">*</span>
+                  </Label>
+                  <Select 
+                    value={selectValues.unit} 
+                    onValueChange={(value) => {
+                      setSelectValues(prev => ({ ...prev, unit: value }))
+                      handleInputChange('unit', value)
+                    }}
+                  >
+                    <SelectTrigger className="mt-2 h-12 px-4 rounded-xl border-2 border-gray-200 bg-gray-50 focus:bg-white focus:border-purple-300 focus:ring-2 focus:ring-purple-100 transition-all duration-200 shadow-sm">
+                      <SelectValue placeholder="เลือกหน่วยนับ" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white">
+                      <SelectItem value="เม็ด">เม็ด</SelectItem>
+                      <SelectItem value="แคปซูล">แคปซูล</SelectItem>
+                      <SelectItem value="ขวด">ขวด</SelectItem>
+                      <SelectItem value="หลอด">หลอด</SelectItem>
+                      <SelectItem value="แผง">แผง</SelectItem>
+                      <SelectItem value="ซอง">ซอง</SelectItem>
+                      <SelectItem value="กระปุก">กระปุก</SelectItem>
+                      <SelectItem value="ถุง">ถุง</SelectItem>
+                      <SelectItem value="กล่อง">กล่อง</SelectItem>
+                      <SelectItem value="หยด">หยด</SelectItem>
+                      <SelectItem value="มิลลิลิตร">มิลลิลิตร</SelectItem>
+                      <SelectItem value="กรัม">กรัม</SelectItem>
+                      <SelectItem value="กิโลกรัม">กิโลกรัม</SelectItem>
+                      <SelectItem value="ชิ้น">ชิ้น</SelectItem>
+                      <SelectItem value="อัน">อัน</SelectItem>
+                      <SelectItem value="คู่">คู่</SelectItem>
+                      <SelectItem value="ชุด">ชุด</SelectItem>
+                      <SelectItem value="แผ่น">แผ่น</SelectItem>
+                      <SelectItem value="ม้วน">ม้วน</SelectItem>
+                      <SelectItem value="อื่นๆ">อื่นๆ</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
               <div>
