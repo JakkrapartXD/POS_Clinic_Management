@@ -21,9 +21,10 @@ export default function ProductImageUpload({
   currentImageUrl,
   disabled = false,
   label = "รูปภาพสินค้า",
-  description = "ขนาดรูปภาพแนะนำ 160x160 หรือ 1:1 และขนาดไม่เกิน 2MB"
+  description = "รูปภาพจะถูกปรับขนาดเป็น 160x160 พิกเซลโดยอัตโนมัติ (ขนาดไม่เกิน 2MB)"
 }: ProductImageUploadProps) {
   const [isUploading, setIsUploading] = useState(false)
+  const [isResizing, setIsResizing] = useState(false)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null)
@@ -34,7 +35,72 @@ export default function ProductImageUpload({
     // Component mounted
   }, [])
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Function to resize and crop image to 160x160
+  const resizeImage = (file: File): Promise<File> => {
+    return new Promise((resolve, reject) => {
+      const canvas = document.createElement('canvas')
+      const ctx = canvas.getContext('2d')
+      const img = new Image()
+      
+      img.onload = () => {
+        // Set canvas size to 160x160
+        canvas.width = 160
+        canvas.height = 160
+        
+        if (!ctx) {
+          reject(new Error('Could not get canvas context'))
+          return
+        }
+        
+        // Calculate crop dimensions to maintain aspect ratio and center crop
+        const aspectRatio = img.width / img.height
+        let sourceX = 0
+        let sourceY = 0
+        let sourceWidth = img.width
+        let sourceHeight = img.height
+        
+        if (aspectRatio > 1) {
+          // Image is wider than tall
+          sourceWidth = img.height
+          sourceX = (img.width - sourceWidth) / 2
+        } else {
+          // Image is taller than wide
+          sourceHeight = img.width
+          sourceY = (img.height - sourceHeight) / 2
+        }
+        
+        // Draw the cropped and resized image
+        ctx.drawImage(
+          img,
+          sourceX, sourceY, sourceWidth, sourceHeight,
+          0, 0, 160, 160
+        )
+        
+        // Convert canvas to blob
+        canvas.toBlob((blob) => {
+          if (blob) {
+            // Create new file with resized image
+            const resizedFile = new File([blob], file.name, {
+              type: 'image/jpeg',
+              lastModified: Date.now()
+            })
+            resolve(resizedFile)
+          } else {
+            reject(new Error('Failed to create resized image'))
+          }
+        }, 'image/jpeg', 0.9) // 90% quality
+      }
+      
+      img.onerror = () => {
+        reject(new Error('Failed to load image'))
+      }
+      
+      // Load the image
+      img.src = URL.createObjectURL(file)
+    })
+  }
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     console.log('File select triggered', e.target.files)
     const file = e.target.files?.[0]
     if (!file) {
@@ -56,16 +122,28 @@ export default function ProductImageUpload({
     }
 
     setError(null)
+    setIsResizing(true)
     
-    // Set selected file name
-    setSelectedFileName(file.name)
-    
-    // Create preview URL
-    const preview = URL.createObjectURL(file)
-    setPreviewUrl(preview)
-    
-    // Call onChange with file only (no upload yet)
-    onChange(file)
+    try {
+      // Resize image to 160x160
+      const resizedFile = await resizeImage(file)
+      console.log('Image resized:', resizedFile.name, resizedFile.size)
+      
+      // Set selected file name
+      setSelectedFileName(resizedFile.name)
+      
+      // Create preview URL from resized file
+      const preview = URL.createObjectURL(resizedFile)
+      setPreviewUrl(preview)
+      
+      // Call onChange with resized file
+      onChange(resizedFile)
+    } catch (error) {
+      console.error('Error resizing image:', error)
+      setError('ไม่สามารถปรับขนาดรูปภาพได้ กรุณาลองใหม่')
+    } finally {
+      setIsResizing(false)
+    }
   }
 
   const handleRemove = () => {
@@ -115,7 +193,7 @@ export default function ProductImageUpload({
         className="hidden"
         accept="image/*"
         onChange={handleFileSelect}
-        disabled={disabled || isUploading}
+        disabled={disabled || isUploading || isResizing}
       />
       
       <div className="flex items-start space-x-4">
@@ -171,7 +249,7 @@ export default function ProductImageUpload({
                         e.stopPropagation()
                         fileInputRef.current?.click()
                       }}
-                      disabled={disabled || isUploading}
+                      disabled={disabled || isUploading || isResizing}
                     >
                       <div className="flex items-center justify-center w-8 h-8 bg-white bg-opacity-90 rounded-full hover:bg-opacity-100 hover:scale-110 transition-all duration-200 shadow-lg group-hover/edit:shadow-xl">
                         <Edit2 className="h-3 w-3 text-gray-700 group-hover/edit:text-purple-600" />
@@ -181,10 +259,12 @@ export default function ProductImageUpload({
                 )}
 
                 {/* Loading overlay */}
-                {isUploading && (
+                {(isUploading || isResizing) && (
                   <div className="absolute inset-0 bg-black bg-opacity-50 flex flex-col items-center justify-center">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mb-2"></div>
-                    <div className="text-white text-sm">กำลังอัพโหลด...</div>
+                    <div className="text-white text-sm">
+                      {isResizing ? 'กำลังปรับขนาดรูปภาพ...' : 'กำลังอัพโหลด...'}
+                    </div>
                   </div>
                 )}
 
@@ -198,10 +278,12 @@ export default function ProductImageUpload({
               </div>
             ) : (
               <div className="space-y-2 text-center p-4">
-                {isUploading ? (
+                {(isUploading || isResizing) ? (
                   <>
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500 mx-auto"></div>
-                    <div className="text-sm text-gray-600">กำลังอัพโหลด...</div>
+                    <div className="text-sm text-gray-600">
+                      {isResizing ? 'กำลังปรับขนาดรูปภาพ...' : 'กำลังอัพโหลด...'}
+                    </div>
                   </>
                 ) : (
                   <>
@@ -213,7 +295,7 @@ export default function ProductImageUpload({
                         onClick={() => {
                           fileInputRef.current?.click()
                         }}
-                        disabled={disabled || isUploading}
+                        disabled={disabled || isUploading || isResizing}
                       >
                         อัพโหลดรูปภาพ
                       </button>
@@ -258,9 +340,9 @@ export default function ProductImageUpload({
             </div>
           )}
 
-          {displayUrl && !isUploading && (
+          {displayUrl && !isUploading && !isResizing && (
             <div className="text-sm text-blue-600 bg-blue-50 p-2 rounded-md">
-              ✓ รูปภาพพร้อมใช้งาน (จะอัพโหลดเมื่อบันทึก)
+              ✓ รูปภาพพร้อมใช้งาน (ปรับขนาดเป็น 160x160 แล้ว)
             </div>
           )}
         </div>

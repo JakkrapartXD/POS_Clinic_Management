@@ -80,6 +80,15 @@ interface ProductFormData {
   // Image
   image: File | null
   image_url: string
+  
+  // Initial Stock
+  add_initial_stock: boolean
+  initial_stock_quantity: string
+  initial_stock_cost: string
+  initial_stock_production_date: string
+  initial_stock_expiration_date: string
+  initial_stock_production_lot: string
+  initial_stock_note: string
 }
 
 export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddProductFormProps) {
@@ -130,7 +139,14 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
     auto_print_label: false,
     show_dosage_table: false,
     image: null,
-    image_url: ""
+    image_url: "",
+    add_initial_stock: false,
+    initial_stock_quantity: "",
+    initial_stock_cost: "",
+    initial_stock_production_date: "",
+    initial_stock_expiration_date: "",
+    initial_stock_production_lot: "",
+    initial_stock_note: ""
   })
 
   const handleInputChange = (field: keyof ProductFormData, value: any) => {
@@ -172,46 +188,43 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
       return
     }
     
+    // Validate initial stock if enabled
+    if (formData.add_initial_stock) {
+      if (!formData.initial_stock_quantity || parseInt(formData.initial_stock_quantity) <= 0) {
+        toast.error('กรุณากรอกจำนวนสต๊อกที่ถูกต้อง')
+        return
+      }
+    }
+    
     try {
-      // Upload image first if there's a new file
+      // Don't upload image yet - wait until product creation succeeds
       let imageUrl = formData.image_url
-      if (formData.image) {
-        try {
-          const uploadResult = await GraphQLAPI.uploadImage(formData.image, 'product')
-          imageUrl = uploadResult.url
-        } catch (error) {
-          console.error('Failed to upload image:', error)
-          toast.error('ไม่สามารถอัพโหลดรูปภาพได้ กรุณาลองใหม่')
-          return
+      let newImageFile = formData.image
+      
+      // Update formData without uploading image first
+      const updatedFormData: any = {
+        ...formData,
+        image_url: imageUrl // Keep existing image URL or empty string
+      }
+      
+      // Add initial stock data if enabled
+      if (formData.add_initial_stock) {
+        updatedFormData.initialStockData = {
+          quantity: parseInt(formData.initial_stock_quantity),
+          cost: formData.initial_stock_cost ? parseFloat(formData.initial_stock_cost) : undefined,
+          production_date: formData.initial_stock_production_date || undefined,
+          expiration_date: formData.initial_stock_expiration_date || undefined,
+          production_lot: formData.initial_stock_production_lot || undefined,
+          note: formData.initial_stock_note || `เพิ่มสต๊อกเริ่มต้น - ล็อต: ${formData.initial_stock_production_lot || 'ไม่ระบุ'}`
         }
       }
       
-      // Update formData with the uploaded image URL
-      const updatedFormData = {
-        ...formData,
-        image_url: imageUrl
+      // Add new image file data for later upload
+      if (newImageFile) {
+        updatedFormData.newImageFile = newImageFile
       }
       
       await onSubmit(updatedFormData)
-      
-      // Delete old image if exists
-      if (formData.image_url) {
-        try {
-          console.log('Deleting old image:', formData.image_url)
-          // Extract filename from URL
-          const urlParts = formData.image_url.split('/')
-          const filename = urlParts[urlParts.length - 1]
-          const category = urlParts[urlParts.length - 2]
-          
-          if (filename && category) {
-            await GraphQLAPI.deleteImage(filename, category as 'product' | 'user' | 'patient')
-            console.log('Old image deleted successfully')
-          }
-        } catch (error) {
-          console.warn('Failed to delete old image:', error)
-          // Continue even if old image deletion fails
-        }
-      }
     } catch (error) {
       console.error('Error submitting form:', error)
       toast.error('เกิดข้อผิดพลาดในการบันทึกข้อมูล กรุณาลองใหม่')
@@ -761,6 +774,116 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
                   placeholder="หมายเหตุการสั่งซื้อ"
                 />
               </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Initial Stock */}
+        <Card>
+          <CardContent className="p-6">
+            <h2 className="text-lg font-semibold text-gray-700 mb-4">สต๊อกเริ่มต้น</h2>
+            <p className="text-sm text-gray-500 mb-6">เพิ่มสต๊อกแรกพร้อมกับการสร้างสินค้า</p>
+            
+            <div className="space-y-4">
+              <div className="flex items-center space-x-2">
+                <Switch 
+                  checked={formData.add_initial_stock}
+                  onCheckedChange={(checked) => handleInputChange('add_initial_stock', checked)}
+                />
+                <Label className="text-sm font-medium">เพิ่มสต๊อกเริ่มต้น</Label>
+              </div>
+              
+              {formData.add_initial_stock && (
+                <div className="space-y-4 p-4 bg-gray-50 rounded-lg">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="initial_stock_quantity" className="text-sm font-medium">
+                        จำนวนสต๊อก *
+                      </Label>
+                      <Input
+                        id="initial_stock_quantity"
+                        type="number"
+                        min="1"
+                        value={formData.initial_stock_quantity}
+                        onChange={(e) => handleInputChange('initial_stock_quantity', e.target.value)}
+                        placeholder="กรอกจำนวนสต๊อก"
+                        className="mt-1"
+                      />
+                    </div>
+                    
+                    <div>
+                      <Label htmlFor="initial_stock_cost" className="text-sm font-medium">
+                        ต้นทุนต่อหน่วย
+                      </Label>
+                      <Input
+                        id="initial_stock_cost"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={formData.initial_stock_cost}
+                        onChange={(e) => handleInputChange('initial_stock_cost', e.target.value)}
+                        placeholder="กรอกต้นทุนต่อหน่วย"
+                        className="mt-1"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="initial_stock_production_date" className="text-sm font-medium">
+                        วันที่ผลิต
+                      </Label>
+                      <Input
+                        id="initial_stock_production_date"
+                        type="date"
+                        value={formData.initial_stock_production_date}
+                        onChange={(e) => handleInputChange('initial_stock_production_date', e.target.value)}
+                        className="mt-1"
+                      />
+                    </div>
+                    
+                    <div>
+                      <Label htmlFor="initial_stock_expiration_date" className="text-sm font-medium">
+                        วันหมดอายุ
+                      </Label>
+                      <Input
+                        id="initial_stock_expiration_date"
+                        type="date"
+                        value={formData.initial_stock_expiration_date}
+                        onChange={(e) => handleInputChange('initial_stock_expiration_date', e.target.value)}
+                        className="mt-1"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="initial_stock_production_lot" className="text-sm font-medium">
+                      ล็อตการผลิต
+                    </Label>
+                    <Input
+                      id="initial_stock_production_lot"
+                      value={formData.initial_stock_production_lot}
+                      onChange={(e) => handleInputChange('initial_stock_production_lot', e.target.value)}
+                      placeholder="กรอกล็อตการผลิต"
+                      className="mt-1"
+                    />
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="initial_stock_note" className="text-sm font-medium">
+                      หมายเหตุ
+                    </Label>
+                    <Textarea
+                      id="initial_stock_note"
+                      value={formData.initial_stock_note}
+                      onChange={(e) => handleInputChange('initial_stock_note', e.target.value)}
+                      placeholder="กรอกหมายเหตุเพิ่มเติม"
+                      className="mt-1"
+                      rows={2}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

@@ -471,15 +471,64 @@ function InventoryPage() {
         input.categoryId = categoryId
       }
 
-      // Only include report_type if it exists and is not empty
-      if (Array.isArray(productData.report_type) && productData.report_type.length > 0) {
-        input.report_type = productData.report_type
-      }
+      // Note: report_type is not supported in CreateProductInput schema
+      // Remove report_type from input to avoid GraphQL error
 
       logger.info('Creating product with input', { input }, 'INVENTORY')
       
       const result = await GraphQLAPI.createProduct(input)
       logger.info('Product created successfully', { result }, 'INVENTORY')
+      
+      // Create initial stock if provided
+      if (productData.initialStockData && result.createProduct) {
+        try {
+          const stockInput = {
+            productId: result.createProduct.id,
+            quantity: productData.initialStockData.quantity,
+            quantity_in: productData.initialStockData.quantity,
+            is_outofstock: false,
+            production_date: productData.initialStockData.production_date ? new Date(productData.initialStockData.production_date).toISOString() : undefined,
+            expiration_date: productData.initialStockData.expiration_date ? new Date(productData.initialStockData.expiration_date).toISOString() : undefined,
+            note: productData.initialStockData.note || 'เพิ่มสต๊อกเริ่มต้น'
+          }
+          
+          await GraphQLAPI.createStock(stockInput)
+          
+          // Update product stock quantity
+          const updateProductInput = {
+            stock_quantity: productData.initialStockData.quantity
+          }
+          
+          await GraphQLAPI.updateProduct(result.createProduct.id, updateProductInput)
+          
+          logger.info('Initial stock created successfully', { productId: result.createProduct.id, stockInput }, 'INVENTORY')
+        } catch (stockError) {
+          logger.error('Failed to create initial stock', { stockError, productId: result.createProduct.id }, 'INVENTORY')
+          // Don't fail the entire operation if stock creation fails
+          toast.error('สร้างสินค้าสำเร็จ แต่ไม่สามารถเพิ่มสต๊อกเริ่มต้นได้')
+        }
+      }
+      
+      // Upload image after successful product creation
+      if (productData.newImageFile && result.createProduct) {
+        try {
+          logger.info('Uploading image for new product', { fileName: productData.newImageFile.name }, 'INVENTORY')
+          const uploadResult = await GraphQLAPI.uploadImage(productData.newImageFile, 'product')
+          const newImageUrl = uploadResult.url
+          logger.info('Image uploaded successfully', { newImageUrl }, 'INVENTORY')
+          
+          // Update product with new image URL
+          await GraphQLAPI.updateProduct(result.createProduct.id, {
+            image_url: newImageUrl
+          })
+          
+          logger.info('Product image updated successfully', { productId: result.createProduct.id }, 'INVENTORY')
+        } catch (error) {
+          logger.error('Failed to upload image for new product', error, 'INVENTORY')
+          // Don't fail the entire operation if image upload fails
+          toast.error('สร้างสินค้าสำเร็จ แต่ไม่สามารถอัปโหลดรูปภาพได้')
+        }
+      }
       
       // Show success message
       toast.success('สร้างสินค้าสำเร็จ')

@@ -15,6 +15,7 @@ import { GraphQLAPI } from "@/clients/graphql"
 import { logger } from "@/lib/logger"
 import { API_CONFIG } from "@/config/api"
 import EditProductForm from "@/components/forms/EditProductForm"
+import { toast } from "sonner"
 
 interface ProductDetailViewProps {
   productId: string
@@ -397,7 +398,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
       })
       setIsCreatingNewUnit(true)
     } else {
-      // Editing existing unit
+      // Editing existing unit - populate form with existing data
       setUnitFormData({
         unit_name: unitData.unit || '',
         pack_size: unitData.pack_size || '',
@@ -411,8 +412,8 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
         sku: unitData.sku || '',
         barcode: unitData.barcode || '',
         display_pos: unitData.status === 'active',
-        image: null,
-        image_url: unitData.image_url || ''
+        image: null, // Don't pre-populate with existing image file
+        image_url: unitData.image_url || '' // Keep existing image URL for display
       })
       setIsCreatingNewUnit(false)
     }
@@ -451,7 +452,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
   const handleDeleteUnit = async (unitId: string, packSize?: string | number) => {
     // Check if this is the main product (pack_size = 1) - cannot delete
     if (isMainProduct(packSize || 1)) {
-      alert('ไม่สามารถลบขนาดบรรจุ 1 ได้ เนื่องจากเป็นสินค้าหลัก')
+      toast.error('ไม่สามารถลบขนาดบรรจุ 1 ได้ เนื่องจากเป็นสินค้าหลัก')
       return
     }
     
@@ -463,7 +464,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
         // Remove the variant from the list
         setProductVariants(prev => prev.filter(variant => variant.id !== unitId))
         
-        alert('ลบหน่วยนับเรียบร้อยแล้ว (Mockup)')
+        toast.success('ลบหน่วยนับเรียบร้อยแล้ว (Mockup)')
         // Refresh product data to ensure consistency
         await refreshProductData()
         
@@ -473,7 +474,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
         }
       } catch (error) {
         logger.error('Error deleting unit', error, 'INVENTORY')
-        alert('เกิดข้อผิดพลาดในการลบหน่วยนับ')
+        toast.error('เกิดข้อผิดพลาดในการลบหน่วยนับ')
       }
     }
   }
@@ -482,20 +483,9 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
     try {
       logger.debug('Saving unit data', { unitFormData }, 'INVENTORY')
       
-      // Upload image first if there's a new file
+      // Don't upload image yet - wait until form validation and product update succeed
       let imageUrl = unitFormData.image_url
-      if (unitFormData.image) {
-        try {
-          logger.info('Uploading image for unit', { fileName: unitFormData.image.name }, 'INVENTORY')
-          const uploadResult = await GraphQLAPI.uploadImage(unitFormData.image, 'product')
-          imageUrl = uploadResult.url
-          logger.info('Image uploaded successfully', { imageUrl }, 'INVENTORY')
-        } catch (error) {
-          logger.error('Failed to upload image', error, 'INVENTORY')
-          alert('ไม่สามารถอัพโหลดรูปภาพได้ กรุณาลองใหม่')
-          return
-        }
-      }
+      let newImageFile = unitFormData.image
       
       // Validate required fields for new unit creation
       if (isCreatingNewUnit) {
@@ -546,18 +536,18 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
         }
         
         if (missingFields.length > 0) {
-          alert(`กรุณากรอกข้อมูลให้ครบถ้วน:\n${missingFields.join('\n')}`)
+          toast.error(`กรุณากรอกข้อมูลให้ครบถ้วน:\n${missingFields.join('\n')}`)
           return
         }
       } else {
         // For editing existing unit, only validate essential fields
         if (!unitFormData.unit_name || unitFormData.unit_name.trim() === '') {
-          alert('กรุณาระบุชื่อหน่วยนับ')
+          toast.error('กรุณาระบุชื่อหน่วยนับ')
           return
         }
         
         if (!unitFormData.pack_size || unitFormData.pack_size.trim() === '') {
-          alert('กรุณาระบุขนาดบรรจุ')
+          toast.error('กรุณาระบุขนาดบรรจุ')
           return
         }
       }
@@ -570,13 +560,13 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
       
       // Check for duplicate unit name
       if (isUnitNameExists(unitFormData.unit_name, isNewUnit ? undefined : variantId)) {
-        alert('หน่วยนับซ้ำไม่สามารถสร้างได้ กรุณาใช้ชื่อหน่วยนับอื่น')
+        toast.error('หน่วยนับซ้ำไม่สามารถสร้างได้ กรุณาใช้ชื่อหน่วยนับอื่น')
         return
       }
       
       // Check for duplicate pack size
       if (isPackSizeExists(unitFormData.pack_size, isNewUnit ? undefined : variantId)) {
-        alert('ขนาดบรรจุซ้ำไม่สามารถสร้างได้ กรุณาใช้ขนาดบรรจุอื่น')
+        toast.error('ขนาดบรรจุซ้ำไม่สามารถสร้างได้ กรุณาใช้ขนาดบรรจุอื่น')
         return
       }
 
@@ -585,7 +575,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
         try {
           const skuCheckResponse = await GraphQLAPI.checkSkuExists(unitFormData.sku.trim())
           if (skuCheckResponse.checkSkuExists) {
-            alert('SKU ซ้ำไม่สามารถสร้างได้ กรุณาใช้ SKU อื่น')
+            toast.error('SKU ซ้ำไม่สามารถสร้างได้ กรุณาใช้ SKU อื่น')
             return
           }
         } catch (error) {
@@ -616,7 +606,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
           volume_unit: unitFormData.volume_unit || 'mg',
           shelf_code: unitFormData.shelf_code || '',
           shelf_row: unitFormData.shelf_row || '',
-          image_url: imageUrl || '',
+          // Don't include image_url yet - will be added after successful creation
           symptom_category: product?.symptom_category || null,
           license_number: product?.license_number || '',
           dosage_unit: product?.dosage_unit || '',
@@ -655,7 +645,28 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
             productName: response.createProduct.product_name 
           }, 'INVENTORY')
           
-          alert('เพิ่มหน่วยนับใหม่เรียบร้อยแล้ว')
+          // Upload image after successful product creation
+          if (newImageFile) {
+            try {
+              logger.info('Uploading image for new unit', { fileName: newImageFile.name }, 'INVENTORY')
+              const uploadResult = await GraphQLAPI.uploadImage(newImageFile, 'product')
+              const newImageUrl = uploadResult.url
+              logger.info('Image uploaded successfully', { newImageUrl }, 'INVENTORY')
+              
+              // Update product with new image URL
+              await GraphQLAPI.updateProduct(response.createProduct.id, {
+                image_url: newImageUrl
+              })
+              
+              logger.info('Product image updated successfully', { productId: response.createProduct.id }, 'INVENTORY')
+            } catch (error) {
+              logger.error('Failed to upload image for new unit', error, 'INVENTORY')
+              // Don't fail the entire operation if image upload fails
+              toast.error('สร้างหน่วยนับสำเร็จ แต่ไม่สามารถอัปโหลดรูปภาพได้')
+            }
+          }
+          
+          toast.success('เพิ่มหน่วยนับใหม่เรียบร้อยแล้ว')
           setShowUnitEditDialog(false)
           
           // Add new variant to the list and refresh product data
@@ -677,23 +688,32 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
           pack_size: unitFormData.pack_size,
           reorder_point: parseInt(unitFormData.reorder_point) || 0,
           cost: parseFloat(unitFormData.cost) || 0,
-          sku: unitFormData.sku || '',
-          barcode: unitFormData.barcode || '',
           volume: parseFloat(unitFormData.volume) || 0,
           volume_unit: unitFormData.volume_unit || 'mg',
           shelf_code: unitFormData.shelf_code || '',
           shelf_row: unitFormData.shelf_row || ''
         }
 
-        // Only include image_url if there's a new image
-        if (imageUrl) {
-          productInput.image_url = imageUrl
+        // Only include SKU and barcode if they have changed
+        const existingVariant = productVariants?.find(v => v.sku === unitFormData.sku)
+        if (existingVariant) {
+          // Check if SKU has changed
+          if (unitFormData.sku && unitFormData.sku !== existingVariant.sku) {
+            productInput.sku = unitFormData.sku
+          }
+          
+          // Check if barcode has changed
+          if (unitFormData.barcode && unitFormData.barcode !== existingVariant.barcode) {
+            productInput.barcode = unitFormData.barcode
+          }
         }
+
+        // Don't include image_url yet - will be handled after successful update
 
         // Find the product variant to get its ID
         const variantToUpdate = existingVariant
         if (!variantToUpdate?.id) {
-          alert('ไม่พบข้อมูลหน่วยนับที่ต้องการแก้ไข')
+          toast.error('ไม่พบข้อมูลหน่วยนับที่ต้องการแก้ไข')
           return
         }
 
@@ -713,29 +733,47 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
             productId: response.updateProduct.id,
             productName: response.updateProduct.product_name 
           }, 'INVENTORY')
-          console.log('New image URL:', productInput.image_url);
-          console.log('Old image URL:', oldImageUrl);
           
-          // Delete old image if exists
-          if (oldImageUrl) {
+          // Upload image after successful product update
+          if (newImageFile) {
             try {
-              console.log('Deleting old image:', oldImageUrl)
-              // Extract filename from URL
-              const urlParts = oldImageUrl.split('/')
-              const filename = urlParts[urlParts.length - 1]
-              const category = urlParts[urlParts.length - 2]
+              logger.info('Uploading image for updated unit', { fileName: newImageFile.name }, 'INVENTORY')
+              const uploadResult = await GraphQLAPI.uploadImage(newImageFile, 'product')
+              const newImageUrl = uploadResult.url
+              logger.info('Image uploaded successfully', { newImageUrl }, 'INVENTORY')
               
-              if (filename && category) {
-                await GraphQLAPI.deleteImage(filename, category as 'product' | 'user' | 'patient')
-                console.log('Old image deleted successfully')
+              // Update product with new image URL
+              await GraphQLAPI.updateProduct(response.updateProduct.id, {
+                image_url: newImageUrl
+              })
+              
+              logger.info('Product image updated successfully', { productId: response.updateProduct.id }, 'INVENTORY')
+              
+              // Delete old image if it was replaced
+              if (oldImageUrl && newImageUrl && oldImageUrl !== newImageUrl) {
+                try {
+                  // Extract filename from old URL
+                  const urlParts = oldImageUrl.split('/')
+                  const filename = urlParts[urlParts.length - 1]
+                  const category = urlParts[urlParts.length - 2]
+                  
+                  if (filename && category) {
+                    await GraphQLAPI.deleteImage(filename, category as 'product' | 'user' | 'patient')
+                    logger.info('Old image deleted successfully', { filename }, 'INVENTORY')
+                  }
+                } catch (error) {
+                  console.warn('Failed to delete old image:', error)
+                  // Continue even if old image deletion fails
+                }
               }
             } catch (error) {
-              console.warn('Failed to delete old image:', error)
-              // Continue even if old image deletion fails
+              logger.error('Failed to upload image for updated unit', error, 'INVENTORY')
+              // Don't fail the entire operation if image upload fails
+              toast.error('แก้ไขหน่วยนับสำเร็จ แต่ไม่สามารถอัปโหลดรูปภาพได้')
             }
           }
           
-          alert('แก้ไขหน่วยนับเรียบร้อยแล้ว')
+          toast.success('แก้ไขหน่วยนับเรียบร้อยแล้ว')
           setShowUnitEditDialog(false)
           
           // Update the variant in the list and refresh product data
@@ -756,7 +794,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
       logger.error('Failed to save unit', error, 'INVENTORY')
       
       const errorMessage = error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการบันทึกข้อมูล'
-      alert(`ไม่สามารถบันทึกข้อมูลได้: ${errorMessage}`)
+      toast.error(`ไม่สามารถบันทึกข้อมูลได้: ${errorMessage}`)
     }
   }
 
@@ -774,13 +812,9 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
         vat_percent: parseInt(productData.vat_percent) || 0,
         // Now backend expects integer (days) which matches our form data
         expiration_warning_date: parseInt(productData.expiration_warning_days) || 90,
-        sale_price: parseFloat(productData.sale_price) || 0,
+        // Don't include sale_price, stock_quantity, cost, reorder_point to preserve existing values
         unit: productData.unit || '',
         pack_size: productData.pack_size || '',
-        reorder_point: parseInt(productData.reorder_point) || 0,
-        cost: parseFloat(productData.cost) || 0,
-        // Don't include SKU and barcode to avoid conflicts with other products
-        stock_quantity: parseInt(productData.stock_quantity) || 0,
         shelf_code: productData.shelf_code || '',
         shelf_row: productData.shelf_row || '',
         // symptom_category should be JSON string if array is not empty, null if empty
@@ -803,8 +837,8 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
         properties: productData.properties || '',
         usage_instruction: productData.usage_instruction || '',
         sale_note: productData.sale_note || '',
-        purchase_note: productData.purchase_note || '',
-        image_url: productData.image_url || ''
+        purchase_note: productData.purchase_note || ''
+        // Don't include image_url to preserve existing image
       }
 
       // Only include categoryId if it exists and is not empty
@@ -918,9 +952,9 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
         // Success feedback with variant count
         const variantCount = productVariants.length
         if (variantCount > 1) {
-          alert(`บันทึกข้อมูลสินค้าและอัพเดตทุกหน่วยนับเรียบร้อยแล้ว (รวม ${variantCount} หน่วยนับ)`)
+          toast.success(`บันทึกข้อมูลสินค้าและอัพเดตทุกหน่วยนับเรียบร้อยแล้ว (รวม ${variantCount} หน่วยนับ)`)
         } else {
-          alert('บันทึกข้อมูลสินค้าเรียบร้อยแล้ว')
+          toast.success('บันทึกข้อมูลสินค้าเรียบร้อยแล้ว')
         }
         
         // Notify parent component that product was updated
@@ -955,7 +989,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
       
       // Error feedback
       const errorMessage = error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการบันทึกข้อมูล'
-      alert(`ไม่สามารถบันทึกข้อมูลได้: ${errorMessage}`)
+      toast.error(`ไม่สามารถบันทึกข้อมูลได้: ${errorMessage}`)
     }
   }
 
@@ -964,7 +998,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
     logger.info('Opening add stock modal for unit', { unitData }, 'INVENTORY')
     
     if (!unitData.productId) {
-      alert('ไม่พบ productId ในข้อมูลหน่วยนับ')
+      toast.error('ไม่พบ productId ในข้อมูลหน่วยนับ')
       return
     }
     
@@ -990,12 +1024,12 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
 
   const handleAddStockSubmit = async () => {
     if (!selectedUnitData || !stockFormData.quantity) {
-      alert('กรุณากรอกจำนวนสต๊อก')
+      toast.error('กรุณากรอกจำนวนสต๊อก')
       return
     }
 
     if (!selectedUnitData.productId) {
-      alert('ไม่พบ productId ของหน่วยนับที่เลือก')
+      toast.error('ไม่พบ productId ของหน่วยนับที่เลือก')
       return
     }
 
@@ -1033,9 +1067,22 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
         
         await GraphQLAPI.updateProduct(selectedUnitData.productId, updateProductInput)
         
-        // Refresh product data and stocks
-        await loadProduct()
-        await loadStocks()
+        // Refresh product data and stocks to show updated information
+        await Promise.all([
+          loadProduct(),
+          loadStocks()
+        ])
+        
+        // Force re-render of product variants to show updated stock quantities
+        if (product?.product_name) {
+          const updatedProductsResponse = await GraphQLAPI.searchProducts(product.product_name)
+          if (updatedProductsResponse.searchProducts) {
+            const sameNameProducts = updatedProductsResponse.searchProducts.filter(
+              (prod: any) => prod.product_name === product.product_name
+            )
+            setProductVariants(sameNameProducts)
+          }
+        }
         
         // Close modal and reset form
         setShowAddStockModal(false)
@@ -1049,13 +1096,14 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
           cost_per_unit: '',
           expiration_date: ''
         })
-        
-        alert('เพิ่มสต๊อกสำเร็จ')
+        toast.success('เพิ่มสต๊อกสำเร็จ')
+        // alert('เพิ่มสต๊อกสำเร็จ')
       }
     } catch (error) {
       logger.error('Failed to add stock', error, 'INVENTORY')
       const errorMessage = error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการเพิ่มสต๊อก'
-      alert(`ไม่สามารถเพิ่มสต๊อกได้: ${errorMessage}`)
+      toast.error(`ไม่สามารถเพิ่มสต๊อกได้: ${errorMessage}`)
+      // alert(`ไม่สามารถเพิ่มสต๊อกได้: ${errorMessage}`)
     } finally {
       setStockLoading(false)
     }
@@ -1097,13 +1145,15 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
 
   const handleAdjustStockSubmit = async () => {
     if (!selectedStockData || !adjustFormData.quantity) {
-      alert('กรุณากรอกจำนวนที่ต้องการปรับ')
+      // alert('กรุณากรอกจำนวนที่ต้องการปรับ')
+      toast.error('กรุณากรอกจำนวนที่ต้องการปรับ')
       return
     }
 
     const adjustQuantity = parseInt(adjustFormData.quantity)
     if (adjustQuantity <= 0) {
-      alert('จำนวนต้องมากกว่า 0')
+      // alert('จำนวนต้องมากกว่า 0')
+      toast.error('จำนวนต้องมากกว่า 0')
       return
     }
 
@@ -1119,7 +1169,8 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
         : stock.quantity - adjustQuantity
       
       if (newQuantity < 0) {
-        alert('ไม่สามารถลดสต๊อกได้มากกว่าจำนวนที่มี')
+        // alert('ไม่สามารถลดสต๊อกได้มากกว่าจำนวนที่มี')
+        toast.error('ไม่สามารถลดสต๊อกได้มากกว่าจำนวนที่มี')
         return
       }
       
@@ -1154,12 +1205,12 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
           operation: 'add'
         })
         
-        alert(`ปรับสต๊อกสำเร็จ (${operation === 'add' ? 'เพิ่ม' : 'ลด'} ${adjustQuantity} หน่วย)`)
+        toast.success(`ปรับสต๊อกสำเร็จ (${operation === 'add' ? 'เพิ่ม' : 'ลด'} ${adjustQuantity} หน่วย)`)
       }
     } catch (error) {
       logger.error('Failed to adjust stock', error, 'INVENTORY')
       const errorMessage = error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการปรับสต๊อก'
-      alert(`ไม่สามารถปรับสต๊อกได้: ${errorMessage}`)
+      toast.error(`ไม่สามารถปรับสต๊อกได้: ${errorMessage}`)
     } finally {
       setAdjustLoading(false)
     }
@@ -1204,10 +1255,10 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
       await loadStocks()
       
       setShowManageStockModal(false)
-      alert('แก้ไขสต๊อกสำเร็จ')
+      toast.success('แก้ไขสต๊อกสำเร็จ')
     } catch (error) {
       console.error('Error updating stock:', error)
-      alert('เกิดข้อผิดพลาดในการแก้ไขสต๊อก')
+      toast.error('เกิดข้อผิดพลาดในการแก้ไขสต๊อก')
     } finally {
       setManageLoading(false)
     }
@@ -1245,10 +1296,10 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
       await loadStocks()
       
       setShowDeleteStockModal(false)
-      alert('ลบสต๊อกสำเร็จ')
+      toast.success('ลบสต๊อกสำเร็จ')
     } catch (error) {
       console.error('Error deleting stock:', error)
-      alert('เกิดข้อผิดพลาดในการลบสต๊อก')
+      toast.error('เกิดข้อผิดพลาดในการลบสต๊อก')
     } finally {
       setDeleteLoading(false)
     }
@@ -1734,8 +1785,8 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                   </div>
                 </CardContent>
               </Card>
-            ) : groupStocksByUnit().filter(unitData => unitData.stocks.some(stock => stock.quantity > 0)).length > 0 ? (
-              groupStocksByUnit().filter(unitData => unitData.stocks.some(stock => stock.quantity > 0)).map((unitData) => (
+            ) : groupStocksByUnit().length > 0 ? (
+              groupStocksByUnit().map((unitData) => (
                 <Card key={unitData.unit}>
                   <CardHeader>
                     <div className="flex items-center justify-between">
@@ -1847,10 +1898,10 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                           ) : (
                             <tr>
                               <td colSpan={10} className="py-8 px-4 text-center text-gray-500">
-                                <div className="flex flex-col items-center space-y-2">
+                                <div className="flex flex-col items-center space-y-3">
                                   <div className="text-lg">📦</div>
-                                  <div>ไม่มีสต๊อกให้แสดง</div>
-                                  <div className="text-sm">สต๊อกที่มีจำนวน = 0 จะไม่แสดงในรายการ</div>
+                                  <div className="font-medium">ยังไม่มีสต๊อกในหน่วยนับนี้</div>
+                                  <div className="text-sm">กดปุ่ม "เพิ่มสต๊อกสินค้าใหม่" ด้านบนเพื่อเพิ่มสต๊อก</div>
                                 </div>
                               </td>
                             </tr>
@@ -1866,10 +1917,10 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                 <CardContent className="p-8 text-center">
                   <div className="flex flex-col items-center space-y-4">
                     <div className="text-4xl">📦</div>
-                    <div className="text-xl font-medium text-gray-600">ไม่มีสต๊อกให้แสดง</div>
+                    <div className="text-xl font-medium text-gray-600">ยังไม่มีหน่วยนับสินค้า</div>
                     <div className="text-sm text-gray-500">
-                      สต๊อกที่มีจำนวน = 0 จะไม่แสดงในรายการ<br/>
-                      กดปุ่ม "เพิ่มสต๊อกสินค้าใหม่" เพื่อเพิ่มสต๊อก
+                      กรุณาเพิ่มหน่วยนับสินค้าก่อน<br/>
+                      จากนั้นจึงสามารถเพิ่มสต๊อกได้
                     </div>
                   </div>
                 </CardContent>
