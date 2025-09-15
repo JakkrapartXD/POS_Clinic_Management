@@ -1097,13 +1097,11 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
           expiration_date: ''
         })
         toast.success('เพิ่มสต๊อกสำเร็จ')
-        // alert('เพิ่มสต๊อกสำเร็จ')
       }
     } catch (error) {
       logger.error('Failed to add stock', error, 'INVENTORY')
       const errorMessage = error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการเพิ่มสต๊อก'
       toast.error(`ไม่สามารถเพิ่มสต๊อกได้: ${errorMessage}`)
-      // alert(`ไม่สามารถเพิ่มสต๊อกได้: ${errorMessage}`)
     } finally {
       setStockLoading(false)
     }
@@ -1145,14 +1143,12 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
 
   const handleAdjustStockSubmit = async () => {
     if (!selectedStockData || !adjustFormData.quantity) {
-      // alert('กรุณากรอกจำนวนที่ต้องการปรับ')
       toast.error('กรุณากรอกจำนวนที่ต้องการปรับ')
       return
     }
 
     const adjustQuantity = parseInt(adjustFormData.quantity)
     if (adjustQuantity <= 0) {
-      // alert('จำนวนต้องมากกว่า 0')
       toast.error('จำนวนต้องมากกว่า 0')
       return
     }
@@ -1169,7 +1165,6 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
         : stock.quantity - adjustQuantity
       
       if (newQuantity < 0) {
-        // alert('ไม่สามารถลดสต๊อกได้มากกว่าจำนวนที่มี')
         toast.error('ไม่สามารถลดสต๊อกได้มากกว่าจำนวนที่มี')
         return
       }
