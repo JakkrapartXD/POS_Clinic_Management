@@ -198,40 +198,40 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
   }
 
   // Load product function
-  const loadProduct = async () => {
-    try {
-      setLoading(true)
-      setError(null)
-      
-      logger.info('Loading product details', { productId }, 'INVENTORY')
-      
-      const response = await GraphQLAPI.getProduct(productId)
-      
-      if (response.product) {
-        setProduct(response.product)
+    const loadProduct = async () => {
+      try {
+        setLoading(true)
+        setError(null)
         
-        // If we have initial product variants, use them, otherwise create a single variant from the main product
-        if (initialProductVariants && initialProductVariants.length > 0) {
-          setProductVariants(initialProductVariants)
+        logger.info('Loading product details', { productId }, 'INVENTORY')
+        
+        const response = await GraphQLAPI.getProduct(productId)
+        
+        if (response.product) {
+          setProduct(response.product)
+          
+          // If we have initial product variants, use them, otherwise create a single variant from the main product
+          if (initialProductVariants && initialProductVariants.length > 0) {
+            setProductVariants(initialProductVariants)
+          } else {
+            // Create a single variant from the main product
+            setProductVariants([response.product])
+          }
+          
+          logger.info('Product loaded successfully', { 
+            productId,
+            productName: response.product.product_name 
+          }, 'INVENTORY')
         } else {
-          // Create a single variant from the main product
-          setProductVariants([response.product])
+          setError('ไม่พบข้อมูลสินค้า')
         }
-        
-        logger.info('Product loaded successfully', { 
-          productId,
-          productName: response.product.product_name 
-        }, 'INVENTORY')
-      } else {
-        setError('ไม่พบข้อมูลสินค้า')
+      } catch (err) {
+        logger.error('Failed to load product', err, 'INVENTORY')
+        setError(err instanceof Error ? err.message : 'ไม่สามารถโหลดข้อมูลสินค้าได้')
+      } finally {
+        setLoading(false)
       }
-    } catch (err) {
-      logger.error('Failed to load product', err, 'INVENTORY')
-      setError(err instanceof Error ? err.message : 'ไม่สามารถโหลดข้อมูลสินค้าได้')
-    } finally {
-      setLoading(false)
     }
-  }
 
   useEffect(() => {
     if (productId) {
@@ -753,17 +753,17 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
               if (oldImageUrl && newImageUrl && oldImageUrl !== newImageUrl) {
                 try {
                   // Extract filename from old URL
-                  const urlParts = oldImageUrl.split('/')
-                  const filename = urlParts[urlParts.length - 1]
-                  const category = urlParts[urlParts.length - 2]
-                  
-                  if (filename && category) {
-                    await GraphQLAPI.deleteImage(filename, category as 'product' | 'user' | 'patient')
+              const urlParts = oldImageUrl.split('/')
+              const filename = urlParts[urlParts.length - 1]
+              const category = urlParts[urlParts.length - 2]
+              
+              if (filename && category) {
+                await GraphQLAPI.deleteImage(filename, category as 'product' | 'user' | 'patient')
                     logger.info('Old image deleted successfully', { filename }, 'INVENTORY')
-                  }
-                } catch (error) {
-                  console.warn('Failed to delete old image:', error)
-                  // Continue even if old image deletion fails
+              }
+            } catch (error) {
+              console.warn('Failed to delete old image:', error)
+              // Continue even if old image deletion fails
                 }
               }
             } catch (error) {
@@ -1764,28 +1764,28 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                 >
                   {stocksLoading ? 'กำลังโหลด...' : 'รีเฟรช'}
                 </Button>
-              </div>
-            </div>
+                  </div>
+                  </div>
 
 
             {/* สต๊อกแยกตามหน่วยนับ */}
             {stocksLoading ? (
-              <Card>
-                <CardContent className="p-6">
+            <Card>
+              <CardContent className="p-6">
                   <div className="flex items-center justify-center h-32">
                     <div className="text-center">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto mb-4"></div>
                       <p className="text-gray-600">กำลังโหลดข้อมูลสต๊อก...</p>
-                    </div>
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </CardContent>
+            </Card>
             ) : groupStocksByUnit().length > 0 ? (
               groupStocksByUnit().map((unitData) => (
                 <Card key={unitData.unit}>
                   <CardHeader>
                     <div className="flex items-center justify-between">
-                      <div>
+                    <div>
                         <CardTitle className="text-xl font-bold">{unitData.unit}</CardTitle>
                         <p className="text-purple-600 font-medium">
                           คงเหลือทั้งหมด {unitData.totalQuantity.toLocaleString()} {unitData.unitName}
@@ -1810,8 +1810,8 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                         >
                           เพิ่มสต๊อกสินค้าใหม่
                         </Button>
-                      </div>
-                    </div>
+                  </div>
+                </div>
                   </CardHeader>
                   <CardContent>
                     <div className="overflow-x-auto">
@@ -1835,14 +1835,14 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                             unitData.stocks.filter(stock => stock.quantity > 0).map((stock) => (
                               <tr key={stock.id} className="border-b hover:bg-gray-50">
                                 <td className="py-3 px-4">
-                                  <div>
+                    <div>
                                     <div className="font-medium">{formatDate(stock.created_at)}</div>
                                     <div className="text-sm text-blue-600">
-                                    </div>
+                      </div>
                                     {/* <div className="text-xs text-gray-500 mt-1">
                                       {stock.note || 'เพิ่มสต๊อกสินค้าจากการนำเข้าข้อมูลสินค้า (IMPORT)'}
                                     </div> */}
-                                  </div>
+                    </div>
                                 </td>
                                 <td className="py-3 px-4 text-gray-500">-</td>
                                 <td className="py-3 px-4 text-gray-500">{formatDate(stock.production_date)}</td>
@@ -1851,7 +1851,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                                 <td className="py-3 px-4 font-medium">฿{stock.product_sale_price?.toFixed(2) || '0.00'}</td>
                                 <td className="py-3 px-4 font-medium">{stock.quantity_in?.toLocaleString() || stock.quantity.toLocaleString()}x</td>
                                 <td className="py-3 px-4">
-                                  <div>
+                      <div>
                                     <div className="font-medium">{stock.quantity.toLocaleString()}x</div>
                                     <div className="text-sm text-blue-600">
                                       <button 
@@ -1860,8 +1860,8 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                                       >
                                         ปรับเพิ่ม/ลดสต๊อก
                                       </button>
-                                    </div>
-                                  </div>
+                        </div>
+                      </div>
                                 </td>
                                 <td className="py-3 px-4">
                                   {getStatusBadge(stock)}
@@ -1886,7 +1886,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                                     >
                                       <Trash2 className="h-4 w-4" />
                                     </Button>
-                                  </div>
+                    </div>
                                 </td>
                               </tr>
                             ))
@@ -1903,12 +1903,12 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                           )}
                         </tbody>
                       </table>
-                    </div>
-                  </CardContent>
-                </Card>
+                </div>
+              </CardContent>
+            </Card>
               ))
             ) : (
-              <Card>
+            <Card>
                 <CardContent className="p-8 text-center">
                   <div className="flex flex-col items-center space-y-4">
                     <div className="text-4xl">📦</div>
@@ -1917,9 +1917,9 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                       กรุณาเพิ่มหน่วยนับสินค้าก่อน<br/>
                       จากนั้นจึงสามารถเพิ่มสต๊อกได้
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
+                </div>
+              </CardContent>
+            </Card>
             )}
           </TabsContent>
 

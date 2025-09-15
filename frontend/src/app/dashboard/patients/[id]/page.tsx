@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,17 +8,33 @@ import { Badge } from '@/components/ui/badge';
 import { CalendarDays, User, Phone, Mail, MapPin, Plus, Clock, Eye, CreditCard } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { GraphQLAPI } from '@/clients/graphql';
+import PageGuard from '@/components/guards/page-guard';
 
 interface Patient {
   id: string;
   first_name: string;
   last_name: string;
   national_id?: string;
+  prefix?: string;
+  nickname?: string;
   date_of_birth?: string;
+  age?: number;
   gender?: string;
+  blood_group?: string;
   phone?: string;
   email?: string;
   address?: string;
+  subdistrict?: string;
+  district?: string;
+  province?: string;
+  zip_code?: string;
+  drug_allergies?: string;
+  drug_allergies_other?: string;
+  medical_conditions?: string;
+  notes?: string;
+  photo_url?: string;
+  photo_path?: string;
   created_at: string;
 }
 
@@ -65,139 +81,112 @@ export default function PatientDetailPage() {
   const [visits, setVisits] = useState<Visit[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreatingVisit, setIsCreatingVisit] = useState(false);
+  const [isFetching, setIsFetching] = useState(false);
+  const [isMounted, setIsMounted] = useState(true);
+  const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastFetchTimeRef = useRef<number>(0);
 
-  useEffect(() => {
-    fetchPatientData();
-  }, [patientId]);
+  const fetchPatientData = useCallback(async () => {
+    // Prevent multiple simultaneous requests
+    if (isFetching) {
+      console.log('Already fetching patient data, skipping...');
+      return;
+    }
 
-  const fetchPatientData = async () => {
+    if (!patientId) {
+      console.log('No patient ID provided, skipping fetch...');
+      return;
+    }
+
     try {
+      setIsFetching(true);
       setIsLoading(true);
       
-      // Fetch patient details
-      const patientResponse = await fetch(`/api/graphql`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          query: `
-            query GetPatient($id: String!) {
-              patient(id: $id) {
-                id
-                first_name
-                last_name
-                national_id
-                date_of_birth
-                gender
-                phone
-                email
-                address
-                created_at
-              }
-            }
-          `,
-          variables: { id: patientId }
-        })
-      });
+      console.log('Fetching patient data for ID:', patientId);
+      
+      // Fetch patient details and visits using GraphQL API
+      const [patientResult, visitsResult] = await Promise.all([
+        GraphQLAPI.getPatient(patientId),
+        GraphQLAPI.getPatientVisits(patientId, { take: 10 })
+      ]);
 
-      const patientData = await patientResponse.json();
-      if (patientData.errors) {
-        throw new Error(patientData.errors[0].message);
+      console.log('Patient data fetched successfully:', patientResult.patient);
+      console.log('Visits data fetched successfully:', visitsResult.patientVisits);
+
+      // Only update state if component is still mounted
+      if (isMounted) {
+        setPatient(patientResult.patient);
+        setVisits(visitsResult.patientVisits || []);
       }
-      setPatient(patientData.data.patient);
-
-      // Fetch recent visits
-      const visitsResponse = await fetch(`/api/graphql`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          query: `
-            query GetPatientVisits($patientId: String!) {
-              patientVisits(patientId: $patientId, pagination: { limit: 10 }) {
-                id
-                visit_date
-                status
-                chief_complaint
-                diagnosis
-                notes
-                vitals {
-                  heightCm
-                  weightKg
-                  tempC
-                  sbp
-                  dbp
-                  hr
-                  spo2
-                }
-                queueTickets {
-                  id
-                  station
-                  status
-                  number
-                }
-              }
-            }
-          `,
-          variables: { patientId }
-        })
-      });
-
-      const visitsData = await visitsResponse.json();
-      if (visitsData.errors) {
-        throw new Error(visitsData.errors[0].message);
-      }
-      setVisits(visitsData.data.patientVisits || []);
 
     } catch (error: any) {
       console.error('Error fetching patient data:', error);
-      toast.error(error.message || 'Failed to load patient data');
+      
+      // Handle rate limiting specifically
+      if (error.message?.includes('Rate limit exceeded') || error.message?.includes('RATE_LIMITED')) {
+        toast.error('Too many requests. Please wait a moment and try again.');
+        // Wait before allowing another request
+        setTimeout(() => {
+          setIsFetching(false);
+        }, 5000);
+      } else {
+        toast.error(error.message || 'Failed to load patient data');
+        setIsFetching(false);
+      }
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [patientId, isFetching, isMounted]);
+
+  useEffect(() => {
+    if (patientId) {
+      // Clear any existing timeout
+      if (fetchTimeoutRef.current) {
+        clearTimeout(fetchTimeoutRef.current);
+      }
+
+      // Check if we've fetched recently (within 2 seconds)
+      const now = Date.now();
+      const timeSinceLastFetch = now - lastFetchTimeRef.current;
+      
+      if (timeSinceLastFetch < 2000) {
+        console.log('Skipping fetch - too recent:', timeSinceLastFetch, 'ms ago');
+        return;
+      }
+
+      // Add a longer delay to prevent rapid successive calls
+      fetchTimeoutRef.current = setTimeout(() => {
+        fetchPatientData();
+        lastFetchTimeRef.current = Date.now();
+      }, 500);
+
+      return () => {
+        if (fetchTimeoutRef.current) {
+          clearTimeout(fetchTimeoutRef.current);
+        }
+      };
+    }
+  }, [patientId, fetchPatientData]);
+
+  // Cleanup function to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      setIsMounted(false);
+    };
+  }, []);
 
   const handleCreateVisit = async () => {
     try {
       setIsCreatingVisit(true);
       
-      const response = await fetch(`/api/graphql`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          query: `
-            mutation CreateVisit($input: CreateVisitInput!) {
-              createVisit(input: $input) {
-                id
-                visit_date
-                status
-                patient {
-                  id
-                  first_name
-                  last_name
-                }
-              }
-            }
-          `,
-          variables: {
-            input: {
-              patientId: patientId
-            }
-          }
-        })
-      });
-
-      const data = await response.json();
-      if (data.errors) {
-        throw new Error(data.errors[0].message);
-      }
-
-      const newVisit = data.data.createVisit;
+      const result = await GraphQLAPI.createVisit({ patientId });
+      const newVisit = result.createVisit;
+      
       toast.success('New visit created successfully!');
       
-      // Navigate to the visit detail page
-      router.push(`/dashboard/visits/${newVisit.id}`);
+      // Navigate to the visit detail page in the same window
+      // Use window.location to ensure it opens in the same window
+      window.location.href = `/dashboard/visits/${newVisit.id}`;
 
     } catch (error: any) {
       console.error('Error creating visit:', error);
@@ -241,7 +230,8 @@ export default function PatientDetailPage() {
   }
 
   return (
-    <div className="container mx-auto p-6">
+    <PageGuard requiredPermission="patients:read">
+      <div className="container mx-auto p-6">
       <div className="flex justify-between items-start mb-6">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">
@@ -273,7 +263,21 @@ export default function PatientDetailPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm font-medium text-gray-500">Full Name</label>
-                  <p className="text-lg font-semibold">{patient.first_name} {patient.last_name}</p>
+                  <p className="text-lg font-semibold">
+                    {patient.prefix && (
+                      <span className="text-sm text-gray-500 mr-1">
+                        {patient.prefix === 'mr' ? 'นาย' : 
+                         patient.prefix === 'mrs' ? 'นาง' : 
+                         patient.prefix === 'miss' ? 'นางสาว' : 
+                         patient.prefix === 'dr' ? 'แพทย์' : 
+                         patient.prefix === 'prof' ? 'ศาสตราจารย์' : patient.prefix}
+                      </span>
+                    )}
+                    {patient.first_name} {patient.last_name}
+                    {patient.nickname && (
+                      <span className="text-sm text-gray-500 ml-2">({patient.nickname})</span>
+                    )}
+                  </p>
                 </div>
                 
                 {patient.national_id && (
@@ -282,6 +286,26 @@ export default function PatientDetailPage() {
                     <p className="flex items-center gap-2">
                       <CreditCard className="w-4 h-4 text-gray-400" />
                       {patient.national_id}
+                    </p>
+                  </div>
+                )}
+
+                {patient.age && (
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">อายุ</label>
+                    <p className="flex items-center gap-2">
+                      <CalendarDays className="w-4 h-4 text-gray-400" />
+                      {patient.age} ปี
+                    </p>
+                  </div>
+                )}
+
+                {patient.blood_group && (
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">หมู่เลือด</label>
+                    <p className="flex items-center gap-2">
+                      <span className="w-4 h-4 text-gray-400">🩸</span>
+                      {patient.blood_group}
                     </p>
                   </div>
                 )}
@@ -330,7 +354,42 @@ export default function PatientDetailPage() {
                   <p className="flex items-start gap-2">
                     <MapPin className="w-4 h-4 text-gray-400 mt-1" />
                     {patient.address}
+                    {patient.subdistrict && `, ${patient.subdistrict}`}
+                    {patient.district && `, ${patient.district}`}
+                    {patient.province && `, ${patient.province}`}
+                    {patient.zip_code && ` ${patient.zip_code}`}
                   </p>
+                </div>
+              )}
+
+              {/* Medical Information */}
+              {(patient.drug_allergies || patient.medical_conditions || patient.notes) && (
+                <div className="border-t pt-4">
+                  <h4 className="text-sm font-medium text-gray-700 mb-3">ข้อมูลทางการแพทย์</h4>
+                  
+                  {patient.drug_allergies && patient.drug_allergies !== 'none' && (
+                    <div className="mb-2">
+                      <label className="text-sm font-medium text-gray-500">การแพ้ยา</label>
+                      <p className="text-sm text-red-600">⚠️ {patient.drug_allergies}</p>
+                      {patient.drug_allergies_other && (
+                        <p className="text-sm text-red-600 ml-4">- {patient.drug_allergies_other}</p>
+                      )}
+                    </div>
+                  )}
+
+                  {patient.medical_conditions && patient.medical_conditions !== '-' && (
+                    <div className="mb-2">
+                      <label className="text-sm font-medium text-gray-500">โรคประจำตัว</label>
+                      <p className="text-sm text-gray-700">{patient.medical_conditions}</p>
+                    </div>
+                  )}
+
+                  {patient.notes && patient.notes !== '-' && (
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">หมายเหตุ</label>
+                      <p className="text-sm text-gray-700">{patient.notes}</p>
+                    </div>
+                  )}
                 </div>
               )}
             </CardContent>
@@ -358,7 +417,7 @@ export default function PatientDetailPage() {
                     <div 
                       key={visit.id}
                       className="border rounded-lg p-3 hover:bg-gray-50 cursor-pointer"
-                      onClick={() => router.push(`/dashboard/visits/${visit.id}`)}
+                      onClick={() => window.location.href = `/dashboard/visits/${visit.id}`}
                     >
                       <div className="flex items-center justify-between mb-2">
                         <Badge className={statusColors[visit.status] || 'bg-gray-100 text-gray-800'}>
@@ -413,5 +472,6 @@ export default function PatientDetailPage() {
         </div>
       </div>
     </div>
+    </PageGuard>
   );
 }

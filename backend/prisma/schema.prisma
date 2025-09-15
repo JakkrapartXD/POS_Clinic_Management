@@ -29,26 +29,38 @@ model User {
 }
 
 model Patient {
-  id             String          @id @default(cuid())
-  first_name     String
-  last_name      String
-  national_id    String?         @unique
-  date_of_birth  DateTime?
-  gender         String?
-  phone          String?
-  email          String?
-  address        String?
-  photo_url      String?
-  photo_path     String?
-  isDelete       Boolean         @default(false)
-  created_at     DateTime        @default(now())
-  updated_at     DateTime        @updatedAt
-  appointments   Appointment[]
-  medicalRecords MedicalRecord[]
-  orders         Order[]
-  treatmentPlans TreatmentPlan[]
-  visits         Visit[]
-  queueTickets   QueueTicket[]
+  id                    String          @id @default(cuid())
+  first_name            String
+  last_name             String
+  national_id           String?         @unique
+  prefix                String?         // นาย, นาง, นางสาว, แพทย์, ศาสตราจารย์
+  nickname              String?         // ชื่อเล่น
+  date_of_birth         DateTime?
+  age                   Int?            // อายุ (คำนวณจาก date_of_birth)
+  gender                String?         // ชาย, หญิง, อื่นๆ
+  blood_group           String?         // A+, A-, B+, B-, AB+, AB-, O+, O-
+  phone                 String?
+  email                 String?
+  address               String?
+  subdistrict           String?         // ตำบล
+  district              String?         // อำเภอ
+  province              String?         // จังหวัด
+  zip_code              String?         // รหัสไปรษณีย์
+  drug_allergies        String?         // การแพ้ยา
+  drug_allergies_other  String?         // การแพ้ยาอื่นๆ
+  medical_conditions    String?         // โรคประจำตัว
+  notes                 String?         // หมายเหตุ
+  photo_url             String?
+  photo_path            String?
+  isDelete              Boolean         @default(false)
+  created_at            DateTime        @default(now())
+  updated_at            DateTime        @updatedAt
+  appointments          Appointment[]
+  medicalRecords        MedicalRecord[]
+  orders                Order[]
+  treatmentPlans        TreatmentPlan[]
+  visits                Visit[]
+  queueTickets          QueueTicket[]
 }
 
 model Category {

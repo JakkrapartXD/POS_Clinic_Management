@@ -42,11 +42,23 @@ export const typeDefs = /* GraphQL */ `
     first_name: String!
     last_name: String!
     national_id: String
+    prefix: String
+    nickname: String
     date_of_birth: DateTime
+    age: Int
     gender: String
+    blood_group: String
     phone: String
     email: String
     address: String
+    subdistrict: String
+    district: String
+    province: String
+    zip_code: String
+    drug_allergies: String
+    drug_allergies_other: String
+    medical_conditions: String
+    notes: String
     photo_url: String
     photo_path: String
     created_at: DateTime!
@@ -63,22 +75,50 @@ export const typeDefs = /* GraphQL */ `
     first_name: String!
     last_name: String!
     national_id: String
+    prefix: String
+    nickname: String
     date_of_birth: DateTime
+    age: Int
     gender: String
+    blood_group: String
     phone: String
     email: String
     address: String
+    subdistrict: String
+    district: String
+    province: String
+    zip_code: String
+    drug_allergies: String
+    drug_allergies_other: String
+    medical_conditions: String
+    notes: String
+    photo_url: String
+    photo_path: String
   }
 
   input UpdatePatientInput {
     first_name: String
     last_name: String
     national_id: String
+    prefix: String
+    nickname: String
     date_of_birth: DateTime
+    age: Int
     gender: String
+    blood_group: String
     phone: String
     email: String
     address: String
+    subdistrict: String
+    district: String
+    province: String
+    zip_code: String
+    drug_allergies: String
+    drug_allergies_other: String
+    medical_conditions: String
+    notes: String
+    photo_url: String
+    photo_path: String
   }
 
   # Category Types

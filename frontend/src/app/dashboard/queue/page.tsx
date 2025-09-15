@@ -20,6 +20,8 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { GraphQLAPI } from '@/clients/graphql';
+import PageGuard from '@/components/guards/page-guard';
 
 interface QueueTicket {
   id: string;
@@ -79,7 +81,7 @@ export default function QueueManagementPage() {
       setIsLoading(true);
       
       const variables: any = {
-        pagination: { limit: 100 }
+        pagination: { take: 100 }
       };
       
       if (selectedStation !== 'all') {
@@ -90,47 +92,8 @@ export default function QueueManagementPage() {
         variables.status = selectedStatus.toUpperCase();
       }
       
-      const response = await fetch(`/api/graphql`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          query: `
-            query GetQueueTickets($station: QueueStation, $status: QueueStatus, $pagination: PaginationInput) {
-              queueTickets(station: $station, status: $status, pagination: $pagination) {
-                id
-                number
-                station
-                status
-                priority
-                called_at
-                started_at
-                done_at
-                created_at
-                visit {
-                  id
-                  chief_complaint
-                  patient {
-                    id
-                    first_name
-                    last_name
-                    national_id
-                    phone
-                  }
-                }
-              }
-            }
-          `,
-          variables
-        })
-      });
-
-      const data = await response.json();
-      if (data.errors) {
-        throw new Error(data.errors[0].message);
-      }
-      
-      setQueueTickets(data.data.queueTickets || []);
+      const result = await GraphQLAPI.getQueueTickets(variables);
+      setQueueTickets(result.queueTickets || []);
 
     } catch (error: any) {
       console.error('Error fetching queue data:', error);
@@ -144,35 +107,7 @@ export default function QueueManagementPage() {
     try {
       setIsUpdating(ticketId);
       
-      const response = await fetch(`/api/graphql`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          query: `
-            mutation UpdateQueueStatus($id: String!, $status: QueueStatus!, $note: String) {
-              updateQueueStatus(id: $id, status: $status, note: $note) {
-                id
-                status
-                called_at
-                started_at
-                done_at
-              }
-            }
-          `,
-          variables: {
-            id: ticketId,
-            status: newStatus.toUpperCase(),
-            note
-          }
-        })
-      });
-
-      const data = await response.json();
-      if (data.errors) {
-        throw new Error(data.errors[0].message);
-      }
-
+      await GraphQLAPI.updateQueueStatus(ticketId, newStatus.toUpperCase(), note);
       toast.success(`Queue status updated to ${newStatus}`);
       fetchQueueData(); // Refresh data
 
@@ -369,7 +304,8 @@ export default function QueueManagementPage() {
   }
 
   return (
-    <div className="container mx-auto p-6">
+    <PageGuard requiredPermission="queue:read">
+      <div className="container mx-auto p-6">
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-900">Queue Management</h1>
@@ -520,5 +456,6 @@ export default function QueueManagementPage() {
         ))}
       </Tabs>
     </div>
+    </PageGuard>
   );
 }

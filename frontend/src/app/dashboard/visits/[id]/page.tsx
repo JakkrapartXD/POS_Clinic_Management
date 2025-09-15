@@ -25,6 +25,8 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { GraphQLAPI } from '@/clients/graphql';
+import PageGuard from '@/components/guards/page-guard';
 
 interface Visit {
   id: string;
@@ -125,76 +127,8 @@ export default function VisitDetailPage() {
     try {
       setIsLoading(true);
       
-      const response = await fetch(`/api/graphql`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          query: `
-            query GetVisit($id: String!) {
-              visit(id: $id) {
-                id
-                visit_date
-                status
-                chief_complaint
-                diagnosis
-                notes
-                patient {
-                  id
-                  first_name
-                  last_name
-                  national_id
-                  phone
-                  email
-                }
-                vitals {
-                  visitId
-                  heightCm
-                  weightKg
-                  tempC
-                  sbp
-                  dbp
-                  hr
-                  rr
-                  spo2
-                  bmi
-                }
-                visitOrders {
-                  id
-                  order {
-                    id
-                    order_date
-                    total_amount
-                    status
-                    orderItems {
-                      id
-                      product_name
-                      quantity
-                      unit_price
-                      total_price
-                    }
-                  }
-                }
-                queueTickets {
-                  id
-                  station
-                  status
-                  number
-                  created_at
-                }
-              }
-            }
-          `,
-          variables: { id: visitId }
-        })
-      });
-
-      const data = await response.json();
-      if (data.errors) {
-        throw new Error(data.errors[0].message);
-      }
-      
-      const visitData = data.data.visit;
+      const result = await GraphQLAPI.getVisit(visitId);
+      const visitData = result.visit;
       setVisit(visitData);
       
       // Populate forms
@@ -229,33 +163,7 @@ export default function VisitDetailPage() {
     try {
       setIsSaving(true);
       
-      const response = await fetch(`/api/graphql`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          query: `
-            mutation UpdateVisit($id: String!, $input: UpdateVisitInput!) {
-              updateVisit(id: $id, input: $input) {
-                id
-                chief_complaint
-                diagnosis
-                notes
-              }
-            }
-          `,
-          variables: {
-            id: visitId,
-            input: soapForm
-          }
-        })
-      });
-
-      const data = await response.json();
-      if (data.errors) {
-        throw new Error(data.errors[0].message);
-      }
-
+      await GraphQLAPI.updateVisit(visitId, soapForm);
       toast.success('SOAP notes saved successfully!');
       fetchVisitData(); // Refresh data
 
@@ -284,36 +192,7 @@ export default function VisitDetailPage() {
         }
       });
       
-      const response = await fetch(`/api/graphql`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          query: `
-            mutation UpsertVitals($input: UpsertVitalsInput!) {
-              upsertVitals(input: $input) {
-                visitId
-                heightCm
-                weightKg
-                tempC
-                sbp
-                dbp
-                hr
-                rr
-                spo2
-                bmi
-              }
-            }
-          `,
-          variables: { input: vitalsData }
-        })
-      });
-
-      const data = await response.json();
-      if (data.errors) {
-        throw new Error(data.errors[0].message);
-      }
-
+      await GraphQLAPI.upsertVitals(vitalsData);
       toast.success('Vitals saved successfully!');
       fetchVisitData(); // Refresh data
 
@@ -334,36 +213,10 @@ export default function VisitDetailPage() {
     try {
       setIsLinkingOrder(true);
       
-      const response = await fetch(`/api/graphql`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          query: `
-            mutation LinkOrderToVisit($input: LinkOrderToVisitInput!) {
-              linkOrderToVisit(input: $input) {
-                id
-                order {
-                  id
-                  total_amount
-                  status
-                }
-              }
-            }
-          `,
-          variables: {
-            input: {
-              visitId,
-              orderId: linkOrderId.trim()
-            }
-          }
-        })
+      await GraphQLAPI.linkOrderToVisit({
+        visitId,
+        orderId: linkOrderId.trim()
       });
-
-      const data = await response.json();
-      if (data.errors) {
-        throw new Error(data.errors[0].message);
-      }
 
       toast.success('Order linked successfully!');
       setLinkOrderId('');
@@ -379,36 +232,12 @@ export default function VisitDetailPage() {
 
   const handleCreateQueueTicket = async (station: string) => {
     try {
-      const response = await fetch(`/api/graphql`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          query: `
-            mutation CreateQueueTicket($input: CreateQueueTicketInput!) {
-              createQueueTicket(input: $input) {
-                id
-                number
-                station
-                status
-              }
-            }
-          `,
-          variables: {
-            input: {
-              visitId,
-              station: station.toLowerCase()
-            }
-          }
-        })
+      const result = await GraphQLAPI.createQueueTicket({
+        visitId,
+        station: station.toLowerCase()
       });
 
-      const data = await response.json();
-      if (data.errors) {
-        throw new Error(data.errors[0].message);
-      }
-
-      const ticket = data.data.createQueueTicket;
+      const ticket = result.createQueueTicket;
       toast.success(`Queue ticket created: ${station} #${ticket.number}`);
       fetchVisitData(); // Refresh data
 
@@ -453,7 +282,8 @@ export default function VisitDetailPage() {
   }
 
   return (
-    <div className="container mx-auto p-6">
+    <PageGuard requiredPermission="visits:read">
+      <div className="container mx-auto p-6">
       {/* Header */}
       <div className="flex justify-between items-start mb-6">
         <div>
@@ -791,5 +621,6 @@ export default function VisitDetailPage() {
         </div>
       </div>
     </div>
+    </PageGuard>
   );
 }
