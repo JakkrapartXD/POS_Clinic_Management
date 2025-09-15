@@ -32,6 +32,7 @@ model Patient {
   id             String          @id @default(cuid())
   first_name     String
   last_name      String
+  national_id    String?         @unique
   date_of_birth  DateTime?
   gender         String?
   phone          String?
@@ -46,6 +47,8 @@ model Patient {
   medicalRecords MedicalRecord[]
   orders         Order[]
   treatmentPlans TreatmentPlan[]
+  visits         Visit[]
+  queueTickets   QueueTicket[]
 }
 
 model Category {
@@ -138,6 +141,7 @@ model Order {
   user         User?       @relation(fields: [userId], references: [id])
   orderItems   OrderItem[]
   payments     Payment[]
+  visitOrders  VisitOrder[]
 }
 
 model OrderItem {
@@ -250,6 +254,7 @@ model Appointment {
   doctor           User            @relation("DoctorAppointments", fields: [doctorId], references: [id])
   patient          Patient         @relation(fields: [patientId], references: [id])
   medicalRecords   MedicalRecord[]
+  visits           Visit[]
 }
 
 model MedicalRecord {
@@ -363,4 +368,128 @@ model Account {
   user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
+}
+
+// ========== CLINIC SYSTEM EXTENSION - NEW MODELS ONLY ==========
+
+enum VisitStatus {
+  open
+  triage
+  doctor
+  pharmacy
+  cashier
+  done
+  cancelled
+}
+
+enum QueueStation {
+  triage
+  doctor
+  pharmacy
+  cashier
+}
+
+enum QueueStatus {
+  waiting
+  called
+  in_service
+  done
+  skipped
+  cancelled
+}
+
+model Visit {
+  id               String      @id @default(cuid())
+  patientId        String
+  appointmentId    String?
+  visit_date       DateTime    @default(now())
+  status           VisitStatus @default(open)
+  chief_complaint  String?
+  diagnosis        String?
+  notes            String?
+  created_at       DateTime    @default(now())
+  updated_at       DateTime    @updatedAt
+
+  // Relations
+  patient      Patient       @relation(fields: [patientId], references: [id])
+  appointment  Appointment?  @relation(fields: [appointmentId], references: [id])
+  vitals       Vitals?
+  queueTickets QueueTicket[]
+  visitOrders  VisitOrder[]
+
+  @@index([patientId, visit_date])
+  @@index([status])
+  @@index([visit_date])
+}
+
+model Vitals {
+  visitId   String @id
+  heightCm  Float?
+  weightKg  Float?
+  tempC     Float?
+  sbp       Int?
+  dbp       Int?
+  hr        Int?
+  rr        Int?
+  spo2      Int?
+  bmi       Float?
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  // Relations
+  visit Visit @relation(fields: [visitId], references: [id], onDelete: Cascade)
+}
+
+model QueueTicket {
+  id         String      @id @default(cuid())
+  visitId    String
+  patientId  String
+  number     Int
+  station    QueueStation
+  status     QueueStatus @default(waiting)
+  priority   Int         @default(0)
+  called_at  DateTime?
+  started_at DateTime?
+  done_at    DateTime?
+  created_at DateTime    @default(now())
+  updated_at DateTime    @updatedAt
+
+  // Relations
+  visit   Visit        @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  patient Patient      @relation(fields: [patientId], references: [id])
+  events  QueueEvent[]
+
+  @@index([station, status, created_at])
+  @@index([patientId])
+  @@index([visitId])
+  @@index([number, station])
+}
+
+model QueueEvent {
+  id       String       @id @default(cuid())
+  ticketId String
+  station  QueueStation
+  status   QueueStatus
+  at       DateTime     @default(now())
+  byUserId String?
+  note     String?
+
+  // Relations
+  ticket QueueTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId, at])
+}
+
+model VisitOrder {
+  id      String @id @default(cuid())
+  visitId String
+  orderId String
+  created_at DateTime @default(now())
+
+  // Relations
+  visit Visit @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@unique([visitId, orderId])
+  @@index([orderId])
 }

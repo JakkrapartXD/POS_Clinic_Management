@@ -75,6 +75,7 @@ interface Patient {
   id: string;
   first_name: string;
   last_name: string;
+  national_id?: string;
   date_of_birth?: string;
   gender?: string;
   phone?: string;
@@ -87,6 +88,7 @@ interface Patient {
 interface CreatePatientInput {
   first_name: string;
   last_name: string;
+  national_id?: string;
   date_of_birth?: string;
   gender?: string;
   phone?: string;
@@ -97,6 +99,7 @@ interface CreatePatientInput {
 interface UpdatePatientInput {
   first_name?: string;
   last_name?: string;
+  national_id?: string;
   date_of_birth?: string;
   gender?: string;
   phone?: string;
@@ -400,6 +403,7 @@ export const GraphQLQueries = {
           id
           first_name
           last_name
+          national_id
           date_of_birth
           gender
           phone
@@ -420,6 +424,7 @@ export const GraphQLQueries = {
         id
         first_name
         last_name
+        national_id
         phone
         email
         date_of_birth
@@ -974,6 +979,7 @@ export const GraphQLMutations = {
         id
         first_name
         last_name
+        national_id
         date_of_birth
         gender
         phone
@@ -991,6 +997,7 @@ export const GraphQLMutations = {
         id
         first_name
         last_name
+        national_id
         date_of_birth
         gender
         phone

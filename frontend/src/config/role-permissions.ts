@@ -18,6 +18,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
       'notifications',
       'pos', 
       'inventory',
+      'patients',
       'documents',
       'users',
       'orders',
@@ -29,7 +30,8 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
     menuItems: [
       'notifications',
       'pos',
-      'inventory', 
+      'inventory',
+      'patients', 
       'documents',
       'users',
       'orders',
@@ -67,6 +69,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
       'notifications',
       'pos',
       'inventory',
+      'patients',
       'documents',
       'users'
     ],
@@ -74,6 +77,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
       'notifications',
       'pos',
       'inventory',
+      'patients',
       'documents',
       'users'
     ]
@@ -81,11 +85,13 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
   staff: {
     allowedPages: [
       'notifications',
+      'patients',
       'orders',
       'reports'
     ],
     menuItems: [
-      'notifications', 
+      'notifications',
+      'patients', 
       'orders',
       'reports'
     ]

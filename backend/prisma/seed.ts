@@ -139,6 +139,72 @@ async function main() {
   } else {
     console.log('📁 Categories already exist. Skipping category creation.');
   }
+
+  // Check if service products exist
+  const serviceProducts = await prisma.product.findMany({
+    where: { product_type: 'service' }
+  });
+
+  if (serviceProducts.length === 0) {
+    console.log('🏥 Creating clinic service products...');
+    
+    // Find or create a service category
+    let serviceCategory = await prisma.category.findFirst({
+      where: { name: { contains: 'บริการ' } }
+    });
+
+    if (!serviceCategory) {
+      serviceCategory = await prisma.category.create({
+        data: {
+          name: 'บริการทางการแพทย์',
+          description: 'MEDICAL SERVICES',
+          code: 'SRV001'
+        }
+      });
+      console.log('✅ Created service category');
+    }
+
+    const defaultServices = [
+      {
+        product_name: 'ค่าตรวจ',
+        product_type: 'service',
+        sku: 'S001',
+        sale_price: 200.0,
+        cost: 150.0,
+        status: 'active',
+        categoryId: serviceCategory.id,
+        unit: 'ครั้ง',
+        short_name: 'ค่าตรวจ',
+        stock_quantity: 999999, // Services don't have stock limits
+      },
+      {
+        product_name: 'ทำแผล',
+        product_type: 'service',
+        sku: 'S002',
+        sale_price: 150.0,
+        cost: 100.0,
+        status: 'active',
+        categoryId: serviceCategory.id,
+        unit: 'ครั้ง',
+        short_name: 'ทำแผล',
+        stock_quantity: 999999, // Services don't have stock limits
+      }
+    ];
+
+    try {
+      for (const service of defaultServices) {
+        const createdService = await prisma.product.create({
+          data: service
+        });
+        console.log(`✅ Created service: ${service.product_name} (${createdService.id})`);
+      }
+      console.log(`🏥 Successfully created ${defaultServices.length} clinic services.`);
+    } catch (error) {
+      console.error('❌ Error creating service products:', error);
+    }
+  } else {
+    console.log(`🏥 Found ${serviceProducts.length} existing service products. Skipping service creation.`);
+  }
 }
 
 // Execute the script

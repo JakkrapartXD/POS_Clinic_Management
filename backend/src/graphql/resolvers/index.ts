@@ -3,6 +3,8 @@ import { medicalQueries } from './medicalQueries';
 import { mutations } from './mutations';
 import { medicalMutations } from './medicalMutations';
 import { productMutations } from './productMutations';
+import { clinicQueries } from './clinicQueries';
+import { clinicMutations } from './clinicMutations';
 import { customScalars } from '../security';
 
 // Relationship resolvers for nested fields
@@ -61,6 +63,18 @@ const relationshipResolvers = {
     },
     async treatmentPlans(parent: any, args: any, context: any) {
       return context.prisma.treatmentPlan.findMany({
+        where: { patientId: parent.id },
+        orderBy: { created_at: 'desc' }
+      });
+    },
+    async visits(parent: any, args: any, context: any) {
+      return context.prisma.visit.findMany({
+        where: { patientId: parent.id },
+        orderBy: { visit_date: 'desc' }
+      });
+    },
+    async queueTickets(parent: any, args: any, context: any) {
+      return context.prisma.queueTicket.findMany({
         where: { patientId: parent.id },
         orderBy: { created_at: 'desc' }
       });
@@ -150,6 +164,12 @@ const relationshipResolvers = {
     async invoice(parent: any, args: any, context: any) {
       return context.prisma.invoice.findUnique({
         where: { orderId: parent.id }
+      });
+    },
+    async visitOrders(parent: any, args: any, context: any) {
+      return context.prisma.visitOrder.findMany({
+        where: { orderId: parent.id },
+        include: { visit: true }
       });
     }
   },
@@ -279,6 +299,12 @@ const relationshipResolvers = {
         where: { appointmentId: parent.id },
         orderBy: { created_at: 'desc' }
       });
+    },
+    async visits(parent: any, args: any, context: any) {
+      return context.prisma.visit.findMany({
+        where: { appointmentId: parent.id },
+        orderBy: { visit_date: 'desc' }
+      });
     }
   },
 
@@ -349,6 +375,86 @@ const relationshipResolvers = {
     async product(parent: any, args: any, context: any) {
       return context.prisma.product.findUnique({
         where: { id: parent.productId }
+      });
+    }
+  },
+
+  // Clinic System Resolvers
+  Visit: {
+    async patient(parent: any, args: any, context: any) {
+      return context.prisma.patient.findUnique({
+        where: { id: parent.patientId }
+      });
+    },
+    async appointment(parent: any, args: any, context: any) {
+      if (!parent.appointmentId) return null;
+      return context.prisma.appointment.findUnique({
+        where: { id: parent.appointmentId }
+      });
+    },
+    async vitals(parent: any, args: any, context: any) {
+      return context.prisma.vitals.findUnique({
+        where: { visitId: parent.id }
+      });
+    },
+    async queueTickets(parent: any, args: any, context: any) {
+      return context.prisma.queueTicket.findMany({
+        where: { visitId: parent.id },
+        orderBy: { created_at: 'desc' }
+      });
+    },
+    async visitOrders(parent: any, args: any, context: any) {
+      return context.prisma.visitOrder.findMany({
+        where: { visitId: parent.id },
+        include: { order: true }
+      });
+    }
+  },
+
+  Vitals: {
+    async visit(parent: any, args: any, context: any) {
+      return context.prisma.visit.findUnique({
+        where: { id: parent.visitId }
+      });
+    }
+  },
+
+  QueueTicket: {
+    async visit(parent: any, args: any, context: any) {
+      return context.prisma.visit.findUnique({
+        where: { id: parent.visitId }
+      });
+    },
+    async patient(parent: any, args: any, context: any) {
+      return context.prisma.patient.findUnique({
+        where: { id: parent.patientId }
+      });
+    },
+    async events(parent: any, args: any, context: any) {
+      return context.prisma.queueEvent.findMany({
+        where: { ticketId: parent.id },
+        orderBy: { at: 'desc' }
+      });
+    }
+  },
+
+  QueueEvent: {
+    async ticket(parent: any, args: any, context: any) {
+      return context.prisma.queueTicket.findUnique({
+        where: { id: parent.ticketId }
+      });
+    }
+  },
+
+  VisitOrder: {
+    async visit(parent: any, args: any, context: any) {
+      return context.prisma.visit.findUnique({
+        where: { id: parent.visitId }
+      });
+    },
+    async order(parent: any, args: any, context: any) {
+      return context.prisma.order.findUnique({
+        where: { id: parent.orderId }
       });
     }
   }
@@ -578,13 +684,15 @@ export const resolvers = {
   // Root resolvers
   Query: {
     ...queries,
-    ...medicalQueries
+    ...medicalQueries,
+    ...clinicQueries
   },
   
   Mutation: {
     ...mutations,
     ...medicalMutations,
     ...productMutations,
+    ...clinicMutations,
     ...additionalMutations
   },
   
