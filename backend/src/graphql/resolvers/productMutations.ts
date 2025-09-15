@@ -26,20 +26,43 @@ export const productMutations = {
     };
     
     try {
-      const product = await context.prisma.product.create({
-        data: sanitizedInput
+      // Use transaction to create product and initial stock
+      const result = await context.prisma.$transaction(async (tx: any) => {
+        const product = await tx.product.create({
+          data: sanitizedInput
+        });
+        
+        // Create initial stock record if stock_quantity > 0
+        if (sanitizedInput.stock_quantity > 0) {
+          await tx.stock.create({
+            data: {
+              productId: product.id,
+              quantity: sanitizedInput.stock_quantity,
+              quantity_in: sanitizedInput.stock_quantity,
+              is_outofstock: false,
+              note: 'Initial stock entry',
+              createdByUserId: context.userId,
+              created_by_username: context.user?.username || 'Unknown',
+              product_name: product.product_name,
+              product_unit: product.unit,
+              created_at: new Date()
+            }
+          });
+        }
+        
+        return product;
       });
       
       await context.security.logSensitiveOperation(
         context.userId,
         'CREATE_PRODUCT',
         'Product',
-        product.id,
-        { product_name: product.product_name, sku: product.sku },
+        result.id,
+        { product_name: result.product_name, sku: result.sku },
         context.redisClient
       );
       
-      return product;
+      return result;
     } catch (error) {
       logger.error('Failed to create product', error, 'GRAPHQL');
       throw new GraphQLError('Failed to create product');
@@ -93,6 +116,25 @@ export const productMutations = {
             sku: productData.sku
           });
           continue;
+        }
+
+        // Validate categoryId if provided
+        if (productData.categoryId) {
+          const categoryExists = await context.prisma.category.findUnique({
+            where: { id: productData.categoryId }
+          });
+          if (!categoryExists) {
+            failed++;
+            const errorMsg = `Category not found: ${productData.categoryId}`;
+            errors.push(errorMsg);
+            results.push({
+              status: 'FAILED',
+              error: errorMsg,
+              product_name: productData.product_name,
+              sku: productData.sku
+            });
+            continue;
+          }
         }
         
         // Check for duplicates if skipDuplicates is enabled
@@ -166,17 +208,41 @@ export const productMutations = {
           updated_at: new Date()
         };
         
-        // Create new product
-        const newProduct = await context.prisma.product.create({
-          data: sanitizedInput
+        // Create new product and initial stock using transaction
+        const result = await context.prisma.$transaction(async (tx: any) => {
+          const newProduct = await tx.product.create({
+            data: sanitizedInput
+          });
+          
+          // Create initial stock record if stock_quantity > 0
+          if (sanitizedInput.stock_quantity > 0) {
+            await tx.stock.create({
+              data: {
+                productId: newProduct.id,
+                quantity: sanitizedInput.stock_quantity,
+                quantity_in: sanitizedInput.stock_quantity,
+                is_outofstock: false,
+                production_date: productData.production_date || null,
+                expiration_date: productData.expiration_date || null,
+                note: 'Initial stock from bulk import',
+                createdByUserId: context.userId,
+                created_by_username: context.user?.username || 'Unknown',
+                product_name: newProduct.product_name,
+                product_unit: newProduct.unit,
+                created_at: new Date()
+              }
+            });
+          }
+          
+          return newProduct;
         });
         
         imported++;
         results.push({
-          product: newProduct,
+          product: result,
           status: 'CREATED',
-          product_name: newProduct.product_name,
-          sku: newProduct.sku
+          product_name: result.product_name,
+          sku: result.sku
         });
         
       } catch (error) {
@@ -397,12 +463,13 @@ export const productMutations = {
           }
         });
         
-        // Create stock movement record
-        const stockMovement = await tx.stockMovement.create({
+        // Create stock record
+        const stock = await tx.stock.create({
           data: {
             productId,
-            movement_type: quantity > 0 ? 'IN' : 'OUT',
             quantity: Math.abs(quantity),
+            quantity_in: quantity > 0 ? Math.abs(quantity) : 0,
+            is_outofstock: updatedProduct.stock_quantity <= 0,
             note: note || 'Manual adjustment',
             createdByUserId: context.userId,
             created_by_username: context.user?.username || 'Unknown',
@@ -410,7 +477,7 @@ export const productMutations = {
           }
         });
         
-        return { updatedProduct, stockMovement };
+        return { updatedProduct, stock };
       });
       
       // Log the operation
@@ -425,7 +492,7 @@ export const productMutations = {
           new_quantity: result.updatedProduct.stock_quantity,
           adjustment: quantity,
           note,
-          stock_movement_id: result.stockMovement.id
+          stock_id: result.stock.id
         },
         context.redisClient
       );
@@ -436,10 +503,10 @@ export const productMutations = {
         oldQuantity: product.stock_quantity,
         newQuantity: result.updatedProduct.stock_quantity,
         adjustment: quantity,
-        stockMovementId: result.stockMovement.id
+        stockId: result.stock.id
       }, 'GRAPHQL');
       
-      return result.stockMovement;
+      return result.stock;
     } catch (error) {
       logger.error('Failed to adjust stock', { 
         productId, 
@@ -448,6 +515,237 @@ export const productMutations = {
         error: error instanceof Error ? error.message : error 
       }, 'GRAPHQL');
       throw new GraphQLError('Failed to adjust stock');
+    }
+  },
+
+  // Create stock record
+  async createStock(parent: any, args: any, context: any) {
+    const { input } = args;
+    context.security.requireStaff(context);
+    
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
+    
+    // Validate required fields
+    if (!input.productId || !input.quantity) {
+      throw new GraphQLError('Product ID and quantity are required');
+    }
+    
+    // Check if product exists
+    const product = await context.prisma.product.findUnique({
+      where: { id: input.productId }
+    });
+    
+    if (!product) {
+      throw new GraphQLError('Product not found');
+    }
+    
+    try {
+      // Use transaction to ensure data consistency
+      const result = await context.prisma.$transaction(async (tx: any) => {
+        // Update product stock
+        const updatedProduct = await tx.product.update({
+          where: { id: input.productId },
+          data: {
+            stock_quantity: {
+              increment: input.quantity
+            },
+            updated_at: new Date()
+          }
+        });
+        
+        // Create stock record
+        const stock = await tx.stock.create({
+          data: {
+            productId: input.productId,
+            quantity: input.quantity,
+            quantity_in: input.quantity_in || input.quantity,
+            is_outofstock: input.is_outofstock || false,
+            production_date: input.production_date,
+            expiration_date: input.expiration_date,
+            reference_table: input.reference_table,
+            reference_id: input.reference_id,
+            note: input.note || 'Stock entry',
+            createdByUserId: context.userId,
+            created_by_username: context.user?.username || 'Unknown',
+            product_name: product.product_name,
+            product_unit: product.unit,
+            created_at: new Date()
+          }
+        });
+        
+        return { updatedProduct, stock };
+      });
+      
+      // Log the operation
+      await context.security.logSensitiveOperation(
+        context.userId,
+        'CREATE_STOCK',
+        'Stock',
+        result.stock.id,
+        { 
+          product_name: product.product_name,
+          quantity: input.quantity,
+          production_date: input.production_date,
+          expiration_date: input.expiration_date
+        },
+        context.redisClient
+      );
+      
+      return result.stock;
+    } catch (error) {
+      logger.error('Failed to create stock', { 
+        input, 
+        error: error instanceof Error ? error.message : error 
+      }, 'GRAPHQL');
+      throw new GraphQLError('Failed to create stock');
+    }
+  },
+
+  // Update stock record
+  async updateStock(parent: any, args: any, context: any) {
+    const { id, input } = args;
+    context.security.requireStaff(context);
+    
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
+    
+    // Validate required fields
+    if (!id) {
+      throw new GraphQLError('Stock ID is required');
+    }
+    
+    // Check if stock exists
+    const existingStock = await context.prisma.stock.findUnique({
+      where: { id },
+      include: { product: true }
+    });
+    
+    if (!existingStock) {
+      throw new GraphQLError('Stock not found');
+    }
+    
+    try {
+      // Calculate quantity difference before transaction
+      const quantityDifference = input.quantity ? input.quantity - existingStock.quantity : 0;
+      
+      // Use transaction to ensure data consistency
+      const result = await context.prisma.$transaction(async (tx: any) => {
+        // Update stock record
+        const updatedStock = await tx.stock.update({
+          where: { id },
+          data: {
+            quantity: input.quantity || existingStock.quantity,
+            quantity_in: input.quantity_in !== undefined ? input.quantity_in : existingStock.quantity_in,
+            is_outofstock: input.is_outofstock !== undefined ? input.is_outofstock : existingStock.is_outofstock,
+            production_date: input.production_date !== undefined ? input.production_date : existingStock.production_date,
+            expiration_date: input.expiration_date !== undefined ? input.expiration_date : existingStock.expiration_date,
+            reference_table: input.reference_table !== undefined ? input.reference_table : existingStock.reference_table,
+            reference_id: input.reference_id !== undefined ? input.reference_id : existingStock.reference_id,
+            note: input.note !== undefined ? input.note : existingStock.note
+          }
+        });
+        
+        // Update product stock quantity if quantity changed
+        if (quantityDifference !== 0) {
+          await tx.product.update({
+            where: { id: existingStock.productId },
+            data: {
+              stock_quantity: {
+                increment: quantityDifference
+              }
+            }
+          });
+        }
+        
+        return { stock: updatedStock };
+      });
+      
+      // Log audit trail
+      await context.security.logSensitiveOperation(
+        context.userId,
+        'UPDATE_STOCK',
+        'Stock',
+        result.stock.id,
+        { 
+          product_name: existingStock.product.product_name,
+          old_quantity: existingStock.quantity,
+          new_quantity: input.quantity,
+          quantity_difference: quantityDifference
+        },
+        context.redisClient
+      );
+      
+      return result.stock;
+    } catch (error) {
+      logger.error('Failed to update stock', { 
+        id, 
+        input, 
+        error: error instanceof Error ? error.message : error 
+      }, 'GRAPHQL');
+      throw new GraphQLError('Failed to update stock');
+    }
+  },
+
+  async deleteStock(parent: any, args: any, context: any) {
+    const { id } = args;
+    context.security.requireStaff(context);
+
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
+
+    if (!id) {
+      throw new GraphQLError('Stock ID is required');
+    }
+
+    const existingStock = await context.prisma.stock.findUnique({
+      where: { id },
+      include: { product: true }
+    });
+
+    if (!existingStock) {
+      throw new GraphQLError('Stock not found');
+    }
+
+    try {
+      // Use transaction to ensure data consistency
+      const result = await context.prisma.$transaction(async (tx: any) => {
+        // Delete stock record
+        const deletedStock = await tx.stock.delete({
+          where: { id }
+        });
+
+        // Update product stock quantity by subtracting the deleted stock quantity
+        await tx.product.update({
+          where: { id: existingStock.productId },
+          data: {
+            stock_quantity: {
+              decrement: existingStock.quantity
+            }
+          }
+        });
+
+        return { stock: deletedStock };
+      });
+
+      // Log audit trail
+      await context.security.logSensitiveOperation(
+        context.userId,
+        'DELETE_STOCK',
+        'Stock',
+        result.stock.id,
+        { 
+          product_name: existingStock.product.product_name,
+          deleted_quantity: existingStock.quantity,
+          product_id: existingStock.productId
+        },
+        context.redisClient
+      );
+
+      return true;
+    } catch (error) {
+      logger.error('Failed to delete stock', { 
+        id, 
+        error: error instanceof Error ? error.message : error 
+      }, 'GRAPHQL');
+      throw new GraphQLError('Failed to delete stock');
     }
   }
 };

@@ -66,10 +66,10 @@ export function getPrescriptionDisplayName(prescription: {
 }
 
 /**
- * Get display name for stock movement
+ * Get display name for stock record
  * Prioritizes historical data to show what was actually moved
  */
-export function getStockMovementDisplayName(stockMovement: {
+export function getStockDisplayName(stock: {
   product_name?: string
   product_unit?: string
   product: {
@@ -77,7 +77,7 @@ export function getStockMovementDisplayName(stockMovement: {
     unit?: string
   }
 }): string {
-  const name = stockMovement.product_name || stockMovement.product.product_name
+  const name = stock.product_name || stock.product.product_name
   return name
 }
 

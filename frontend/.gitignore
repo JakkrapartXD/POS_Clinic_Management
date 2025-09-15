@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# public images (ignore uploaded user content, keep static assets)
+/public/uploads/
+/public/assets/
+/public/images/uploads/
+/public/images/products/
+/public/images/users/

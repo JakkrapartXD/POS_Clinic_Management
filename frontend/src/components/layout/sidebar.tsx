@@ -3,7 +3,20 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
-import { Bell, ShoppingCart, Pill, Tag, LayoutGrid, Package, BarChart3, Settings, Users, FileText, Shield, Receipt, ChevronDown, ChevronRight, LogOut } from "lucide-react"
+import { Bell, ShoppingCart, Pill, LayoutGrid, Package, BarChart3, Settings, Users, FileText, Shield, Receipt, ChevronDown, ChevronRight, LogOut, LucideIcon } from "lucide-react"
+
+interface MenuItem {
+  id: string
+  icon: LucideIcon
+  href: string
+  label: string
+  submenu?: Array<{
+    id: string
+    href: string
+    label: string
+    icon?: LucideIcon
+  }>
+}
 import { useUser } from "@/hooks/use-user"
 import { getMenuItemsForRole } from "@/config/role-permissions"
 import { logger } from "@/lib/logger"
@@ -83,11 +96,10 @@ export default function Sidebar() {
     }
   }
 
-  const allMenuItems = [
+  const allMenuItems: MenuItem[] = [
     { id: "notifications", icon: Bell, href: "/dashboard/notifications", label: "แจ้งเตือน" },
     { id: "pos", icon: ShoppingCart, href: "/dashboard/pos", label: "จุดขาย" },
     { id: "inventory", icon: Pill, href: "/dashboard/inventory", label: "คลังสินค้า" },
-    { id: "discounts", icon: Tag, href: "/dashboard/discounts", label: "ส่วนลด" },
     { id: "documents", icon: LayoutGrid, href: "/dashboard/documents", label: "เอกสาร" },
     { id: "users", icon: Users, href: "/dashboard/users", label: "ผู้ใช้งาน" },
     { id: "orders", icon: Receipt, href: "/dashboard/orders", label: "ใบเสร็จรับเงินวันนี้" },
@@ -211,7 +223,7 @@ export default function Sidebar() {
                     <div className="text-xs font-medium text-gray-500 px-2 py-1 border-b">
                       {item.label}
                     </div>
-                    {item.submenu.map((subItem: any) => (
+                    {item.submenu.map((subItem) => (
                       <Link
                         key={subItem.id}
                         href={subItem.href}

@@ -14,7 +14,7 @@ Contains utility functions for displaying product names with units in various co
 - `getOrderItemDisplayName(orderItem)` - Get display name for order item (prioritizes historical data)
 - `getPurchaseItemDisplayName(purchaseItem)` - Get display name for purchase item
 - `getPrescriptionDisplayName(prescription)` - Get display name for prescription item
-- `getStockMovementDisplayName(stockMovement)` - Get display name for stock movement
+- `getStockDisplayName(stock)` - Get display name for stock record
 - `getSalesReportDisplayName(salesReport)` - Get display name for sales report
 - `getStockAlertDisplayName(stockAlert)` - Get display name for stock alert
 
@@ -68,7 +68,7 @@ The backend has been updated to store historical product information:
 
 - `OrderItem.product_name` - Stored product name at time of sale
 - `OrderItem.product_unit` - Stored product unit at time of sale
-- Similar fields added to `PurchaseItem`, `Prescription`, `StockMovement`, `SalesReport`, `StockAlert`
+- Similar fields added to `PurchaseItem`, `Prescription`, `Stock`, `SalesReport`, `StockAlert`
 
 This ensures that even if a product is deleted or modified, the historical transaction data remains intact and displayable.
 

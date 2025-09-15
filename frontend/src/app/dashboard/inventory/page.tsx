@@ -7,15 +7,16 @@ import ProductListSidebar from "@/components/modules/inventory/product-list-side
 import AlphabetIndex from "@/components/modules/inventory/alphabet-index"
 import InventoryActionsGrid from "@/components/modules/inventory/inventory-actions-grid"
 import ImportProductsView from "@/components/modules/inventory/import-products-view"
-import ExportProductsView from "@/components/modules/inventory/export-products-view"
 import DeleteProductsView from "@/components/modules/inventory/delete-products-view"
 import ProductDetailView from "@/components/modules/inventory/product-detail-view"
+import ExportProductsView from "@/components/modules/inventory/export-products-view"
 import { GraphQLAPI } from "@/clients/graphql"
 import { logger } from "@/lib/logger"
 import { useAuth } from "@/components/providers/auth-provider"
+import toast from "react-hot-toast"
 
 type AlphabetMode = 'english' | 'thai' | 'numbers'
-type ViewMode = 'list' | 'add-product' | 'product-detail' | 'import-products' | 'export-products' | 'delete-products' | 'print-barcode' | 'print-price-tag' | 'print-medicine-label' | 'product-report'
+type ViewMode = 'list' | 'add-product' | 'product-detail' | 'import-products' | 'delete-products' | 'export-products'
 
 interface TransformedProduct {
   id: string
@@ -31,16 +32,145 @@ interface TransformedProduct {
 interface Product {
   id: string
   product_name: string
-  product_type?: string
+  product_type?: string | { id: string; name: string; description?: string; code?: string }
   short_name?: string
   sale_price: number
   unit?: string
   stock_quantity: number
   sku?: string
   barcode?: string
-  category?: string
+  category?: string | { id: string; name: string; description?: string; code?: string }
   status?: string
   pack_size?: string
+}
+
+interface ExportProduct {
+  id: string
+  product_name: string
+  product_type?: string | { id: string; name: string; description?: string; code?: string }
+  generic_name?: string
+  short_name?: string
+  status?: string
+  vat_percent?: number
+  expiration_warning_date?: number | string
+  sale_price: number
+  unit?: string
+  pack_size?: string
+  reorder_point?: number
+  cost?: number
+  sku?: string
+  barcode?: string
+  stock_quantity?: number
+  volume?: number
+  volume_unit?: string
+  shelf_code?: string
+  shelf_row?: string
+  categoryId?: string
+  category?: string | { id: string; name: string; description?: string; code?: string }
+  symptom_category?: string
+  license_number?: string
+  dosage_unit?: string
+  dosage?: string
+  times_per_day?: number
+  interval_hours?: number
+  before_meal?: boolean
+  after_meal?: boolean
+  after_meal_immediate?: boolean
+  morning?: string
+  noon?: string
+  evening?: string
+  before_bed?: string
+  properties?: string
+  usage_instruction?: string
+  sale_note?: string
+  purchase_note?: string
+  image_url?: string
+  image_path?: string
+  created_at?: string
+  updated_at?: string
+}
+
+// CSV conversion functions
+const convertProductsToCSV = (products: ExportProduct[], exportSettings: any): string => {
+  // CSV headers in Thai language
+  const headers = [
+    'รหัสสินค้า', 'ชื่อสินค้า', 'ประเภทสินค้า', 'ชื่อสามัญทางยา', 'ชื่อย่อ', 'สถานะสินค้า', 
+    'ภาษีมูลค่าเพิ่ม', 'วันแจ้งเตือน', 'ราคาขาย', 'หน่วยนับ', 'ขนาดบรรจุ', 'จุดสั่งซื้อ', 
+    'ต้นทุน', 'รหัส SKU', 'บาร์โค้ด', 'คงเหลือ', 'ปริมาณ', 'หน่วยปริมาณ', 'รหัสชั้นวาง', 
+    'แถว', 'หมวดหมู่', 'หมวดหมู่ยาแยกตามอาการที่รักษา', 'ทะเบียนบัญชี', 'หน่วยการทาน', 
+    'การทาน', 'จำนวนครั้งต่อวัน', 'ทานยาทุก ๆ ชั่วโมง', 'ก่อนอาหาร', 'หลังอาหาร', 
+    'หลังอาหารทันที', 'เช้า', 'กลางวัน', 'เย็น', 'ก่อนนอน', 'สรรพคุณ', 'คำแนะนำการใช้', 
+    'หมายเหตุการขาย', 'หมายเหตุการสั่งซื้อ'
+  ]
+
+  // Convert products to CSV rows
+  const rows = products.map(product => [
+    product.id || '', // รหัสสินค้า - Product ID
+    product.product_name || '',
+    typeof product.product_type === 'object' && product.product_type?.name 
+      ? product.product_type.name 
+      : product.product_type || '',
+    product.generic_name || '', // ชื่อสามัญทางยา
+    product.short_name || '',
+    product.status || 'แสดงหน้าร้าน',
+    product.vat_percent?.toString() || '', // ภาษีมูลค่าเพิ่ม
+    product.expiration_warning_date?.toString() || '90', // วันแจ้งเตือน
+    product.sale_price?.toString() || '0',
+    product.unit || '',
+    product.pack_size || '1',
+    product.reorder_point?.toString() || '', // จุดสั่งซื้อ
+    product.cost?.toString() || '', // ต้นทุน
+    product.sku || '',
+    product.barcode ? `="${product.barcode}"` : '',
+    product.stock_quantity?.toString() || '0',
+    product.volume?.toString() || '', // ปริมาณ
+    product.volume_unit || '', // หน่วยปริมาณ
+    product.shelf_code || '', // รหัสชั้นวาง
+    product.shelf_row || '', // แถว
+    typeof product.category === 'object' && product.category?.name 
+      ? product.category.name 
+      : product.category || '',
+    product.symptom_category || '', // หมวดหมู่ยาแยกตามอาการที่รักษา
+    product.license_number || '', // ทะเบียนบัญชี
+    product.dosage_unit || '', // หน่วยการทาน
+    product.dosage || '', // การทาน
+    product.times_per_day?.toString() || '', // จำนวนครั้งต่อวัน
+    product.interval_hours?.toString() || '', // ทานยาทุก ๆ ชั่วโมง
+    product.before_meal ? 'true' : '', // ก่อนอาหาร
+    product.after_meal ? 'true' : '', // หลังอาหาร
+    product.after_meal_immediate ? 'true' : '', // หลังอาหารทันที
+    product.morning || '', // เช้า
+    product.noon || '', // กลางวัน
+    product.evening || '', // เย็น
+    product.before_bed || '', // ก่อนนอน
+    product.properties || '', // สรรพคุณ
+    product.usage_instruction || '', // คำแนะนำการใช้
+    product.sale_note || '', // หมายเหตุการขาย
+    product.purchase_note || ''  // หมายเหตุการสั่งซื้อ
+  ])
+
+  // Combine headers and rows
+  const csvContent = [headers, ...rows]
+    .map(row => row.map(field => `"${field}"`).join(','))
+    .join('\n')
+
+  return csvContent
+}
+
+const downloadCSV = (csvContent: string, filename: string) => {
+  // Add UTF-8 BOM for proper Thai character display in Excel
+  const BOM = '\uFEFF'
+  const csvWithBOM = BOM + csvContent
+  
+  const blob = new Blob([csvWithBOM], { type: 'text/csv;charset=utf-8;' })
+  const link = document.createElement('a')
+  const url = URL.createObjectURL(blob)
+  link.setAttribute('href', url)
+  link.setAttribute('download', filename)
+  link.style.visibility = 'hidden'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
 }
 
 function InventoryPage() {
@@ -91,9 +221,9 @@ function InventoryPage() {
       
       logger.info('Loading all products from GraphQL', {}, 'INVENTORY')
       
-      // Load all products without pagination
+      // Load all products without pagination (including inactive but not deleted)
       const response = await GraphQLAPI.getAllProducts({
-        filter: { status: 'active' } // Only load active products
+        // No filter - load all products (backend will handle excluding deleted ones)
       })
       
       if (response.products && response.products.products) {
@@ -253,10 +383,6 @@ function InventoryPage() {
   const handleImportProducts = useCallback(() => setViewMode('import-products'), [])
   const handleExportProducts = useCallback(() => setViewMode('export-products'), [])
   const handleDeleteProduct = useCallback(() => setViewMode('delete-products'), [])
-  const handlePrintBarcode = useCallback(() => setViewMode('print-barcode'), [])
-  const handlePrintPriceTag = useCallback(() => setViewMode('print-price-tag'), [])
-  const handlePrintMedicineLabel = useCallback(() => setViewMode('print-medicine-label'), [])
-  const handleProductReport = useCallback(() => setViewMode('product-report'), [])
 
   // Product detail handler - memoized
   const handleProductClick = useCallback((productId: string) => {
@@ -313,8 +439,8 @@ function InventoryPage() {
         unit: productData.unit || '',
         pack_size: productData.pack_size || '',
         reorder_point: parseInt(productData.reorder_point) || 0,
-        cost: parseFloat(productData.cost) || 0,
-        stock_quantity: parseInt(productData.stock_quantity) || 0,
+        cost: 0, // Default value since field is removed
+        stock_quantity: 0, // Default value since field is removed
         shelf_code: productData.shelf_code || '',
         shelf_row: productData.shelf_row || '',
         symptom_category: Array.isArray(productData.symptom_category) && productData.symptom_category.length > 0 
@@ -345,15 +471,67 @@ function InventoryPage() {
         input.categoryId = categoryId
       }
 
-      // Only include report_type if it exists and is not empty
-      if (Array.isArray(productData.report_type) && productData.report_type.length > 0) {
-        input.report_type = productData.report_type
-      }
+      // Note: report_type is not supported in CreateProductInput schema
+      // Remove report_type from input to avoid GraphQL error
 
       logger.info('Creating product with input', { input }, 'INVENTORY')
       
       const result = await GraphQLAPI.createProduct(input)
       logger.info('Product created successfully', { result }, 'INVENTORY')
+      
+      // Create initial stock if provided
+      if (productData.initialStockData && result.createProduct) {
+        try {
+          const stockInput = {
+            productId: result.createProduct.id,
+            quantity: productData.initialStockData.quantity,
+            quantity_in: productData.initialStockData.quantity,
+            is_outofstock: false,
+            production_date: productData.initialStockData.production_date ? new Date(productData.initialStockData.production_date).toISOString() : undefined,
+            expiration_date: productData.initialStockData.expiration_date ? new Date(productData.initialStockData.expiration_date).toISOString() : undefined,
+            note: productData.initialStockData.note || 'เพิ่มสต๊อกเริ่มต้น'
+          }
+          
+          await GraphQLAPI.createStock(stockInput)
+          
+          // Update product stock quantity
+          const updateProductInput = {
+            stock_quantity: productData.initialStockData.quantity
+          }
+          
+          await GraphQLAPI.updateProduct(result.createProduct.id, updateProductInput)
+          
+          logger.info('Initial stock created successfully', { productId: result.createProduct.id, stockInput }, 'INVENTORY')
+        } catch (stockError) {
+          logger.error('Failed to create initial stock', { stockError, productId: result.createProduct.id }, 'INVENTORY')
+          // Don't fail the entire operation if stock creation fails
+          toast.error('สร้างสินค้าสำเร็จ แต่ไม่สามารถเพิ่มสต๊อกเริ่มต้นได้')
+        }
+      }
+      
+      // Upload image after successful product creation
+      if (productData.newImageFile && result.createProduct) {
+        try {
+          logger.info('Uploading image for new product', { fileName: productData.newImageFile.name }, 'INVENTORY')
+          const uploadResult = await GraphQLAPI.uploadImage(productData.newImageFile, 'product')
+          const newImageUrl = uploadResult.url
+          logger.info('Image uploaded successfully', { newImageUrl }, 'INVENTORY')
+          
+          // Update product with new image URL
+          await GraphQLAPI.updateProduct(result.createProduct.id, {
+            image_url: newImageUrl
+          })
+          
+          logger.info('Product image updated successfully', { productId: result.createProduct.id }, 'INVENTORY')
+        } catch (error) {
+          logger.error('Failed to upload image for new product', error, 'INVENTORY')
+          // Don't fail the entire operation if image upload fails
+          toast.error('สร้างสินค้าสำเร็จ แต่ไม่สามารถอัปโหลดรูปภาพได้')
+        }
+      }
+      
+      // Show success message
+      toast.success('สร้างสินค้าสำเร็จ')
       
       // Invalidate product cache before reloading
       GraphQLAPI.invalidateCachePattern('Products')
@@ -366,7 +544,7 @@ function InventoryPage() {
     } catch (error) {
       logger.error('Error creating product', { error, productData }, 'INVENTORY')
       const errorMessage = error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการสร้างสินค้า'
-      alert(`ไม่สามารถสร้างสินค้าได้: ${errorMessage}`)
+      toast.error(`ไม่สามารถสร้างสินค้าได้: ${errorMessage}`)
     }
   }, [loadProducts])
 
@@ -381,9 +559,6 @@ function InventoryPage() {
     setViewMode('list')
   }, [loadProducts])
 
-  const handleExportSubmit = useCallback((exportSettings: any) => {
-    // Handle export logic here
-  }, [])
 
   const handleDeleteSubmit = useCallback((deleteData: any) => {
     // Invalidate product cache before reloading
@@ -391,6 +566,51 @@ function InventoryPage() {
     loadProducts() // Reload products after bulk deletion
     setViewMode('list')
   }, [loadProducts])
+
+  const handleExportSubmit = useCallback(async (exportData: any) => {
+    try {
+      logger.info('Exporting products with complete data', { exportData }, 'INVENTORY')
+      
+      // Fetch complete product data using the new export API
+      const response = await GraphQLAPI.exportProducts()
+      
+      if (response.products && response.products.products) {
+        const allProducts = response.products.products
+        
+        // Convert products to CSV format matching sample_item_data.csv
+        const csvData = convertProductsToCSV(allProducts, exportData)
+        
+        // Create and download CSV file
+        const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-')
+        downloadCSV(csvData, `รายการสินค้า_${timestamp}.csv`)
+        
+        logger.info('Products exported successfully', { 
+          count: allProducts.length 
+        }, 'INVENTORY')
+      } else {
+        throw new Error('No products data received from server')
+      }
+      
+      setViewMode('list')
+    } catch (error) {
+      logger.error('Error exporting products', { error, exportData }, 'INVENTORY')
+      
+      // Check if it's an authentication error
+      if (error instanceof Error && (
+        error.message.includes('Authentication required') ||
+        error.message.includes('Unauthorized') ||
+        error.message.includes('Not authenticated') ||
+        error.message.includes('Invalid token') ||
+        error.message.includes('Token expired')
+      )) {
+        handleAuthError(error)
+        return
+      }
+      
+      const errorMessage = error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการส่งออกข้อมูล'
+      toast.error(`ไม่สามารถส่งออกข้อมูลได้: ${errorMessage}`)
+    }
+  }, [handleAuthError])
 
   const handleSaveButtonClick = useCallback(() => {
     setSubmitTrigger(prev => prev + 1)
@@ -403,10 +623,6 @@ function InventoryPage() {
       case 'import-products': return 'เพิ่มชุดสินค้า/นำเข้า/แก้ไข'
       case 'export-products': return 'ส่งออกยอดสินค้า'
       case 'delete-products': return 'ลบสินค้า'
-      case 'print-barcode': return 'พิมพ์บาร์โค้ด'
-      case 'print-price-tag': return 'พิมพ์ป้ายราคาสินค้า'
-      case 'print-medicine-label': return 'พิมพ์ฉลากยา'
-      case 'product-report': return 'รายงานรับเข้า/ออกของสินค้า'
       default: return 'สต็อกสินค้า'
     }
   }, [viewMode])
@@ -506,10 +722,10 @@ function InventoryPage() {
               onImportProducts={handleImportProducts}
               onExportProducts={handleExportProducts}
               onDeleteProduct={handleDeleteProduct}
-              onPrintBarcode={handlePrintBarcode}
-              onPrintPriceTag={handlePrintPriceTag}
-              onPrintMedicineLabel={handlePrintMedicineLabel}
-              onProductReport={handleProductReport}
+              onPrintBarcode={() => {}} // Disabled
+              onPrintPriceTag={() => {}} // Disabled
+              onPrintMedicineLabel={() => {}} // Disabled
+              onProductReport={() => {}} // Disabled
             />
           )}
 
@@ -548,6 +764,7 @@ function InventoryPage() {
             <ExportProductsView
               onBack={handleBackToList}
               onExport={handleExportSubmit}
+              products={products}
             />
           )}
 
@@ -556,22 +773,6 @@ function InventoryPage() {
               onBack={handleBackToList}
               onDelete={handleDeleteSubmit}
             />
-          )}
-
-          {(viewMode === 'print-barcode' || viewMode === 'print-price-tag' || viewMode === 'print-medicine-label' || viewMode === 'product-report') && (
-            <div className="p-6 text-center">
-              <div className="max-w-md mx-auto">
-                <div className="text-lg font-medium text-gray-700 mb-2">
-                  {getViewTitle()}
-                </div>
-                <div className="text-gray-500 mb-6">
-                  ฟีเจอร์นี้กำลังอยู่ในระหว่างการพัฒนา
-                </div>
-                <Button onClick={handleBackToList}>
-                  ย้อนกลับ
-                </Button>
-              </div>
-            </div>
           )}
         </div>
       </div>

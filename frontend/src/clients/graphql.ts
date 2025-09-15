@@ -460,6 +460,65 @@ export const GraphQLQueries = {
     }
   `,
 
+  // Complete product data for export (single page)
+  EXPORT_PRODUCTS_PAGE: `
+    query ExportProductsPage($pagination: PaginationInput) {
+      products(filter: { status: "active" }, pagination: $pagination) {
+        total
+        products {
+          id
+          product_name
+          product_type
+          generic_name
+          short_name
+          status
+          vat_percent
+          expiration_warning_date
+          sale_price
+          unit
+          pack_size
+          reorder_point
+          cost
+          sku
+          barcode
+          stock_quantity
+          volume
+          volume_unit
+          shelf_code
+          shelf_row
+          categoryId
+          category {
+            id
+            name
+            description
+            code
+          }
+          symptom_category
+          license_number
+          dosage_unit
+          dosage
+          times_per_day
+          interval_hours
+          before_meal
+          after_meal
+          after_meal_immediate
+          morning
+          noon
+          evening
+          before_bed
+          properties
+          usage_instruction
+          sale_note
+          purchase_note
+          image_url
+          image_path
+          created_at
+          updated_at
+        }
+      }
+    }
+  `,
+
   SEARCH_PRODUCTS: `
     query SearchProducts($query: String!) {
       searchProducts(query: $query) {
@@ -760,18 +819,23 @@ export const GraphQLQueries = {
     }
   `,
 
-  STOCK_MOVEMENTS: `
-    query StockMovements($productId: String, $pagination: PaginationInput) {
-      stockMovements(productId: $productId, pagination: $pagination) {
+  STOCKS: `
+    query Stocks($productId: String, $pagination: PaginationInput) {
+      stocks(productId: $productId, pagination: $pagination) {
         id
-        movement_type
         quantity
+        quantity_in
+        is_outofstock
+        production_date
+        expiration_date
         reference_table
         reference_id
         note
         created_at
         createdByUserId
         created_by_username
+        product_name
+        product_unit
         product {
           id
           product_name
@@ -1154,8 +1218,9 @@ export const GraphQLMutations = {
     mutation AdjustStock($productId: String!, $quantity: Int!, $note: String) {
       adjustStock(productId: $productId, quantity: $quantity, note: $note) {
         id
-        movement_type
         quantity
+        quantity_in
+        is_outofstock
         note
         created_at
         product {
@@ -1164,6 +1229,67 @@ export const GraphQLMutations = {
           stock_quantity
         }
       }
+    }
+  `,
+
+  // Create stock mutation
+  CREATE_STOCK: `
+    mutation CreateStock($input: CreateStockInput!) {
+      createStock(input: $input) {
+        id
+        quantity
+        quantity_in
+        is_outofstock
+        production_date
+        expiration_date
+        reference_table
+        reference_id
+        note
+        created_at
+        createdByUserId
+        created_by_username
+        product_name
+        product_unit
+        product {
+          id
+          product_name
+          stock_quantity
+        }
+      }
+    }
+  `,
+
+  // Update stock mutation
+  UPDATE_STOCK: `
+    mutation UpdateStock($id: String!, $input: UpdateStockInput!) {
+      updateStock(id: $id, input: $input) {
+        id
+        quantity
+        quantity_in
+        is_outofstock
+        production_date
+        expiration_date
+        reference_table
+        reference_id
+        note
+        created_at
+        createdByUserId
+        created_by_username
+        product_name
+        product_unit
+        product {
+          id
+          product_name
+          stock_quantity
+        }
+      }
+    }
+  `,
+
+  // Delete stock mutation
+  DELETE_STOCK: `
+    mutation DeleteStock($id: String!) {
+      deleteStock(id: $id)
     }
   `,
 
@@ -1333,6 +1459,40 @@ export const GraphQLAPI = {
       variables: { productId, quantity, note }
     }),
 
+  createStock: (input: {
+    productId: string
+    quantity: number
+    quantity_in?: number
+    is_outofstock?: boolean
+    production_date?: string
+    expiration_date?: string
+    reference_table?: string
+    reference_id?: string
+    note?: string
+  }): Promise<{ createStock: any }> =>
+    graphqlClient.mutation(GraphQLMutations.CREATE_STOCK, {
+      variables: { input }
+    }),
+
+  updateStock: (id: string, input: {
+    quantity?: number
+    quantity_in?: number
+    is_outofstock?: boolean
+    production_date?: string
+    expiration_date?: string
+    reference_table?: string
+    reference_id?: string
+    note?: string
+  }): Promise<{ updateStock: any }> =>
+    graphqlClient.mutation(GraphQLMutations.UPDATE_STOCK, {
+      variables: { id, input }
+    }),
+
+  deleteStock: (id: string): Promise<{ deleteStock: boolean }> =>
+    graphqlClient.mutation(GraphQLMutations.DELETE_STOCK, {
+      variables: { id }
+    }),
+
   // Category operations
   getAllCategories: (): Promise<{ categories: Category[] }> =>
     graphqlClient.query(GraphQLQueries.ALL_CATEGORIES),
@@ -1392,6 +1552,42 @@ export const GraphQLAPI = {
     }
   },
 
+  // Export all products with complete data (with pagination)
+  exportProducts: async (): Promise<{ products: { products: any[], total: number } }> => {
+    const allProducts: any[] = []
+    let skip = 0
+    const take = 100 // Maximum allowed per request
+    let hasMore = true
+
+    while (hasMore) {
+      const result = await graphqlClient.query<{ products: { products: any[], total: number } }>(
+        GraphQLQueries.EXPORT_PRODUCTS_PAGE, 
+        {
+          variables: { 
+            pagination: { take, skip }
+          }
+        }
+      )
+      
+      const products = result.products.products
+      allProducts.push(...products)
+      
+      // Check if there are more products to fetch
+      hasMore = products.length === take
+      skip += take
+      
+      // Safety break to prevent infinite loop
+      if (skip > 10000) break
+    }
+
+    return {
+      products: {
+        products: allProducts,
+        total: allProducts.length
+      }
+    }
+  },
+
   // Bulk import products
   bulkImportProducts: (products: MappedProductData[], settings: ImportSettings): Promise<{ bulkImportProducts: ImportResult }> =>
     graphqlClient.mutation(GraphQLMutations.BULK_IMPORT_PRODUCTS, {
@@ -1410,8 +1606,8 @@ export const GraphQLAPI = {
   getSalesReports: (variables?: { date_from?: string; date_to?: string; productId?: string }): Promise<{ salesReports: any[] }> =>
     graphqlClient.query(GraphQLQueries.SALES_REPORTS, { variables }),
 
-  getStockMovements: (variables?: { productId?: string; pagination?: any }): Promise<{ stockMovements: any[] }> =>
-    graphqlClient.query(GraphQLQueries.STOCK_MOVEMENTS, { variables }),
+  getStocks: (variables?: { productId?: string; pagination?: any }): Promise<{ stocks: any[] }> =>
+    graphqlClient.query(GraphQLQueries.STOCKS, { variables }),
 
   getStockAlerts: (variables?: { acknowledged?: boolean; pagination?: any }): Promise<{ stockAlerts: any[] }> =>
     graphqlClient.query(GraphQLQueries.STOCK_ALERTS, { variables }),

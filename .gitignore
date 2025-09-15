@@ -19,22 +19,17 @@ mongodata/
 .DS_Store
 Thumbs.db
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
 # Backup files and Google Drive config
 backups/
 backend/data/google-drive-config.json
-=======
-backups/
->>>>>>> c0df445c4c60e4ce93d4481a25b66a0f0c6ea88a
-=======
-backups/
->>>>>>> c0df445c4c60e4ce93d4481a25b66a0f0c6ea88a
-=======
-backups/
->>>>>>> c0df445c4c60e4ce93d4481a25b66a0f0c6ea88a
-=======
-backups/
->>>>>>> c0df445c4c60e4ce93d4481a25b66a0f0c6ea88a
+
+# Uploaded images and files in public folder
+backend/public/uploads/
+backend/public/**/*.jpg
+backend/public/**/*.jpeg
+backend/public/**/*.png
+backend/public/**/*.gif
+backend/public/**/*.webp
+backend/public/**/*.svg
+backend/public/**/*.bmp
+backend/public/**/*.ico

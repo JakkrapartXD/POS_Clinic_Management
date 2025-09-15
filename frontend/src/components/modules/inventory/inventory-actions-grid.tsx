@@ -32,7 +32,7 @@ export default function InventoryActionsGrid({
   onPrintMedicineLabel,
   onProductReport
 }: InventoryActionsGridProps) {
-  const actions = [
+  const allActions = [
     {
       id: 'add-product',
       icon: Plus,
@@ -66,30 +66,37 @@ export default function InventoryActionsGrid({
       icon: Barcode,
       title: 'พิมพ์บาร์โค้ด',
       subtitle: 'Barcode',
-      onClick: onPrintBarcode
+      onClick: onPrintBarcode,
+      disabled: true // Disabled as requested
     },
     {
       id: 'print-price-tag',
       icon: Tag,
       title: 'พิมพ์ป้ายราคาสินค้า',
       subtitle: 'Price Tag',
-      onClick: onPrintPriceTag
+      onClick: onPrintPriceTag,
+      disabled: true // Disabled as requested
     },
     {
       id: 'print-medicine-label',
       icon: Tag,
       title: 'พิมพ์ฉลากยา',
       subtitle: 'Label',
-      onClick: onPrintMedicineLabel
+      onClick: onPrintMedicineLabel,
+      disabled: true // Disabled as requested
     },
     {
       id: 'product-report',
       icon: Clipboard,
       title: 'รายงานรับเข้า/ออกของสินค้า',
       subtitle: 'Product IN/OUT Report',
-      onClick: onProductReport
+      onClick: onProductReport,
+      disabled: true // Disabled as requested
     }
   ]
+
+  // Filter out disabled actions
+  const actions = allActions.filter(action => !action.disabled)
 
   return (
     <div className="p-6">

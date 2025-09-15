@@ -365,17 +365,22 @@ export const mutations = {
       }
     });
     
-    // Create initial stock movement
-    await context.prisma.stockMovement.create({
-      data: {
-        productId: product.id,
-        movement_type: 'in',
-        quantity: input.stock_quantity || 0,
-        note: 'Initial stock entry',
-        createdByUserId: context.userId,
-        created_by_username: context.user?.username
-      }
-    });
+    // Create initial stock record
+    if (input.stock_quantity > 0) {
+      await context.prisma.stock.create({
+        data: {
+          productId: product.id,
+          quantity: input.stock_quantity,
+          quantity_in: input.stock_quantity,
+          is_outofstock: false,
+          note: 'Initial stock entry',
+          createdByUserId: context.userId,
+          created_by_username: context.user?.username,
+          product_name: product.product_name,
+          product_unit: product.unit
+        }
+      });
+    }
     
     await context.security.logSensitiveOperation(
       context.userId,
@@ -520,15 +525,18 @@ export const mutations = {
       data: { stock_quantity: newStockQuantity }
     });
     
-    // Create stock movement record
-    const stockMovement = await context.prisma.stockMovement.create({
+    // Create stock record
+    const stock = await context.prisma.stock.create({
       data: {
         productId,
-        movement_type: quantity > 0 ? 'in' : 'out',
         quantity: Math.abs(quantity),
+        quantity_in: quantity > 0 ? Math.abs(quantity) : 0,
+        is_outofstock: newStockQuantity <= 0,
         note: note || (quantity > 0 ? 'Stock increase' : 'Stock decrease'),
         createdByUserId: context.userId,
-        created_by_username: context.user?.username
+        created_by_username: context.user?.username,
+        product_name: product.product_name,
+        product_unit: product.unit
       },
       include: {
         product: {
@@ -548,7 +556,7 @@ export const mutations = {
       { quantity, newStock: newStockQuantity }, context.redisClient
     );
     
-    return stockMovement;
+    return stock;
   },
 
   // Bulk Import Products
@@ -600,6 +608,24 @@ export const mutations = {
           continue;
         }
 
+        // Validate categoryId if provided
+        if (productInput.categoryId) {
+          const categoryExists = await context.prisma.category.findUnique({
+            where: { id: productInput.categoryId }
+          });
+          if (!categoryExists) {
+            failed++;
+            results.push({
+              product: null,
+              status: 'FAILED',
+              error: `หมวดหมู่ไม่พบ: ${productInput.categoryId}`,
+              sku: productInput.sku,
+              product_name: productInput.product_name
+            });
+            continue;
+          }
+        }
+
         // Sanitize input
         const sanitizedInput = {
           product_name: context.security.sanitizeString(productInput.product_name),
@@ -621,7 +647,7 @@ export const mutations = {
           volume_unit: productInput.volume_unit ? context.security.sanitizeString(productInput.volume_unit) : null,
           shelf_code: productInput.shelf_code ? context.security.sanitizeString(productInput.shelf_code) : null,
           shelf_row: productInput.shelf_row ? context.security.sanitizeString(productInput.shelf_row) : null,
-          category: productInput.category ? context.security.sanitizeString(productInput.category) : null,
+          categoryId: productInput.categoryId ? productInput.categoryId : null,
           symptom_category: productInput.symptom_category ? context.security.sanitizeString(productInput.symptom_category) : null,
           license_number: productInput.license_number ? context.security.sanitizeString(productInput.license_number) : null,
           dosage_unit: productInput.dosage_unit ? context.security.sanitizeString(productInput.dosage_unit) : null,
@@ -701,14 +727,38 @@ export const mutations = {
           }
         }
 
-        // Create new product
-        const newProduct = await context.prisma.product.create({
-          data: sanitizedInput
+        // Create new product and initial stock using transaction
+        const result = await context.prisma.$transaction(async (tx: any) => {
+          const newProduct = await tx.product.create({
+            data: sanitizedInput
+          });
+          
+          // Create initial stock record if stock_quantity > 0
+          if (sanitizedInput.stock_quantity > 0) {
+            await tx.stock.create({
+              data: {
+                productId: newProduct.id,
+                quantity: sanitizedInput.stock_quantity,
+                quantity_in: sanitizedInput.stock_quantity,
+                is_outofstock: false,
+                production_date: productInput.production_date || null,
+                expiration_date: productInput.expiration_date || null,
+                note: 'Initial stock from bulk import',
+                createdByUserId: context.userId,
+                created_by_username: context.user?.username || 'Unknown',
+                product_name: newProduct.product_name,
+                product_unit: newProduct.unit,
+                created_at: new Date()
+              }
+            });
+          }
+          
+          return newProduct;
         });
 
         imported++;
         results.push({
-          product: newProduct,
+          product: result,
           status: 'CREATED',
           error: null,
           sku: sanitizedInput.sku,
@@ -719,8 +769,8 @@ export const mutations = {
           context.userId,
           'CREATE_PRODUCT_BULK',
           'Product',
-          newProduct.id,
-          { product_name: newProduct.product_name },
+          result.id,
+          { product_name: result.product_name },
           context.redisClient
         );
 

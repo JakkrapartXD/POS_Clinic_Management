@@ -95,11 +95,11 @@ const relationshipResolvers = {
         include: { medicalRecord: true }
       });
     },
-    async stockMovements(parent: any, args: any, context: any) {
-      return context.prisma.stockMovement.findMany({
+    async stocks(parent: any, args: any, context: any) {
+      return context.prisma.stock.findMany({
         where: { productId: parent.id },
         orderBy: { created_at: 'desc' },
-        take: 50 // Limit to recent movements
+        take: 50 // Limit to recent stocks
       });
     },
     async salesReports(parent: any, args: any, context: any) {
@@ -241,7 +241,7 @@ const relationshipResolvers = {
     }
   },
 
-  StockMovement: {
+  Stock: {
     async product(parent: any, args: any, context: any) {
       return context.prisma.product.findUnique({
         where: { id: parent.productId }
