@@ -22,3 +22,14 @@ Thumbs.db
 # Backup files and Google Drive config
 backups/
 backend/data/google-drive-config.json
+
+# Uploaded images and files in public folder
+backend/public/uploads/
+backend/public/**/*.jpg
+backend/public/**/*.jpeg
+backend/public/**/*.png
+backend/public/**/*.gif
+backend/public/**/*.webp
+backend/public/**/*.svg
+backend/public/**/*.bmp
+backend/public/**/*.ico
