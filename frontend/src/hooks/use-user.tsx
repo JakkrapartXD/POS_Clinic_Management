@@ -82,15 +82,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     loadUser()
     
-    // Refresh user data when window gains focus (better than polling)
-    const handleFocus = () => {
-      if (process.env.NODE_ENV === 'development') {
-        logger.debug('Window focused, checking for user changes', {}, 'USER')
-      }
-      loadUser()
-    }
-    
-    // Refresh user data when storage changes (for same-origin tabs)
+    // Only refresh user data when storage changes (for same-origin tabs)
+    // Remove window focus listener to prevent excessive permission checks
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === 'user_changed') {
         if (process.env.NODE_ENV === 'development') {
@@ -100,11 +93,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
       }
     }
     
-    window.addEventListener('focus', handleFocus)
     window.addEventListener('storage', handleStorageChange)
     
     return () => {
-      window.removeEventListener('focus', handleFocus)
       window.removeEventListener('storage', handleStorageChange)
     }
   }, [])

@@ -159,6 +159,37 @@ export class ClinicService {
     return visit;
   }
 
+  async deleteVisit(visitId: string) {
+    // Verify visit exists
+    const existingVisit = await this.prisma.visit.findUnique({
+      where: { id: visitId }
+    });
+
+    if (!existingVisit) {
+      throw new Error('Visit not found');
+    }
+
+    // Delete related data first
+    await this.prisma.vitals.deleteMany({
+      where: { visitId: visitId }
+    });
+
+    await this.prisma.queueTicket.deleteMany({
+      where: { visitId: visitId }
+    });
+
+    await this.prisma.visitOrder.deleteMany({
+      where: { visitId: visitId }
+    });
+
+    // Delete the visit
+    await this.prisma.visit.delete({
+      where: { id: visitId }
+    });
+
+    return true;
+  }
+
   async getVisitById(visitId: string) {
     const visit = await this.prisma.visit.findUnique({
       where: { id: visitId },

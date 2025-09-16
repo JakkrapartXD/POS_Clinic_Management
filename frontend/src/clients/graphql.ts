@@ -89,6 +89,8 @@ interface Patient {
   district?: string;
   province?: string;
   zip_code?: string;
+  latitude?: number;
+  longitude?: number;
   drug_allergies?: string;
   drug_allergies_other?: string;
   medical_conditions?: string;
@@ -116,6 +118,8 @@ interface CreatePatientInput {
   district?: string;
   province?: string;
   zip_code?: string;
+  latitude?: number;
+  longitude?: number;
   drug_allergies?: string;
   drug_allergies_other?: string;
   medical_conditions?: string;
@@ -141,6 +145,8 @@ interface UpdatePatientInput {
   district?: string;
   province?: string;
   zip_code?: string;
+  latitude?: number;
+  longitude?: number;
   drug_allergies?: string;
   drug_allergies_other?: string;
   medical_conditions?: string;
@@ -1581,6 +1587,12 @@ export const GraphQLMutations = {
     }
   `,
 
+  DELETE_VISIT: `
+    mutation DeleteVisit($id: String!) {
+      deleteVisit(id: $id)
+    }
+  `,
+
   UPSERT_VITALS: `
     mutation UpsertVitals($input: UpsertVitalsInput!) {
       upsertVitals(input: $input) {
@@ -2037,6 +2049,11 @@ export const GraphQLAPI = {
   updateVisit: (id: string, input: { chief_complaint?: string; diagnosis?: string; notes?: string }): Promise<{ updateVisit: any }> =>
     graphqlClient.mutation(GraphQLMutations.UPDATE_VISIT, {
       variables: { id, input }
+    }),
+
+  deleteVisit: (id: string): Promise<{ deleteVisit: boolean }> =>
+    graphqlClient.mutation(GraphQLMutations.DELETE_VISIT, {
+      variables: { id }
     }),
 
   upsertVitals: (input: {

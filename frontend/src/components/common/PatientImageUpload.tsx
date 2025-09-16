@@ -108,6 +108,9 @@ export default function PatientImageUpload({
       return
     }
     console.log('File selected:', file.name, file.type, file.size)
+    
+    // Clear any previous errors
+    setError(null)
 
     // Validate file type
     if (!file.type.startsWith('image/')) {
@@ -188,12 +191,17 @@ export default function PatientImageUpload({
         accept="image/*"
         onChange={handleFileSelect}
         disabled={disabled || isUploading || isResizing}
+        onClick={(e) => {
+          // Prevent any form submission when clicking file input
+          e.stopPropagation()
+        }}
       />
       
-      <div className="flex items-start space-x-4">
+      <div className="space-y-4">
         {/* Upload Area */}
-        <div className="relative group">
-          <div className="w-32 h-32 border-2 border-gray-300 border-dashed rounded-full flex items-center justify-center overflow-hidden bg-gray-50">
+        <div className="flex justify-center">
+          <div className="relative group">
+            <div className="w-32 h-32 border-2 border-gray-300 border-dashed rounded-full flex items-center justify-center overflow-hidden bg-gray-50">
             {displayUrl ? (
               <div className="relative w-full h-full group">
                 <img
@@ -243,6 +251,10 @@ export default function PatientImageUpload({
                         fileInputRef.current?.click()
                       }}
                       disabled={disabled || isUploading || isResizing}
+                      onMouseDown={(e) => {
+                        // Prevent form submission on mouse down
+                        e.preventDefault()
+                      }}
                     >
                       <div className="flex items-center justify-center w-6 h-6 bg-white bg-opacity-90 rounded-full hover:bg-opacity-100 hover:scale-110 transition-all duration-200 shadow-lg group-hover/edit:shadow-xl">
                         <Edit2 className="h-3 w-3 text-gray-700 group-hover/edit:text-blue-600" />
@@ -277,10 +289,16 @@ export default function PatientImageUpload({
                       <button
                         type="button"
                         className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500"
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
                           fileInputRef.current?.click()
                         }}
                         disabled={disabled || isUploading || isResizing}
+                        onMouseDown={(e) => {
+                          // Prevent form submission on mouse down
+                          e.preventDefault()
+                        }}
                       >
                         อัพโหลดรูป
                       </button>
@@ -291,20 +309,24 @@ export default function PatientImageUpload({
             )}
           </div>
           
-          {/* File Name Display */}
-          {displayFileName && (
-            <div className="mt-2 text-center">
-              <div className="text-xs text-gray-600 bg-gray-50 px-2 py-1 rounded-md inline-block">
-                <span className="font-medium">
-                  {selectedFileName ? 'ไฟล์ที่เลือก:' : 'รูปภาพปัจจุบัน:'}
-                </span> {displayFileName}
+            {/* File Name Display */}
+            {displayFileName && (
+              <div className="mt-2 text-center">
+                <div className="text-xs text-gray-600 bg-gray-50 px-2 py-1 rounded-md inline-block max-w-full">
+                  <span className="font-medium">
+                    {selectedFileName ? 'ไฟล์:' : 'รูป:'}
+                  </span> 
+                  <span className="truncate block max-w-[200px]">
+                    {displayFileName.length > 20 ? `${displayFileName.substring(0, 20)}...` : displayFileName}
+                  </span>
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
-        {/* Info Panel */}
-        <div className="flex-1 space-y-3">
+        {/* Info Panel - Moved below */}
+        <div className="space-y-3">
           <div className="text-sm text-gray-600">
             <div className="flex items-center space-x-2 mb-2">
               <ImageIcon className="h-4 w-4" />

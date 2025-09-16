@@ -21,7 +21,9 @@ import {
   Thermometer,
   Weight,
   Ruler,
-  Zap
+  Zap,
+  Trash2,
+  ArrowLeft
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -247,6 +249,7 @@ export default function VisitDetailPage() {
     }
   };
 
+
   if (isLoading) {
     return (
       <div className="container mx-auto p-6">
@@ -288,7 +291,7 @@ export default function VisitDetailPage() {
       <div className="flex justify-between items-start mb-6">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">
-            Visit - {visit.patient.first_name} {visit.patient.last_name}
+            การเยี่ยม - {visit.patient.first_name} {visit.patient.last_name}
           </h1>
           <div className="flex items-center gap-4 mt-2">
             <Badge className={statusColors[visit.status] || 'bg-gray-100 text-gray-800'}>
@@ -302,6 +305,14 @@ export default function VisitDetailPage() {
         </div>
         
         <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => router.back()}
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            ย้อนกลับ
+          </Button>
+          
           <Button
             variant="outline"
             onClick={() => router.push('/dashboard/pos')}
@@ -328,7 +339,7 @@ export default function VisitDetailPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <User className="w-5 h-5" />
-                SOAP Notes
+                บันทึก SOAP
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -381,7 +392,7 @@ export default function VisitDetailPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Activity className="w-5 h-5" />
-                Vital Signs (สัญญาณชีพ)
+                สัญญาณชีพ
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -518,7 +529,7 @@ export default function VisitDetailPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <ShoppingCart className="w-5 h-5" />
-                Link Order (เชื่อมบิล)
+                เชื่อมบิล
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -541,7 +552,7 @@ export default function VisitDetailPage() {
           {/* Linked Orders */}
           <Card>
             <CardHeader>
-              <CardTitle>Linked Orders ({visit.visitOrders.length})</CardTitle>
+              <CardTitle>บิลที่เชื่อมโยง ({visit.visitOrders.length})</CardTitle>
             </CardHeader>
             <CardContent>
               {visit.visitOrders.length === 0 ? (
@@ -579,7 +590,7 @@ export default function VisitDetailPage() {
           {/* Queue Tickets */}
           <Card>
             <CardHeader>
-              <CardTitle>Queue Tickets ({visit.queueTickets.length})</CardTitle>
+              <CardTitle>บัตรคิว ({visit.queueTickets.length})</CardTitle>
             </CardHeader>
             <CardContent>
               {visit.queueTickets.length === 0 ? (
@@ -620,6 +631,7 @@ export default function VisitDetailPage() {
           </Card>
         </div>
       </div>
+
     </div>
     </PageGuard>
   );

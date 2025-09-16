@@ -55,6 +55,8 @@ export const typeDefs = /* GraphQL */ `
     district: String
     province: String
     zip_code: String
+    latitude: Float
+    longitude: Float
     drug_allergies: String
     drug_allergies_other: String
     medical_conditions: String
@@ -88,6 +90,8 @@ export const typeDefs = /* GraphQL */ `
     district: String
     province: String
     zip_code: String
+    latitude: Float
+    longitude: Float
     drug_allergies: String
     drug_allergies_other: String
     medical_conditions: String
@@ -113,6 +117,8 @@ export const typeDefs = /* GraphQL */ `
     district: String
     province: String
     zip_code: String
+    latitude: Float
+    longitude: Float
     drug_allergies: String
     drug_allergies_other: String
     medical_conditions: String
@@ -860,6 +866,7 @@ export const typeDefs = /* GraphQL */ `
     # Clinic System Mutations
     createVisit(input: CreateVisitInput!): Visit!
     updateVisit(id: String!, input: UpdateVisitInput!): Visit!
+    deleteVisit(id: String!): Boolean!
     upsertVitals(input: UpsertVitalsInput!): Vitals!
     createQueueTicket(input: CreateQueueTicketInput!): QueueTicket!
     updateQueueStatus(id: String!, status: QueueStatus!, note: String): QueueTicket!

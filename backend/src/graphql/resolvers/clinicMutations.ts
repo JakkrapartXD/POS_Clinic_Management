@@ -45,6 +45,26 @@ export const clinicMutations = {
     }
   },
 
+  deleteVisit: async (
+    _: any,
+    { id }: { id: string },
+    context: any
+  ) => {
+    if (!context.isAuthenticated) {
+      throw new Error("Authentication required");
+    }
+
+    if (!["doctor", "admin", "staff"].includes(context.user.role)) {
+      throw new Error("Access denied. Required roles: doctor, admin, staff");
+    }
+
+    try {
+      return await clinicService.deleteVisit(id);
+    } catch (error: any) {
+      throw new Error(error.message);
+    }
+  },
+
   upsertVitals: async (
     _: any,
     { input }: { input: any },

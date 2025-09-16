@@ -5,9 +5,10 @@ import { useParams, useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { CalendarDays, User, Phone, Mail, MapPin, Plus, Clock, Eye, CreditCard } from 'lucide-react';
+import { CalendarDays, User, Phone, Mail, MapPin, Plus, Clock, Eye, CreditCard, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { API_CONFIG } from "@/config/api"
 import { GraphQLAPI } from '@/clients/graphql';
 import PageGuard from '@/components/guards/page-guard';
 
@@ -83,12 +84,15 @@ export default function PatientDetailPage() {
   const [isCreatingVisit, setIsCreatingVisit] = useState(false);
   const [isFetching, setIsFetching] = useState(false);
   const [isMounted, setIsMounted] = useState(true);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [visitToDelete, setVisitToDelete] = useState<string | null>(null);
   const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastFetchTimeRef = useRef<number>(0);
 
-  const fetchPatientData = useCallback(async () => {
-    // Prevent multiple simultaneous requests
-    if (isFetching) {
+  const fetchPatientData = useCallback(async (forceRefresh = false) => {
+    // Prevent multiple simultaneous requests unless force refresh
+    if (isFetching && !forceRefresh) {
       console.log('Already fetching patient data, skipping...');
       return;
     }
@@ -102,7 +106,7 @@ export default function PatientDetailPage() {
       setIsFetching(true);
       setIsLoading(true);
       
-      console.log('Fetching patient data for ID:', patientId);
+      console.log('Fetching patient data for ID:', patientId, forceRefresh ? '(force refresh)' : '');
       
       // Fetch patient details and visits using GraphQL API
       const [patientResult, visitsResult] = await Promise.all([
@@ -196,6 +200,41 @@ export default function PatientDetailPage() {
     }
   };
 
+  const handleDeleteVisit = async () => {
+    if (!visitToDelete) return;
+
+    try {
+      setIsDeleting(true);
+      
+      await GraphQLAPI.deleteVisit(visitToDelete);
+      toast.success('ลบการเยี่ยมสำเร็จ!');
+      
+      // Clear current data and refresh
+      setPatient(null);
+      setVisits([]);
+      setIsLoading(true);
+      
+      // Add small delay to ensure backend processing is complete
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Force refresh patient data to update visits list
+      await fetchPatientData(true);
+
+    } catch (error: any) {
+      console.error('Error deleting visit:', error);
+      toast.error(error.message || 'ลบการเยี่ยมไม่สำเร็จ');
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteDialog(false);
+      setVisitToDelete(null);
+    }
+  };
+
+  const openDeleteDialog = (visitId: string) => {
+    setVisitToDelete(visitId);
+    setShowDeleteDialog(true);
+  };
+
   if (isLoading) {
     return (
       <div className="container mx-auto p-6">
@@ -233,12 +272,35 @@ export default function PatientDetailPage() {
     <PageGuard requiredPermission="patients:read">
       <div className="container mx-auto p-6">
       <div className="flex justify-between items-start mb-6">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">
-            {patient.first_name} {patient.last_name}
-          </h1>
-          <p className="text-gray-600 mt-1">Patient ID: {patient.id}</p>
+        <div className="flex items-center gap-4">
+          {/* Patient Photo */}
+          <div className="flex-shrink-0">
+            {patient.photo_url ? (
+              <img
+                src={`${API_CONFIG.BASE_URL}${patient.photo_url}`}
+                alt={`${patient.first_name} ${patient.last_name}`}
+                className="w-20 h-20 rounded-full object-cover border-4 border-white shadow-lg"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  target.style.display = 'none';
+                  target.nextElementSibling?.classList.remove('hidden');
+                }}
+              />
+            ) : null}
+            <div className={`w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center border-4 border-white shadow-lg ${patient.photo_url ? 'hidden' : ''}`}>
+              <User className="w-8 h-8 text-gray-400" />
+            </div>
+          </div>
+          
+          {/* Patient Info */}
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">
+              {patient.first_name} {patient.last_name}
+            </h1>
+            <p className="text-gray-600 mt-1">Patient ID: {patient.id}</p>
+          </div>
         </div>
+        
         <Button 
           onClick={handleCreateVisit}
           disabled={isCreatingVisit}
@@ -452,10 +514,30 @@ export default function PatientDetailPage() {
                       
                       <div className="flex items-center justify-between mt-2">
                         <span className="text-xs text-gray-500">Visit ID: {visit.id.slice(-8)}</span>
-                        <Button variant="ghost" size="sm">
-                          <Eye className="w-3 h-3 mr-1" />
-                          View
-                        </Button>
+                        <div className="flex gap-1">
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              window.location.href = `/dashboard/visits/${visit.id}`;
+                            }}
+                          >
+                            <Eye className="w-3 h-3 mr-1" />
+                            View
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openDeleteDialog(visit.id);
+                            }}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -471,6 +553,36 @@ export default function PatientDetailPage() {
           </Card>
         </div>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      {showDeleteDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              ยืนยันการลบการเยี่ยม
+            </h3>
+            <p className="text-gray-600 mb-6">
+              คุณแน่ใจหรือไม่ว่าต้องการลบการเยี่ยมนี้? การดำเนินการนี้ไม่สามารถย้อนกลับได้
+            </p>
+            <div className="flex gap-3 justify-end">
+              <Button
+                variant="outline"
+                onClick={() => setShowDeleteDialog(false)}
+                disabled={isDeleting}
+              >
+                ยกเลิก
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleDeleteVisit}
+                disabled={isDeleting}
+              >
+                {isDeleting ? 'กำลังลบ...' : 'ลบ'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
     </PageGuard>
   );

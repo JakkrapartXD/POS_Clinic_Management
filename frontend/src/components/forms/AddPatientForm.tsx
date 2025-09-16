@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -12,6 +12,7 @@ import { X, Plus, User, MapPin, Heart } from 'lucide-react'
 import { toast } from 'sonner'
 import { GraphQLAPI } from '@/clients/graphql'
 import PatientImageUpload from '@/components/common/PatientImageUpload'
+import ThailandAddressSelector from '@/components/forms/ThailandAddressSelector'
 
 interface AddPatientFormProps {
   isOpen: boolean
@@ -39,6 +40,8 @@ interface PatientFormData {
   district: string
   province: string
   zip_code: string
+  latitude: string
+  longitude: string
   
   // Medical Information
   drug_allergies: string
@@ -85,38 +88,67 @@ const drugAllergies = [
 ]
 
 
-const provinces = [
-  { value: 'bangkok', label: 'กรุงเทพมหานคร' },
-  { value: 'chiangmai', label: 'เชียงใหม่' },
-  { value: 'phuket', label: 'ภูเก็ต' },
-  { value: 'pattaya', label: 'พัทยา' }
-]
 
 export default function AddPatientForm({ isOpen, onClose, onSuccess }: AddPatientFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [formData, setFormData] = useState<PatientFormData>({
-    national_id: '',
-    prefix: 'mr',
-    gender: 'male',
-    first_name: '',
-    last_name: '',
-    nickname: '',
-    date_of_birth: '',
-    age: '',
-    blood_group: '',
-    email: '',
-    phone: '',
-    address: '',
-    subdistrict: '',
-    district: '',
-    province: '',
-    zip_code: '',
-    drug_allergies: '',
-    drug_allergies_other: '',
-    medical_conditions: '',
-    notes: '',
-    photo: null
-  })
+  // Initialize form data with localStorage persistence
+  const getInitialFormData = (): PatientFormData => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('addPatientFormData')
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved)
+          // Don't restore photo file, only other data
+          return { ...parsed, photo: null }
+        } catch (e) {
+          console.warn('Failed to parse saved form data:', e)
+        }
+      }
+    }
+    return {
+      national_id: '',
+      prefix: 'mr',
+      gender: 'male',
+      first_name: '',
+      last_name: '',
+      nickname: '',
+      date_of_birth: '',
+      age: '',
+      blood_group: '',
+      email: '',
+      phone: '',
+      address: '',
+      subdistrict: '',
+      district: '',
+      province: '',
+      zip_code: '',
+      latitude: '',
+      longitude: '',
+      drug_allergies: '',
+      drug_allergies_other: '',
+      medical_conditions: '',
+      notes: '',
+      photo: null
+    }
+  }
+
+  const [formData, setFormData] = useState<PatientFormData>(getInitialFormData)
+
+  // Save form data to localStorage whenever it changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const dataToSave = { ...formData, photo: null } // Don't save file objects
+      localStorage.setItem('addPatientFormData', JSON.stringify(dataToSave))
+    }
+  }, [formData])
+
+  // Clear form data when modal closes
+  useEffect(() => {
+    if (!isOpen && typeof window !== 'undefined') {
+      // Don't clear immediately, let user keep data when switching tabs
+      // localStorage.removeItem('addPatientFormData')
+    }
+  }, [isOpen])
 
   const handleInputChange = (field: keyof PatientFormData, value: string) => {
     setFormData(prev => ({
@@ -168,8 +200,16 @@ export default function AddPatientForm({ isOpen, onClose, onSuccess }: AddPatien
       // Upload photo if provided
       let photoUrl = ''
       if (formData.photo) {
-        const uploadResult = await GraphQLAPI.uploadImage(formData.photo, 'patient')
-        photoUrl = uploadResult.url
+        try {
+          console.log('Uploading photo:', formData.photo.name, formData.photo.size, formData.photo.type)
+          const uploadResult = await GraphQLAPI.uploadImage(formData.photo, 'patient')
+          photoUrl = uploadResult.url
+          console.log('Photo uploaded successfully:', photoUrl)
+        } catch (uploadError: any) {
+          console.error('Photo upload failed:', uploadError)
+          toast.error('ไม่สามารถอัพโหลดรูปภาพได้: ' + (uploadError.message || 'Unknown error'))
+          return // Stop submission if photo upload fails
+        }
       }
 
       // Create patient data
@@ -190,6 +230,8 @@ export default function AddPatientForm({ isOpen, onClose, onSuccess }: AddPatien
         district: formData.district || undefined,
         province: formData.province || undefined,
         zip_code: formData.zip_code || undefined,
+        latitude: formData.latitude ? parseFloat(formData.latitude) : undefined,
+        longitude: formData.longitude ? parseFloat(formData.longitude) : undefined,
         drug_allergies: formData.drug_allergies || undefined,
         drug_allergies_other: formData.drug_allergies_other || undefined,
         medical_conditions: formData.medical_conditions || undefined,
@@ -200,8 +242,11 @@ export default function AddPatientForm({ isOpen, onClose, onSuccess }: AddPatien
       await GraphQLAPI.createPatient(patientData)
       
       toast.success('เพิ่มผู้ป่วยใหม่เรียบร้อยแล้ว')
-      onSuccess()
-      onClose()
+      
+      // Clear localStorage on successful submission
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('addPatientFormData')
+      }
       
       // Reset form
       setFormData({
@@ -221,12 +266,17 @@ export default function AddPatientForm({ isOpen, onClose, onSuccess }: AddPatien
         district: '',
         province: '',
         zip_code: '',
+        latitude: '',
+        longitude: '',
         drug_allergies: '',
         drug_allergies_other: '',
         medical_conditions: '',
         notes: '',
         photo: null
       })
+      
+      onSuccess()
+      onClose()
 
     } catch (error: any) {
       console.error('Error creating patient:', error)
@@ -248,8 +298,7 @@ export default function AddPatientForm({ isOpen, onClose, onSuccess }: AddPatien
               <User className="w-4 h-4 text-blue-600" />
             </div>
             <div>
-              <h2 className="text-xl font-semibold text-gray-900">Add customer</h2>
-              <p className="text-sm text-gray-500">ID: HNS601008</p>
+              <h2 className="text-xl font-semibold text-gray-900">เพิ่มผู้ป่วย</h2>
             </div>
           </div>
           <Button
@@ -442,59 +491,52 @@ export default function AddPatientForm({ isOpen, onClose, onSuccess }: AddPatien
                       />
                     </div>
                     
-                    <div>
-                      <Label htmlFor="subdistrict">Subdistrict</Label>
-                      <Select value={formData.subdistrict} onValueChange={(value) => handleInputChange('subdistrict', value)}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="เลือกตำบล" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="sub1">ตำบล 1</SelectItem>
-                          <SelectItem value="sub2">ตำบล 2</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    
-                    <div>
-                      <Label htmlFor="district">District</Label>
-                      <Select value={formData.district} onValueChange={(value) => handleInputChange('district', value)}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="เลือกอำเภอ" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="dist1">อำเภอ 1</SelectItem>
-                          <SelectItem value="dist2">อำเภอ 2</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    
-                    <div>
-                      <Label htmlFor="province">Province</Label>
-                      <Select value={formData.province} onValueChange={(value) => handleInputChange('province', value)}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="เลือกจังหวัด" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {provinces.map((province) => (
-                            <SelectItem key={province.value} value={province.value}>
-                              {province.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    
-                    <div>
-                      <Label htmlFor="zip_code">Zip code</Label>
-                      <Select value={formData.zip_code} onValueChange={(value) => handleInputChange('zip_code', value)}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="เลือกรหัสไปรษณีย์" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="10110">10110</SelectItem>
-                          <SelectItem value="10120">10120</SelectItem>
-                        </SelectContent>
-                      </Select>
+                    <ThailandAddressSelector
+                      value={{
+                        subdistrict: formData.subdistrict,
+                        district: formData.district,
+                        province: formData.province,
+                        zipCode: formData.zip_code
+                      }}
+                      onChange={(address) => {
+                        setFormData(prev => ({
+                          ...prev,
+                          subdistrict: address.subdistrict,
+                          district: address.district,
+                          province: address.province,
+                          zip_code: address.zipCode
+                        }))
+                      }}
+                      disabled={isSubmitting}
+                    />
+
+                    {/* GPS Coordinates */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <Label htmlFor="latitude">ละติจูด (Latitude)</Label>
+                        <Input
+                          id="latitude"
+                          type="number"
+                          step="any"
+                          placeholder="13.7563"
+                          value={formData.latitude}
+                          onChange={(e) => handleInputChange('latitude', e.target.value)}
+                          disabled={isSubmitting}
+                        />
+                      </div>
+                      
+                      <div>
+                        <Label htmlFor="longitude">ลองติจูด (Longitude)</Label>
+                        <Input
+                          id="longitude"
+                          type="number"
+                          step="any"
+                          placeholder="100.5018"
+                          value={formData.longitude}
+                          onChange={(e) => handleInputChange('longitude', e.target.value)}
+                          disabled={isSubmitting}
+                        />
+                      </div>
                     </div>
                   </div>
                 </CardContent>
@@ -567,13 +609,56 @@ export default function AddPatientForm({ isOpen, onClose, onSuccess }: AddPatien
           </div>
 
           {/* Footer */}
-          <div className="flex justify-end space-x-3 pt-6 border-t">
-            <Button type="button" variant="outline" onClick={onClose}>
-              ยกเลิก
+          <div className="flex justify-between pt-6 border-t">
+            <Button 
+              type="button" 
+              variant="ghost" 
+              onClick={() => {
+                if (confirm('คุณแน่ใจหรือไม่ว่าต้องการล้างข้อมูลทั้งหมด?')) {
+                  setFormData({
+                    national_id: '',
+                    prefix: 'mr',
+                    gender: 'male',
+                    first_name: '',
+                    last_name: '',
+                    nickname: '',
+                    date_of_birth: '',
+                    age: '',
+                    blood_group: '',
+                    email: '',
+                    phone: '',
+                    address: '',
+                    subdistrict: '',
+                    district: '',
+                    province: '',
+                    zip_code: '',
+                    latitude: '',
+                    longitude: '',
+                    drug_allergies: '',
+                    drug_allergies_other: '',
+                    medical_conditions: '',
+                    notes: '',
+                    photo: null
+                  })
+                  if (typeof window !== 'undefined') {
+                    localStorage.removeItem('addPatientFormData')
+                  }
+                  toast.success('ล้างข้อมูลเรียบร้อยแล้ว')
+                }
+              }}
+              className="text-gray-500 hover:text-red-600"
+            >
+              ล้างข้อมูล
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? 'กำลังบันทึก...' : 'บันทึก'}
-            </Button>
+            
+            <div className="flex space-x-3">
+              <Button type="button" variant="outline" onClick={onClose}>
+                ยกเลิก
+              </Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? 'กำลังบันทึก...' : 'บันทึก'}
+              </Button>
+            </div>
           </div>
         </form>
       </div>

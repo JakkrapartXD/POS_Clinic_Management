@@ -202,6 +202,8 @@ export const mutations = {
       district: input.district ? context.security.sanitizeString(input.district) : null,
       province: input.province ? context.security.sanitizeString(input.province) : null,
       zip_code: input.zip_code ? context.security.sanitizeString(input.zip_code) : null,
+      latitude: input.latitude,
+      longitude: input.longitude,
       drug_allergies: input.drug_allergies ? context.security.sanitizeString(input.drug_allergies) : null,
       drug_allergies_other: input.drug_allergies_other ? context.security.sanitizeString(input.drug_allergies_other) : null,
       medical_conditions: input.medical_conditions ? context.security.sanitizeString(input.medical_conditions) : null,
@@ -269,6 +271,8 @@ export const mutations = {
     if (input.district) updateData.district = context.security.sanitizeString(input.district);
     if (input.province) updateData.province = context.security.sanitizeString(input.province);
     if (input.zip_code) updateData.zip_code = context.security.sanitizeString(input.zip_code);
+    if (input.latitude !== undefined) updateData.latitude = input.latitude;
+    if (input.longitude !== undefined) updateData.longitude = input.longitude;
     if (input.drug_allergies) updateData.drug_allergies = context.security.sanitizeString(input.drug_allergies);
     if (input.drug_allergies_other) updateData.drug_allergies_other = context.security.sanitizeString(input.drug_allergies_other);
     if (input.medical_conditions) updateData.medical_conditions = context.security.sanitizeString(input.medical_conditions);

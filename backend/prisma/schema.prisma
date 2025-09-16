@@ -46,6 +46,8 @@ model Patient {
   district              String?         // อำเภอ
   province              String?         // จังหวัด
   zip_code              String?         // รหัสไปรษณีย์
+  latitude              Float?          // ละติจูด (GPS)
+  longitude             Float?          // ลองติจูด (GPS)
   drug_allergies        String?         // การแพ้ยา
   drug_allergies_other  String?         // การแพ้ยาอื่นๆ
   medical_conditions    String?         // โรคประจำตัว

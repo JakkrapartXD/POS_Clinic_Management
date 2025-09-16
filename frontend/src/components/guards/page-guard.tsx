@@ -34,7 +34,10 @@ export default function PageGuard({ children, requiredPermission }: PageGuardPro
     // Check if user has permission to access this page
     const hasAccess = hasPermission(user.role as any, requiredPermission)
     
-    logger.auth.permissionCheck(requiredPermission, user.role, hasAccess)
+    // Only log permission check in development mode to reduce noise
+    if (process.env.NODE_ENV === 'development') {
+      logger.auth.permissionCheck(requiredPermission, user.role, hasAccess)
+    }
     
     if (!hasAccess) {
       setIsAuthorized(false)
