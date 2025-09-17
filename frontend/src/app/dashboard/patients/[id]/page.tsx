@@ -66,7 +66,7 @@ interface Visit {
 const statusColors: Record<string, string> = {
   open: 'bg-blue-100 text-blue-800',
   triage: 'bg-yellow-100 text-yellow-800',
-  doctor: 'bg-purple-100 text-purple-800',
+  doctor: 'bg-teal-100 text-teal-800',
   pharmacy: 'bg-green-100 text-green-800',
   cashier: 'bg-orange-100 text-orange-800',
   done: 'bg-gray-100 text-gray-800',
@@ -301,14 +301,24 @@ export default function PatientDetailPage() {
           </div>
         </div>
         
-        <Button 
-          onClick={handleCreateVisit}
-          disabled={isCreatingVisit}
-          className="bg-blue-600 hover:bg-blue-700"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          {isCreatingVisit ? 'Creating...' : 'เริ่มรอบตรวจ'}
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            onClick={() => window.location.href = `/dashboard/patients/${patient.id}/receipts`}
+            variant="outline"
+            className="border-green-600 text-green-600 hover:bg-green-50"
+          >
+            <CreditCard className="w-4 h-4 mr-2" />
+            ดูประวัติการซื้อ
+          </Button>
+          <Button 
+            onClick={handleCreateVisit}
+            disabled={isCreatingVisit}
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            {isCreatingVisit ? 'Creating...' : 'เริ่มรอบตรวจ'}
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

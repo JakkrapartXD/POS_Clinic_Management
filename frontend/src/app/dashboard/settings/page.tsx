@@ -14,55 +14,46 @@ export default function SettingsPage() {
         {
           id: "store-closure",
           icon: Store,
-          title: "ร้านค้าปิดจุน",
-          subtitle: "โปรโมชั่นส่วนลด",
-          description: "แก้ไขข้อมูลร้านค้า การเปิด-ปิด และข้อมูล",
+          title: "ร้านค้า",
+          subtitle: "แก้ไขข้อมูลร้านค้า",
+          description: "ชื่อ การเปิด-ปิด และข้อมูลร้านค้า",
           href: "/dashboard/settings/store",
           hasSwitch: false,
-        },
-        {
-          id: "promotions",
-          icon: Tag,
-          title: "โปรโมชั่นส่วนลด",
-          subtitle: "ใบเสร็จรับเงินหลังจ่าย",
-          description: "ข้อมูลส่วนลดพิเศษ ข้อเสนอพิเศษ และระบบ",
-          href: "/discounts",
-          hasSwitch: false,
-        },
+        }
       ],
     },
-    {
-      title: "การตั้งค่าระบบ",
-      items: [
-        {
-          id: "receipt-settings",
-          icon: Receipt,
-          title: "ใบเสร็จรับเงินหลังจ่าย",
-          subtitle: "การคำนวณมูลค่าสินค้า",
-          description: "ข้อมูลส่วนลดพิเศษ ข้อเสนอพิเศษ และระบบ",
-          href: "/dashboard/settings/receipt",
-          hasSwitch: false,
-        },
-        {
-          id: "calculation",
-          icon: Calculator,
-          title: "การคำนวณมูลค่าสินค้า",
-          subtitle: "ระบบหน้าร้าน POS",
-          description: "ภาษีมูลค่าเพิ่ม VAT(%), สำนักงานภาษีอื่น",
-          href: "/dashboard/settings/calculation",
-          hasSwitch: false,
-        },
-        {
-          id: "pos-system",
-          icon: Monitor,
-          title: "ระบบหน้าร้าน POS",
-          subtitle: "การเก็บข้อมูล",
-          description: "แสดงรายการสินค้า การขายและข้อมูลสินค้า",
-          href: "/dashboard/settings/pos",
-          hasSwitch: false,
-        },
-      ],
-    },
+    // {
+    //   title: "การตั้งค่าระบบ",
+    //   items: [
+    //     {
+    //       id: "receipt-settings",
+    //       icon: Receipt,
+    //       title: "ใบเสร็จรับเงินหลังจ่าย",
+    //       subtitle: "การคำนวณมูลค่าสินค้า",
+    //       description: "ข้อมูลส่วนลดพิเศษ ข้อเสนอพิเศษ และระบบ",
+    //       href: "/dashboard/settings/receipt",
+    //       hasSwitch: false,
+    //     },
+    //     {
+    //       id: "calculation",
+    //       icon: Calculator,
+    //       title: "การคำนวณมูลค่าสินค้า",
+    //       subtitle: "ระบบหน้าร้าน POS",
+    //       description: "ภาษีมูลค่าเพิ่ม VAT(%), สำนักงานภาษีอื่น",
+    //       href: "/dashboard/settings/calculation",
+    //       hasSwitch: false,
+    //     },
+    //     {
+    //       id: "pos-system",
+    //       icon: Monitor,
+    //       title: "ระบบหน้าร้าน POS",
+    //       subtitle: "การเก็บข้อมูล",
+    //       description: "แสดงรายการสินค้า การขายและข้อมูลสินค้า",
+    //       href: "/dashboard/settings/pos",
+    //       hasSwitch: false,
+    //     },
+    //   ],
+    // },
     {
       title: "การจัดการข้อมูล",
       items: [
@@ -104,12 +95,12 @@ export default function SettingsPage() {
                       <CardContent className="p-4">
                         <div className="flex items-center justify-between">
                           <div className="flex items-start space-x-4">
-                            <div className="p-2 bg-purple-100 rounded-lg">
-                              <item.icon className="h-5 w-5 text-purple-600" />
+                            <div className="p-2 bg-teal-100 rounded-lg">
+                              <item.icon className="h-5 w-5 text-teal-600" />
                             </div>
                             <div className="flex-1">
                               <h3 className="font-medium text-gray-900">{item.title}</h3>
-                              {item.subtitle && <p className="text-sm text-purple-600 mt-1">{item.subtitle}</p>}
+                              {item.subtitle && <p className="text-sm text-teal-600 mt-1">{item.subtitle}</p>}
                               <p className="text-sm text-gray-500 mt-1">{item.description}</p>
                             </div>
                           </div>

@@ -19,7 +19,7 @@ export default function DiscountsPage() {
       <div className="p-6">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-xl font-semibold">เรียงลำดับ</h1>
-          <Button className="bg-purple-500 hover:bg-purple-600">
+          <Button className="bg-teal-500 hover:bg-teal-600">
             <Plus className="h-4 w-4 mr-2" />
             เพิ่มส่วนลดใหม่
           </Button>
@@ -99,7 +99,7 @@ export default function DiscountsPage() {
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="font-medium text-purple-600">{promotion.discount}</p>
+                        <p className="font-medium text-teal-600">{promotion.discount}</p>
                         <p className="text-xs text-gray-500">{promotion.type}</p>
                       </div>
                     </div>
@@ -130,7 +130,7 @@ export default function DiscountsPage() {
                         <p className="text-sm text-gray-500">{discount.description}</p>
                       </div>
                       <div className="text-right">
-                        <p className="font-medium text-purple-600">{discount.amount}</p>
+                        <p className="font-medium text-teal-600">{discount.amount}</p>
                         <p className="text-xs text-gray-500">{discount.type}</p>
                       </div>
                     </div>

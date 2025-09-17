@@ -176,7 +176,7 @@ export default function UsersPage() {
                 <p className="text-sm font-medium text-gray-600">พนักงานในระบบ</p>
                 <p className="text-2xl font-bold">{mockStaff.length}</p>
               </div>
-              <Users className="h-8 w-8 text-purple-600" />
+              <Users className="h-8 w-8 text-teal-600" />
             </div>
           </CardContent>
         </Card>
@@ -318,7 +318,7 @@ export default function UsersPage() {
                         <div className="flex items-center space-x-3">
                           <Avatar>
                             <AvatarImage src="" />
-                            <AvatarFallback className="bg-purple-100 text-purple-600">
+                            <AvatarFallback className="bg-teal-100 text-teal-600">
                               {user.username.charAt(0).toUpperCase()}
                             </AvatarFallback>
                           </Avatar>

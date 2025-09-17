@@ -23,7 +23,7 @@ export default function ClinicInfoCard({ email, packageName, packageDetails }: C
           <div className="text-gray-500">แพ็กเกจ:</div>
           <div className="col-span-2 flex items-center gap-2">
             {packageName}
-            <Button variant="link" className="text-purple-500 p-0 h-auto">
+            <Button variant="link" className="text-teal-500 p-0 h-auto">
               <span className="flex items-center">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"

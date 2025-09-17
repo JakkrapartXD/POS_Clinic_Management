@@ -62,7 +62,7 @@ export default function AlphabetIndex({
           <div 
             onClick={() => onLetterSelect("")}
             className={`text-xs px-2 py-1 cursor-pointer rounded transition-colors text-center ${
-              !selectedLetter ? "bg-purple-100 text-purple-600" : "text-gray-500 hover:bg-gray-100"
+              !selectedLetter ? "bg-teal-100 text-teal-600" : "text-gray-500 hover:bg-gray-100"
             }`}
           >
             ทั้งหมด
@@ -75,7 +75,7 @@ export default function AlphabetIndex({
                 onClick={() => onLetterSelect(section)}
                 className={`text-xs px-2 py-1 cursor-pointer rounded transition-colors text-center ${
                   selectedLetter === section 
-                    ? "bg-purple-100 text-purple-600" 
+                    ? "bg-teal-100 text-teal-600" 
                     : hasProducts 
                       ? "text-gray-700 hover:bg-gray-100 font-medium" 
                       : "text-gray-300"

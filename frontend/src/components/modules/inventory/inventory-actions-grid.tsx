@@ -110,8 +110,8 @@ export default function InventoryActionsGrid({
               onClick={action.onClick}
             >
               <CardContent className="p-8 text-center">
-                <IconComponent className="h-12 w-12 text-purple-500 mb-4 mx-auto" />
-                <div className="text-purple-500 font-medium mb-2 text-lg">{action.title}</div>
+                <IconComponent className="h-12 w-12 text-teal-500 mb-4 mx-auto" />
+                <div className="text-teal-500 font-medium mb-2 text-lg">{action.title}</div>
                 <div className="text-gray-500 text-sm">{action.subtitle}</div>
               </CardContent>
             </Card>

@@ -129,7 +129,7 @@ export default function ProductListSidebar({
                         <div className="text-xs text-gray-400 mt-1">{product.status}</div>
                       </div>
                       <div className="text-right">
-                        <div className="text-sm font-medium text-purple-600">฿{product.price}</div>
+                        <div className="text-sm font-medium text-teal-600">฿{product.price}</div>
                         <div className="w-4 h-4 border border-gray-300 mt-1"></div>
                       </div>
                     </div>

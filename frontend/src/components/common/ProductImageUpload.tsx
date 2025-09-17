@@ -252,7 +252,7 @@ export default function ProductImageUpload({
                       disabled={disabled || isUploading || isResizing}
                     >
                       <div className="flex items-center justify-center w-8 h-8 bg-white bg-opacity-90 rounded-full hover:bg-opacity-100 hover:scale-110 transition-all duration-200 shadow-lg group-hover/edit:shadow-xl">
-                        <Edit2 className="h-3 w-3 text-gray-700 group-hover/edit:text-purple-600" />
+                        <Edit2 className="h-3 w-3 text-gray-700 group-hover/edit:text-teal-600" />
                       </div>
                     </button>
                   </div>
@@ -280,7 +280,7 @@ export default function ProductImageUpload({
               <div className="space-y-2 text-center p-4">
                 {(isUploading || isResizing) ? (
                   <>
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500 mx-auto"></div>
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-500 mx-auto"></div>
                     <div className="text-sm text-gray-600">
                       {isResizing ? 'กำลังปรับขนาดรูปภาพ...' : 'กำลังอัพโหลด...'}
                     </div>
@@ -291,7 +291,7 @@ export default function ProductImageUpload({
                     <div className="flex text-sm text-gray-600">
                       <button
                         type="button"
-                        className="relative cursor-pointer bg-white rounded-md font-medium text-purple-600 hover:text-purple-500"
+                        className="relative cursor-pointer bg-white rounded-md font-medium text-teal-600 hover:text-teal-500"
                         onClick={() => {
                           fileInputRef.current?.click()
                         }}

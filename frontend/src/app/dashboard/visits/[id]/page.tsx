@@ -85,7 +85,7 @@ interface Visit {
 const statusColors: Record<string, string> = {
   open: 'bg-blue-100 text-blue-800',
   triage: 'bg-yellow-100 text-yellow-800',
-  doctor: 'bg-purple-100 text-purple-800',
+  doctor: 'bg-teal-100 text-teal-800',
   pharmacy: 'bg-green-100 text-green-800',
   cashier: 'bg-orange-100 text-orange-800',
   done: 'bg-gray-100 text-gray-800',

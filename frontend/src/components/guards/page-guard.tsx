@@ -53,7 +53,7 @@ export default function PageGuard({ children, requiredPermission }: PageGuardPro
       <div className="p-6 max-w-4xl mx-auto">
         <Card>
           <CardContent className="p-8 text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mx-auto mb-4"></div>
             <p className="text-gray-600">กำลังตรวจสอบสิทธิ์การเข้าถึง...</p>
           </CardContent>
         </Card>

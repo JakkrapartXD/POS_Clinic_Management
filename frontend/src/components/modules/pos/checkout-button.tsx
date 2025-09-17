@@ -11,7 +11,7 @@ interface CheckoutButtonProps {
 export default function CheckoutButton({ itemCount, onClick, disabled = false }: CheckoutButtonProps) {
   return (
     <Button
-      className="w-full bg-purple-500 hover:bg-purple-600"
+      className="w-full bg-teal-500 hover:bg-teal-600"
       onClick={onClick}
       disabled={disabled || itemCount === 0}
     >

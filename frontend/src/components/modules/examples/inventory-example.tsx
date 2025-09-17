@@ -46,7 +46,7 @@ export default function InventoryExample() {
   return (
     <div className="p-4">
       <PageHeader title="สต็อกสินค้า">
-        <Button variant="outline" className="text-purple-500">
+        <Button variant="outline" className="text-teal-500">
           ตัวเลือก
         </Button>
       </PageHeader>

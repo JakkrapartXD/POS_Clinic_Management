@@ -14,8 +14,8 @@ export default function ActionCard({ icon: Icon, title, subtitle, onClick }: Act
   return (
     <Card className="bg-white shadow-sm hover:shadow-md transition-shadow cursor-pointer" onClick={onClick}>
       <CardContent className="p-4 flex flex-col items-center">
-        <Icon className="h-5 w-5 text-purple-500 mb-2" />
-        <div className="text-purple-500 font-medium">{title}</div>
+        <Icon className="h-5 w-5 text-teal-500 mb-2" />
+        <div className="text-teal-500 font-medium">{title}</div>
         <div className="text-gray-500 text-sm">{subtitle}</div>
       </CardContent>
     </Card>

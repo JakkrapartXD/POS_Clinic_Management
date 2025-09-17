@@ -156,7 +156,7 @@ export default function ExportProductsView({ onBack, onExport, products }: Expor
         </Button>
         <Button 
           onClick={handleExport}
-          className="bg-purple-500 hover:bg-purple-600"
+          className="bg-teal-500 hover:bg-teal-600"
         >
           <Download className="h-4 w-4 mr-2" />
           ส่งออกข้อมูล

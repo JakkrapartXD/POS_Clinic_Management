@@ -48,7 +48,7 @@ interface QueueTicket {
 
 const stations = [
   { value: 'triage', label: 'Triage', color: 'bg-yellow-100 text-yellow-800' },
-  { value: 'doctor', label: 'Doctor', color: 'bg-purple-100 text-purple-800' },
+  { value: 'doctor', label: 'Doctor', color: 'bg-teal-100 text-teal-800' },
   { value: 'pharmacy', label: 'Pharmacy', color: 'bg-green-100 text-green-800' },
   { value: 'cashier', label: 'Cashier', color: 'bg-orange-100 text-orange-800' }
 ];
@@ -56,7 +56,7 @@ const stations = [
 const statusConfig = {
   waiting: { label: 'Waiting', color: 'bg-blue-100 text-blue-800', icon: Clock },
   called: { label: 'Called', color: 'bg-yellow-100 text-yellow-800', icon: Phone },
-  in_service: { label: 'In Service', color: 'bg-purple-100 text-purple-800', icon: Activity },
+  in_service: { label: 'In Service', color: 'bg-teal-100 text-teal-800', icon: Activity },
   done: { label: 'Done', color: 'bg-green-100 text-green-800', icon: CheckCircle },
   skipped: { label: 'Skipped', color: 'bg-gray-100 text-gray-800', icon: SkipForward },
   cancelled: { label: 'Cancelled', color: 'bg-red-100 text-red-800', icon: XCircle }
@@ -211,7 +211,7 @@ export default function QueueManagementPage() {
                   size="sm"
                   onClick={() => updateQueueStatus(ticket.id, 'in_service')}
                   disabled={isUpdating === ticket.id}
-                  className="bg-purple-600 hover:bg-purple-700"
+                  className="bg-teal-600 hover:bg-teal-700"
                 >
                   <Play className="w-3 h-3 mr-1" />
                   Start Service
@@ -430,7 +430,7 @@ export default function QueueManagementPage() {
                         <div className="text-sm text-gray-600">Called</div>
                       </div>
                       <div className="text-center">
-                        <div className="text-2xl font-bold text-purple-600">{counts.in_service}</div>
+                        <div className="text-2xl font-bold text-teal-600">{counts.in_service}</div>
                         <div className="text-sm text-gray-600">In Service</div>
                       </div>
                       <div className="text-center">

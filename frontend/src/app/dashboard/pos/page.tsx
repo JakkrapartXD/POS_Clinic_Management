@@ -53,6 +53,14 @@ interface Category {
   count: number
 }
 
+interface Patient {
+  id: string
+  first_name: string
+  last_name: string
+  phone?: string
+  email?: string
+}
+
 export default function POSPage() {
   const { user } = useUser()
   const [searchQuery, setSearchQuery] = useState("")
@@ -70,6 +78,13 @@ export default function POSPage() {
   const [showPaymentSuccess, setShowPaymentSuccess] = useState(false)
   const [completedOrder, setCompletedOrder] = useState<any>(null)
   const barcodeRef = useRef<SVGSVGElement>(null)
+  
+  // Customer search states
+  const [customerPhone, setCustomerPhone] = useState("")
+  const [selectedCustomer, setSelectedCustomer] = useState<Patient | null>(null)
+  const [customerSearchResults, setCustomerSearchResults] = useState<Patient[]>([])
+  const [isSearchingCustomer, setIsSearchingCustomer] = useState(false)
+  const [showCustomerSearch, setShowCustomerSearch] = useState(false)
 
   // Handle keyboard input for numpad
   useEffect(() => {
@@ -221,6 +236,37 @@ export default function POSPage() {
     return paymentAmount
   }
 
+  // Customer search functions
+  const searchCustomerByPhone = async (phone: string) => {
+    if (!phone || phone.length < 3) {
+      setCustomerSearchResults([])
+      return
+    }
+
+    try {
+      setIsSearchingCustomer(true)
+      const response = await GraphQLAPI.searchPatients(phone)
+      setCustomerSearchResults(response.searchPatients || [])
+    } catch (error) {
+      logger.error('Failed to search customer by phone', error, 'POS')
+      setCustomerSearchResults([])
+    } finally {
+      setIsSearchingCustomer(false)
+    }
+  }
+
+  const selectCustomer = (customer: Patient) => {
+    setSelectedCustomer(customer)
+    setCustomerPhone(customer.phone || "")
+    setShowCustomerSearch(false)
+    setCustomerSearchResults([])
+  }
+
+  const clearCustomer = () => {
+    setSelectedCustomer(null)
+    setCustomerPhone("")
+    setCustomerSearchResults([])
+  }
 
   const handleCheckout = () => {
     if (cartItems.length === 0) return
@@ -282,7 +328,8 @@ export default function POSPage() {
       const orderInput = {
         status: "completed",
         total_amount: calculateTotal(),
-        is_walkin: true,
+        is_walkin: !selectedCustomer, // ถ้ามีลูกค้าเลือกแล้วไม่ใช่ walk-in
+        patientId: selectedCustomer?.id || null, // เพิ่ม patientId
         orderItems: orderItems
       }
 
@@ -353,7 +400,13 @@ export default function POSPage() {
           total_price: item.sale_price * item.quantity
         })),
         created_at: new Date().toISOString(),
-        user: { username: user?.username || 'เจ้าของร้าน' }
+        user: { username: user?.username || 'เจ้าของร้าน' },
+        patient: selectedCustomer ? {
+          first_name: selectedCustomer.first_name,
+          last_name: selectedCustomer.last_name,
+          phone: selectedCustomer.phone,
+          email: selectedCustomer.email
+        } : null
       }
       
       // แสดงหน้าคอนเฟิร์มการชำระเงิน
@@ -394,6 +447,10 @@ export default function POSPage() {
   const handleClosePaymentSuccess = () => {
     setShowPaymentSuccess(false)
     setCompletedOrder(null)
+    // รีเซ็ตข้อมูลลูกค้า
+    setSelectedCustomer(null)
+    setCustomerPhone("")
+    setCustomerSearchResults([])
   }
 
   // สร้าง barcode เมื่อมี completedOrder
@@ -500,7 +557,7 @@ export default function POSPage() {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-500 mx-auto mb-4"></div>
           <div className="text-gray-600">กำลังโหลดข้อมูลสินค้า...</div>
         </div>
       </div>
@@ -563,7 +620,7 @@ export default function POSPage() {
                 <div className="text-xs text-gray-400 mb-2">
                   {product.stock_quantity > 0 ? `สต๊อก: ${product.stock_quantity}` : 'หมดสต๊อก'}
                 </div>
-                <div className="text-purple-600 font-medium">฿{product.sale_price.toFixed(2)}</div>
+                <div className="text-teal-600 font-medium">฿{product.sale_price.toFixed(2)}</div>
                 {product.stock_quantity <= 0 && (
                   <Badge variant="destructive" className="mt-1 text-xs">หมดสต๊อก</Badge>
                 )}
@@ -583,7 +640,7 @@ export default function POSPage() {
       {/* ส่วนตะกร้าสินค้า */}
       <div className="w-96 border-l bg-gray-50 flex flex-col">
         <div className="p-4 border-b bg-white">
-          <h2 className="text-lg font-medium text-center text-gray-700">ตะกร้าสินค้า #{Math.floor(Math.random() * 1000) + 1}</h2>
+          <h2 className="text-lg font-medium text-center text-gray-700">ตะกร้าสินค้า</h2>
         </div>
 
         <div className="flex-1 overflow-auto p-4">
@@ -600,7 +657,7 @@ export default function POSPage() {
                   <div className="flex-1">
                     <h3 className="font-medium text-sm text-gray-700">{item.product_name}</h3>
                     <div className="text-sm text-gray-500">{item.pack_size} {item.unit}</div>
-                    <div className="text-purple-600">฿{item.sale_price.toFixed(2)}</div>
+                    <div className="text-teal-600">฿{item.sale_price.toFixed(2)}</div>
                   </div>
                   <div className="flex items-center text-gray-500">
                     <Button
@@ -628,17 +685,93 @@ export default function POSPage() {
         </div>
 
         <div className="border-t p-4 bg-white">
-          <div className="flex items-center mb-4">
-            <Avatar className="h-10 w-10 mr-3 text-gray-500">
-              <AvatarFallback>C</AvatarFallback>
-            </Avatar>
-            <div className="flex-1">
-              <div className="text-sm font-medium text-gray-500">เลือกข้อมูลลูกค้า</div>
-              <div className="text-xs text-gray-500">จากฐานข้อมูลลูกค้า</div>
-            </div>
-            <Button variant="ghost" size="sm">
-              <ChevronDown className="h-4 w-4" />
-            </Button>
+          {/* Customer Selection */}
+          <div className="mb-4">
+            {selectedCustomer ? (
+              <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg border border-blue-200">
+                <div className="flex items-center">
+                  <Avatar className="h-10 w-10 mr-3">
+                    <AvatarFallback className="bg-blue-100 text-blue-600">
+                      {selectedCustomer.first_name.charAt(0)}{selectedCustomer.last_name.charAt(0)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <div className="text-sm font-medium text-gray-900">
+                      {selectedCustomer.first_name} {selectedCustomer.last_name}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {selectedCustomer.phone} • {selectedCustomer.email}
+                    </div>
+                  </div>
+                </div>
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={clearCustomer}
+                  className="text-red-600 hover:text-red-700"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="flex items-center mb-2">
+                  <Avatar className="h-10 w-10 mr-3 text-gray-500">
+                    <AvatarFallback>C</AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1">
+                    <div className="text-sm font-medium text-gray-500">ค้นหาลูกค้าด้วยเบอร์โทร</div>
+                    <div className="text-xs text-gray-500">จากฐานข้อมูลลูกค้า</div>
+                  </div>
+                </div>
+                
+                <div className="relative">
+                  <Input
+                    placeholder="กรอกเบอร์โทรศัพท์..."
+                    value={customerPhone}
+                    onChange={(e) => {
+                      setCustomerPhone(e.target.value)
+                      searchCustomerByPhone(e.target.value)
+                    }}
+                    className="pr-10"
+                  />
+                  {isSearchingCustomer && (
+                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+                    </div>
+                  )}
+                </div>
+                
+                {/* Customer Search Results */}
+                {customerSearchResults.length > 0 && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-y-auto">
+                    {customerSearchResults.map((customer) => (
+                      <div
+                        key={customer.id}
+                        className="p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                        onClick={() => selectCustomer(customer)}
+                      >
+                        <div className="flex items-center">
+                          <Avatar className="h-8 w-8 mr-3">
+                            <AvatarFallback className="bg-gray-100 text-gray-600">
+                              {customer.first_name.charAt(0)}{customer.last_name.charAt(0)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">
+                              {customer.first_name} {customer.last_name}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {customer.phone} • {customer.email}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="space-y-2 mb-4">
@@ -657,7 +790,7 @@ export default function POSPage() {
           </div>
 
           <Button 
-            className="w-full bg-purple-500 hover:bg-purple-600" 
+            className="w-full bg-teal-500 hover:bg-teal-600" 
             onClick={handleCheckout}
             disabled={cartItems.length === 0}
           >
@@ -729,14 +862,14 @@ export default function POSPage() {
                   <div 
                     className={`flex items-center justify-between p-3 rounded-lg border-2 cursor-pointer transition-all ${
                       paymentMethod === 'cash' 
-                        ? 'border-purple-500 bg-purple-50' 
+                        ? 'border-teal-500 bg-teal-50' 
                         : 'border-gray-200 hover:border-gray-300'
                     }`}
                     onClick={() => setPaymentMethod('cash')}
                   >
                     <div className="flex items-center">
                       <div className={`w-4 h-4 rounded-full border-2 mr-3 ${
-                        paymentMethod === 'cash' ? 'border-purple-500 bg-purple-500' : 'border-gray-300'
+                        paymentMethod === 'cash' ? 'border-teal-500 bg-teal-500' : 'border-gray-300'
                       }`}>
                         {paymentMethod === 'cash' && <Check className="w-3 h-3 text-white" />}
                       </div>
@@ -745,7 +878,7 @@ export default function POSPage() {
                       }`}>เงินสด</span>
                     </div>
                     <span className={`font-medium ${
-                      paymentMethod === 'cash' ? 'text-purple-600' : 'text-gray-500'
+                      paymentMethod === 'cash' ? 'text-teal-600' : 'text-gray-500'
                     }`}>฿{paymentAmount.toFixed(2)}</span>
                   </div>
 
@@ -840,7 +973,7 @@ export default function POSPage() {
                 onClick={handlePaymentConfirm}
                 className={`w-full h-12 text-lg font-medium ${
                   paymentMethod === 'cash' 
-                    ? 'bg-purple-500 hover:bg-purple-600' 
+                    ? 'bg-teal-500 hover:bg-teal-600' 
                     : 'bg-green-500 hover:bg-green-600'
                 }`}
                 disabled={getTotalPaymentAmount() < calculateTotal() || isProcessingPayment}
@@ -861,11 +994,11 @@ export default function POSPage() {
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-white">
           <DialogHeader>
             <DialogTitle className="flex justify-between items-center">
-              <span className="text-purple-600 font-medium">B พิมพ์ฉลากยา</span>
-              <div className="flex space-x-4 text-purple-600">
+              {/* <span className="text-teal-600 font-medium">B พิมพ์ฉลากยา</span>
+              <div className="flex space-x-4 text-teal-600">
                 <button className="hover:underline text-sm">พิมพ์ใบเสร็จรับเงิน</button>
                 <button className="hover:underline text-sm">เปิดลิ้นชักเก็บเงิน</button>
-              </div>
+              </div> */}
             </DialogTitle>
           </DialogHeader>
 
@@ -917,6 +1050,15 @@ export default function POSPage() {
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">ออกโดย:</span>
                     <span className="text-black">{completedOrder.user.username}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">ลูกค้า:</span>
+                    <span className="text-black">
+                      {completedOrder.patient 
+                        ? `${completedOrder.patient.first_name} ${completedOrder.patient.last_name}`
+                        : '-'
+                      }
+                    </span>
                   </div>
                   
                   {/* Barcode Section - Centered and prominent */}
@@ -986,7 +1128,7 @@ export default function POSPage() {
               <div className="flex justify-center">
                 <Button
                   onClick={handleClosePaymentSuccess}
-                  className="bg-purple-600 hover:bg-purple-700 text-white px-8 py-3"
+                  className="bg-teal-600 hover:bg-teal-700 text-white px-8 py-3"
                 >
                   รับชำระ ฿{completedOrder.payment_amount.toFixed(2)} ({completedOrder.change === 0 ? 'ไม่มีเงินทอน' : `เงินทอน ฿${completedOrder.change.toFixed(2)}`})
                 </Button>

@@ -185,9 +185,9 @@ export default function Sidebar() {
         <div className="mb-8">
           <button
             onClick={() => setShowLogoutDialog(true)}
-            className="w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center relative hover:bg-purple-200 transition-colors"
+            className="w-12 h-12 rounded-full bg-teal-100 flex items-center justify-center relative hover:bg-teal-200 transition-colors"
           >
-            <div className="w-10 h-10 rounded-full bg-purple-500 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-full bg-teal-500 flex items-center justify-center">
               <LogOut className="text-white" size={20} />
             </div>
             <div className="absolute -right-1 -bottom-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white"></div>
@@ -202,7 +202,7 @@ export default function Sidebar() {
                 className={cn(
                   "w-12 h-12 flex items-center justify-center rounded-lg transition-colors relative",
                   activeItem === item.id || (item.submenu && item.submenu.some((sub: any) => activeItem === sub.id))
-                    ? "bg-purple-100 text-purple-600"
+                    ? "bg-teal-100 text-teal-600"
                     : "text-gray-400 hover:text-gray-600 hover:bg-gray-100",
                 )}
                 title={item.label}
@@ -232,7 +232,7 @@ export default function Sidebar() {
                         className={cn(
                           "flex items-center px-2 py-2 text-sm rounded-md transition-colors",
                           activeItem === subItem.id
-                            ? "bg-purple-100 text-purple-600"
+                            ? "bg-teal-100 text-teal-600"
                             : "text-gray-700 hover:bg-gray-100"
                         )}
                       >
@@ -256,7 +256,7 @@ export default function Sidebar() {
         <div className="mt-auto text-xs text-gray-400">
           {user?.role && (
             <div className="text-center">
-              <div className="text-purple-600 font-medium">{user.role}</div>
+              <div className="text-teal-600 font-medium">{user.role}</div>
               <div>1.1.109</div>
             </div>
           )}

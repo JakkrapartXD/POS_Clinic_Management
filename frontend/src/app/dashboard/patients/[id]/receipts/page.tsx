@@ -1,10 +1,11 @@
 'use client'
 
 import { useState, useEffect } from "react"
+import { useParams, useRouter } from "next/navigation"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Search, ArrowLeft, Download, Calendar } from "lucide-react"
+import { Search, ArrowLeft, Download, Calendar, User } from "lucide-react"
 import PageGuard from "@/components/guards/page-guard"
 import { GraphQLAPI } from "@/clients/graphql"
 import { logger } from "@/lib/logger"
@@ -55,24 +56,47 @@ interface Payment {
   details: string
 }
 
-export default function ReceiptsPage() {
+interface Patient {
+  id: string
+  first_name: string
+  last_name: string
+  phone?: string
+  email?: string
+}
+
+export default function PatientReceiptsPage() {
+  const params = useParams()
+  const router = useRouter()
+  const patientId = params.id as string
+  
   const [searchTerm, setSearchTerm] = useState("")
   const [orders, setOrders] = useState<Order[]>([])
   const [filteredOrders, setFilteredOrders] = useState<Order[]>([])
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
+  const [patient, setPatient] = useState<Patient | null>(null)
   const [loading, setLoading] = useState(true)
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
 
-  // ตั้งค่าวันที่เริ่มต้นเป็น 7 วันที่ผ่านมา
+  // ตั้งค่าวันที่เริ่มต้นเป็น 30 วันที่ผ่านมา
   useEffect(() => {
     const today = new Date()
-    const weekAgo = new Date(today)
-    weekAgo.setDate(today.getDate() - 7)
+    const monthAgo = new Date(today)
+    monthAgo.setDate(today.getDate() - 30)
     
-    setDateFrom(weekAgo.toISOString().split('T')[0])
+    setDateFrom(monthAgo.toISOString().split('T')[0])
     setDateTo(today.toISOString().split('T')[0])
   }, [])
+
+  // ดึงข้อมูลผู้ป่วย
+  const fetchPatient = async () => {
+    try {
+      const response = await GraphQLAPI.getPatient(patientId)
+      setPatient(response.patient)
+    } catch (error) {
+      logger.error('Failed to fetch patient', error, 'PatientReceipts')
+    }
+  }
 
   // ดึงข้อมูลใบเสร็จตามช่วงวันที่
   const fetchOrdersByDateRange = async () => {
@@ -90,38 +114,43 @@ export default function ReceiptsPage() {
       })
 
       if (response.orders?.orders) {
-        setOrders(response.orders.orders)
-        setFilteredOrders(response.orders.orders)
+        // กรองเฉพาะ orders ของผู้ป่วยนี้
+        const patientOrders = response.orders.orders.filter(order => 
+          order.patient?.id === patientId
+        )
+        setOrders(patientOrders)
+        setFilteredOrders(patientOrders)
         
         // เลือกใบเสร็จแรกเป็นค่าเริ่มต้น
-        if (response.orders.orders.length > 0) {
-          setSelectedOrder(response.orders.orders[0])
+        if (patientOrders.length > 0) {
+          setSelectedOrder(patientOrders[0])
         } else {
           setSelectedOrder(null)
         }
       }
     } catch (error) {
-      logger.error('Failed to fetch orders by date range', error, 'Receipt')
+      logger.error('Failed to fetch orders by date range', error, 'PatientReceipts')
     } finally {
       setLoading(false)
     }
   }
 
   useEffect(() => {
+    if (patientId) {
+      fetchPatient()
+    }
+  }, [patientId])
+
+  useEffect(() => {
     if (dateFrom && dateTo) {
       fetchOrdersByDateRange()
     }
-  }, [dateFrom, dateTo])
+  }, [dateFrom, dateTo, patientId])
 
   useEffect(() => {
     const filtered = orders.filter(order => {
       const receiptNumber = generateReceiptNumber(order.id)
-      const customerName = order.patient 
-        ? `${order.patient.first_name} ${order.patient.last_name}`
-        : order.is_walkin ? 'ลูกค้าทั่วไป' : ''
-      
-      return receiptNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-             customerName.toLowerCase().includes(searchTerm.toLowerCase())
+      return receiptNumber.toLowerCase().includes(searchTerm.toLowerCase())
     })
     setFilteredOrders(filtered)
   }, [searchTerm, orders])
@@ -188,9 +217,9 @@ export default function ReceiptsPage() {
 
     const csvData = filteredOrders.map(order => {
       const receiptNumber = generateReceiptNumber(order.id)
-      const customerName = order.patient 
-        ? `${order.patient.first_name} ${order.patient.last_name}`
-        : order.is_walkin ? 'ลูกค้าทั่วไป' : '-'
+      const customerName = patient 
+        ? `${patient.first_name} ${patient.last_name}`
+        : 'ลูกค้าทั่วไป'
       const paymentType = getPaymentTypeThai(order.payments[0]?.payment_type || 'cash')
       const orderDate = new Date(order.created_at)
       const dateStr = orderDate.toLocaleDateString('th-TH')
@@ -220,7 +249,7 @@ export default function ReceiptsPage() {
     const link = document.createElement('a')
     const url = URL.createObjectURL(blob)
     link.setAttribute('href', url)
-    link.setAttribute('download', `ใบเสร็จรับเงิน_${dateFrom}_ถึง_${dateTo}.csv`)
+    link.setAttribute('download', `ประวัติการซื้อ_${patient?.first_name}_${patient?.last_name}_${dateFrom}_ถึง_${dateTo}.csv`)
     link.style.visibility = 'hidden'
     document.body.appendChild(link)
     link.click()
@@ -229,11 +258,11 @@ export default function ReceiptsPage() {
 
   if (loading) {
     return (
-      <PageGuard requiredPermission="documents">
+      <PageGuard requiredPermission="patients:read">
         <div className="flex items-center justify-center h-full">
           <div className="text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-500 mx-auto mb-4"></div>
-            <div className="text-gray-600">กำลังโหลดข้อมูลใบเสร็จรับเงิน...</div>
+            <div className="text-gray-600">กำลังโหลดประวัติการซื้อ...</div>
           </div>
         </div>
       </PageGuard>
@@ -241,15 +270,29 @@ export default function ReceiptsPage() {
   }
 
   return (
-    <PageGuard requiredPermission="documents">
+    <PageGuard requiredPermission="patients:read">
       <div className="flex h-screen bg-gray-50">
         {/* Left Sidebar - รายการใบเสร็จ */}
         <div className="w-1/3 bg-white border-r border-gray-200 flex flex-col">
           {/* Header */}
           <div className="p-6 border-b border-gray-200">
             <div className="flex items-center space-x-3 mb-4">
-              <ArrowLeft className="h-5 w-5 text-gray-400" />
-              <h1 className="text-xl font-bold text-gray-900">ใบเสร็จรับเงิน</h1>
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={() => router.back()}
+                className="p-1"
+              >
+                <ArrowLeft className="h-5 w-5 text-gray-400" />
+              </Button>
+              <div>
+                <h1 className="text-xl font-bold text-gray-900">ประวัติการซื้อ</h1>
+                {patient && (
+                  <p className="text-sm text-gray-600">
+                    {patient.first_name} {patient.last_name}
+                  </p>
+                )}
+              </div>
             </div>
           </div>
 
@@ -258,7 +301,7 @@ export default function ReceiptsPage() {
             <div className="relative mb-4">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
               <Input
-                placeholder="ค้นหาเลขที่ใบเสร็จ/ข้อมูลลูกค้า..."
+                placeholder="ค้นหาเลขที่ใบเสร็จ..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10"
@@ -290,7 +333,7 @@ export default function ReceiptsPage() {
             {filteredOrders.length === 0 ? (
               <div className="p-6 text-center text-gray-500">
                 <div className="text-6xl text-gray-300 mb-4">📄</div>
-                <p className="text-lg font-medium mb-2">ยังไม่พบรายการใบเสร็จรับเงิน</p>
+                <p className="text-lg font-medium mb-2">ยังไม่พบประวัติการซื้อ</p>
                 <p className="text-sm">
                   ระหว่าง {new Date(dateFrom).toLocaleDateString('th-TH')} ถึง {new Date(dateTo).toLocaleDateString('th-TH')}
                 </p>
@@ -349,7 +392,7 @@ export default function ReceiptsPage() {
               {/* Export Info */}
               <div className="p-4 bg-blue-50 border-b border-blue-200">
                 <p className="text-sm text-blue-800">
-                  ส่งออกใบเสร็จรับเงินจากวันที่เลือก
+                  ส่งออกประวัติการซื้อของ {patient?.first_name} {patient?.last_name} จากวันที่เลือก
                 </p>
               </div>
 
@@ -405,9 +448,9 @@ export default function ReceiptsPage() {
                       <div>
                         <label className="text-sm font-medium text-gray-600">ลูกค้า</label>
                         <p className="text-gray-900">
-                          {selectedOrder.patient 
-                            ? `${selectedOrder.patient.first_name} ${selectedOrder.patient.last_name}`
-                            : selectedOrder.is_walkin ? 'ลูกค้าทั่วไป' : '-'
+                          {patient 
+                            ? `${patient.first_name} ${patient.last_name}`
+                            : 'ลูกค้าทั่วไป'
                           }
                         </p>
                       </div>
