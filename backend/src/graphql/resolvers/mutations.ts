@@ -188,11 +188,28 @@ export const mutations = {
     const sanitizedInput = {
       first_name: context.security.sanitizeString(input.first_name),
       last_name: context.security.sanitizeString(input.last_name),
+      national_id: input.national_id ? context.security.sanitizeString(input.national_id) : null,
+      prefix: input.prefix ? context.security.sanitizeString(input.prefix) : null,
+      nickname: input.nickname ? context.security.sanitizeString(input.nickname) : null,
       date_of_birth: input.date_of_birth,
+      age: input.age,
       gender: input.gender ? context.security.sanitizeString(input.gender) : null,
+      blood_group: input.blood_group ? context.security.sanitizeString(input.blood_group) : null,
       phone: input.phone ? context.security.sanitizeString(input.phone) : null,
       email: input.email ? context.security.sanitizeString(input.email).toLowerCase() : null,
-      address: input.address ? context.security.sanitizeString(input.address) : null
+      address: input.address ? context.security.sanitizeString(input.address) : null,
+      subdistrict: input.subdistrict ? context.security.sanitizeString(input.subdistrict) : null,
+      district: input.district ? context.security.sanitizeString(input.district) : null,
+      province: input.province ? context.security.sanitizeString(input.province) : null,
+      zip_code: input.zip_code ? context.security.sanitizeString(input.zip_code) : null,
+      latitude: input.latitude,
+      longitude: input.longitude,
+      drug_allergies: input.drug_allergies ? context.security.sanitizeString(input.drug_allergies) : null,
+      drug_allergies_other: input.drug_allergies_other ? context.security.sanitizeString(input.drug_allergies_other) : null,
+      medical_conditions: input.medical_conditions ? context.security.sanitizeString(input.medical_conditions) : null,
+      notes: input.notes ? context.security.sanitizeString(input.notes) : null,
+      photo_url: input.photo_url ? context.security.sanitizeString(input.photo_url) : null,
+      photo_path: input.photo_path ? context.security.sanitizeString(input.photo_path) : null
     };
     
     // Validate email and phone if provided
@@ -230,8 +247,13 @@ export const mutations = {
     
     if (input.first_name) updateData.first_name = context.security.sanitizeString(input.first_name);
     if (input.last_name) updateData.last_name = context.security.sanitizeString(input.last_name);
+    if (input.national_id) updateData.national_id = context.security.sanitizeString(input.national_id);
+    if (input.prefix) updateData.prefix = context.security.sanitizeString(input.prefix);
+    if (input.nickname) updateData.nickname = context.security.sanitizeString(input.nickname);
     if (input.date_of_birth) updateData.date_of_birth = input.date_of_birth;
+    if (input.age !== undefined) updateData.age = input.age;
     if (input.gender) updateData.gender = context.security.sanitizeString(input.gender);
+    if (input.blood_group) updateData.blood_group = context.security.sanitizeString(input.blood_group);
     if (input.phone) {
       if (!context.security.validatePhone(input.phone)) {
         throw new GraphQLError('Invalid phone number format');
@@ -245,6 +267,18 @@ export const mutations = {
       updateData.email = context.security.sanitizeString(input.email).toLowerCase();
     }
     if (input.address) updateData.address = context.security.sanitizeString(input.address);
+    if (input.subdistrict) updateData.subdistrict = context.security.sanitizeString(input.subdistrict);
+    if (input.district) updateData.district = context.security.sanitizeString(input.district);
+    if (input.province) updateData.province = context.security.sanitizeString(input.province);
+    if (input.zip_code) updateData.zip_code = context.security.sanitizeString(input.zip_code);
+    if (input.latitude !== undefined) updateData.latitude = input.latitude;
+    if (input.longitude !== undefined) updateData.longitude = input.longitude;
+    if (input.drug_allergies) updateData.drug_allergies = context.security.sanitizeString(input.drug_allergies);
+    if (input.drug_allergies_other) updateData.drug_allergies_other = context.security.sanitizeString(input.drug_allergies_other);
+    if (input.medical_conditions) updateData.medical_conditions = context.security.sanitizeString(input.medical_conditions);
+    if (input.notes) updateData.notes = context.security.sanitizeString(input.notes);
+    if (input.photo_url) updateData.photo_url = context.security.sanitizeString(input.photo_url);
+    if (input.photo_path) updateData.photo_path = context.security.sanitizeString(input.photo_path);
     
     const patient = await context.prisma.patient.update({
       where: { id },

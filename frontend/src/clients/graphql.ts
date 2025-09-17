@@ -75,11 +75,28 @@ interface Patient {
   id: string;
   first_name: string;
   last_name: string;
+  national_id?: string;
+  prefix?: string;
+  nickname?: string;
   date_of_birth?: string;
+  age?: number;
   gender?: string;
+  blood_group?: string;
   phone?: string;
   email?: string;
   address?: string;
+  subdistrict?: string;
+  district?: string;
+  province?: string;
+  zip_code?: string;
+  latitude?: number;
+  longitude?: number;
+  drug_allergies?: string;
+  drug_allergies_other?: string;
+  medical_conditions?: string;
+  notes?: string;
+  photo_url?: string;
+  photo_path?: string;
   created_at: string;
   updated_at: string;
 }
@@ -87,21 +104,55 @@ interface Patient {
 interface CreatePatientInput {
   first_name: string;
   last_name: string;
+  national_id?: string;
+  prefix?: string;
+  nickname?: string;
   date_of_birth?: string;
+  age?: number;
   gender?: string;
+  blood_group?: string;
   phone?: string;
   email?: string;
   address?: string;
+  subdistrict?: string;
+  district?: string;
+  province?: string;
+  zip_code?: string;
+  latitude?: number;
+  longitude?: number;
+  drug_allergies?: string;
+  drug_allergies_other?: string;
+  medical_conditions?: string;
+  notes?: string;
+  photo_url?: string;
+  photo_path?: string;
 }
 
 interface UpdatePatientInput {
   first_name?: string;
   last_name?: string;
+  national_id?: string;
+  prefix?: string;
+  nickname?: string;
   date_of_birth?: string;
+  age?: number;
   gender?: string;
+  blood_group?: string;
   phone?: string;
   email?: string;
   address?: string;
+  subdistrict?: string;
+  district?: string;
+  province?: string;
+  zip_code?: string;
+  latitude?: number;
+  longitude?: number;
+  drug_allergies?: string;
+  drug_allergies_other?: string;
+  medical_conditions?: string;
+  notes?: string;
+  photo_url?: string;
+  photo_path?: string;
 }
 
 interface PatientsResponse {
@@ -163,6 +214,8 @@ class GraphQLClient {
   private endpoint: string;
   private timeout: number;
   private authErrorHandler?: (error: any) => void;
+  private pendingRequests: Map<string, Promise<any>> = new Map();
+  private lastRequestTime: Map<string, number> = new Map();
 
   constructor() {
     this.baseURL = API_CONFIG.BASE_URL;
@@ -185,6 +238,13 @@ class GraphQLClient {
   private generateCacheKey(query: string, variables?: any): string {
     const operationName = this.extractOperationName(query);
     return cache.generateKey(operationName, variables);
+  }
+
+  // Generate request key for deduplication
+  private generateRequestKey(query: string, variables?: any): string {
+    const operationName = this.extractOperationName(query);
+    const variablesStr = variables ? JSON.stringify(variables) : '';
+    return `${operationName}:${variablesStr}`;
   }
 
   // Extract operation name from query
@@ -227,6 +287,25 @@ class GraphQLClient {
     query: string,
     options: GraphQLRequestOptions = {}
   ): Promise<T> {
+    // Generate request key for deduplication
+    const requestKey = this.generateRequestKey(query, options.variables);
+    
+    // Check if there's already a pending request for the same query
+    if (this.pendingRequests.has(requestKey)) {
+      logger.info('Deduplicating GraphQL request', { requestKey }, 'GRAPHQL_DEDUP');
+      return this.pendingRequests.get(requestKey)!;
+    }
+
+    // Check if we've made this request recently (within 1 second)
+    const now = Date.now();
+    const lastTime = this.lastRequestTime.get(requestKey) || 0;
+    const timeSinceLastRequest = now - lastTime;
+    
+    if (timeSinceLastRequest < 1000) {
+      logger.info('Rate limiting GraphQL request', { requestKey, timeSinceLastRequest }, 'GRAPHQL_RATE_LIMIT');
+      throw new Error('Request too frequent. Please wait a moment.');
+    }
+
     // Check cache first for read operations
     if (this.shouldCache(query) && !options.skipCache) {
       const cacheKey = this.generateCacheKey(query, options.variables);
@@ -261,16 +340,21 @@ class GraphQLClient {
       body: JSON.stringify(body),
     };
 
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+    // Update last request time
+    this.lastRequestTime.set(requestKey, now);
 
-      const response = await fetch(url, {
-        ...config,
-        signal: controller.signal,
-      });
+    // Create the request promise
+    const requestPromise = (async () => {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
-      clearTimeout(timeoutId);
+        const response = await fetch(url, {
+          ...config,
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -315,22 +399,31 @@ class GraphQLClient {
         logger.info('Cached GraphQL response', { cacheKey, ttl }, 'GRAPHQL_CACHE');
       }
 
-      return result.data;
-    } catch (error) {
-      logger.api.error(url, error);
-      
-      // Handle authentication errors
-      if (this.authErrorHandler) {
-        handleAuthError(error, () => {
-          this.authErrorHandler?.(error);
-        });
+        return result.data;
+      } catch (error) {
+        logger.api.error(url, error);
+        
+        // Handle authentication errors
+        if (this.authErrorHandler) {
+          handleAuthError(error, () => {
+            this.authErrorHandler?.(error);
+          });
+        }
+        
+        if (error instanceof Error) {
+          throw new Error(`GraphQL request failed: ${error.message}`);
+        }
+        throw error;
+      } finally {
+        // Remove from pending requests when done
+        this.pendingRequests.delete(requestKey);
       }
-      
-      if (error instanceof Error) {
-        throw new Error(`GraphQL request failed: ${error.message}`);
-      }
-      throw error;
-    }
+    })();
+
+    // Store the promise in pending requests
+    this.pendingRequests.set(requestKey, requestPromise);
+
+    return requestPromise;
   }
 
   async query<T>(query: string, options?: GraphQLRequestOptions): Promise<T> {
@@ -400,6 +493,7 @@ export const GraphQLQueries = {
           id
           first_name
           last_name
+          national_id
           date_of_birth
           gender
           phone
@@ -420,6 +514,7 @@ export const GraphQLQueries = {
         id
         first_name
         last_name
+        national_id
         phone
         email
         date_of_birth
@@ -880,6 +975,150 @@ export const GraphQLQueries = {
       }
     }
   `,
+
+  // Visit Queries
+  GET_PATIENT: `
+    query GetPatient($id: String!) {
+      patient(id: $id) {
+        id
+        first_name
+        last_name
+        national_id
+        prefix
+        nickname
+        date_of_birth
+        age
+        gender
+        blood_group
+        phone
+        email
+        address
+        subdistrict
+        district
+        province
+        zip_code
+        drug_allergies
+        drug_allergies_other
+        medical_conditions
+        notes
+        photo_url
+        photo_path
+        created_at
+      }
+    }
+  `,
+
+  GET_PATIENT_VISITS: `
+    query GetPatientVisits($patientId: String!, $pagination: PaginationInput) {
+      patientVisits(patientId: $patientId, pagination: $pagination) {
+        id
+        visit_date
+        status
+        chief_complaint
+        diagnosis
+        notes
+        vitals {
+          heightCm
+          weightKg
+          tempC
+          sbp
+          dbp
+          hr
+          spo2
+        }
+        queueTickets {
+          id
+          station
+          status
+          number
+        }
+      }
+    }
+  `,
+
+  GET_VISIT: `
+    query GetVisit($id: String!) {
+      visit(id: $id) {
+        id
+        visit_date
+        status
+        chief_complaint
+        diagnosis
+        notes
+        patient {
+          id
+          first_name
+          last_name
+          national_id
+          phone
+          email
+        }
+        vitals {
+          visitId
+          heightCm
+          weightKg
+          tempC
+          sbp
+          dbp
+          hr
+          rr
+          spo2
+          bmi
+        }
+        visitOrders {
+          id
+          order {
+            id
+            order_date
+            total_amount
+            status
+            orderItems {
+              id
+              product_name
+              quantity
+              unit_price
+              total_price
+            }
+          }
+        }
+        queueTickets {
+          id
+          station
+          status
+          number
+          created_at
+        }
+      }
+    }
+  `,
+
+  // Queue Queries
+  GET_QUEUE_TICKETS: `
+    query GetQueueTickets($station: QueueStation, $status: QueueStatus, $pagination: PaginationInput) {
+      queueTickets(station: $station, status: $status, pagination: $pagination) {
+        id
+        number
+        station
+        status
+        priority
+        called_at
+        started_at
+        done_at
+        created_at
+        visit {
+          id
+          chief_complaint
+          patient {
+            id
+            first_name
+            last_name
+            national_id
+            phone
+          }
+        }
+      }
+    }
+  `,
 };
 
 export const GraphQLMutations = {
@@ -974,6 +1213,7 @@ export const GraphQLMutations = {
         id
         first_name
         last_name
+        national_id
         date_of_birth
         gender
         phone
@@ -991,6 +1231,7 @@ export const GraphQLMutations = {
         id
         first_name
         last_name
+        national_id
         date_of_birth
         gender
         phone
@@ -1315,6 +1556,93 @@ export const GraphQLMutations = {
         id
         acknowledged
         acknowledged_at
+      }
+    }
+  `,
+
+  // Visit Mutations
+  CREATE_VISIT: `
+    mutation CreateVisit($input: CreateVisitInput!) {
+      createVisit(input: $input) {
+        id
+        visit_date
+        status
+        patient {
+          id
+          first_name
+          last_name
+        }
+      }
+    }
+  `,
+
+  UPDATE_VISIT: `
+    mutation UpdateVisit($id: String!, $input: UpdateVisitInput!) {
+      updateVisit(id: $id, input: $input) {
+        id
+        chief_complaint
+        diagnosis
+        notes
+      }
+    }
+  `,
+
+  DELETE_VISIT: `
+    mutation DeleteVisit($id: String!) {
+      deleteVisit(id: $id)
+    }
+  `,
+
+  UPSERT_VITALS: `
+    mutation UpsertVitals($input: UpsertVitalsInput!) {
+      upsertVitals(input: $input) {
+        visitId
+        heightCm
+        weightKg
+        tempC
+        sbp
+        dbp
+        hr
+        rr
+        spo2
+        bmi
+      }
+    }
+  `,
+
+  LINK_ORDER_TO_VISIT: `
+    mutation LinkOrderToVisit($input: LinkOrderToVisitInput!) {
+      linkOrderToVisit(input: $input) {
+        id
+        order {
+          id
+          total_amount
+          status
+        }
+      }
+    }
+  `,
+
+  // Queue Mutations
+  CREATE_QUEUE_TICKET: `
+    mutation CreateQueueTicket($input: CreateQueueTicketInput!) {
+      createQueueTicket(input: $input) {
+        id
+        number
+        station
+        status
+      }
+    }
+  `,
+
+  UPDATE_QUEUE_STATUS: `
+    mutation UpdateQueueStatus($id: String!, $status: QueueStatus!, $note: String) {
+      updateQueueStatus(id: $id, status: $status, note: $note) {
+        id
+        status
+        called_at
+        started_at
+        done_at
       }
     }
   `,
@@ -1694,4 +2022,75 @@ export const GraphQLAPI = {
 
   clearCache: () =>
     graphqlClient.clearCache(),
+
+  // Visit Operations
+  getPatient: (id: string): Promise<{ patient: Patient }> =>
+    graphqlClient.query(GraphQLQueries.GET_PATIENT, {
+      variables: { id },
+      skipCache: true // Skip cache for patient details to ensure fresh data
+    }),
+
+  getPatientVisits: (patientId: string, pagination?: PaginationInput): Promise<{ patientVisits: any[] }> =>
+    graphqlClient.query(GraphQLQueries.GET_PATIENT_VISITS, {
+      variables: { patientId, pagination },
+      skipCache: true // Skip cache for patient visits to ensure fresh data
+    }),
+
+  getVisit: (id: string): Promise<{ visit: any }> =>
+    graphqlClient.query(GraphQLQueries.GET_VISIT, {
+      variables: { id }
+    }),
+
+  createVisit: (input: { patientId: string }): Promise<{ createVisit: any }> =>
+    graphqlClient.mutation(GraphQLMutations.CREATE_VISIT, {
+      variables: { input }
+    }),
+
+  updateVisit: (id: string, input: { chief_complaint?: string; diagnosis?: string; notes?: string }): Promise<{ updateVisit: any }> =>
+    graphqlClient.mutation(GraphQLMutations.UPDATE_VISIT, {
+      variables: { id, input }
+    }),
+
+  deleteVisit: (id: string): Promise<{ deleteVisit: boolean }> =>
+    graphqlClient.mutation(GraphQLMutations.DELETE_VISIT, {
+      variables: { id }
+    }),
+
+  upsertVitals: (input: {
+    visitId: string;
+    heightCm?: number;
+    weightKg?: number;
+    tempC?: number;
+    sbp?: number;
+    dbp?: number;
+    hr?: number;
+    rr?: number;
+    spo2?: number;
+  }): Promise<{ upsertVitals: any }> =>
+    graphqlClient.mutation(GraphQLMutations.UPSERT_VITALS, {
+      variables: { input }
+    }),
+
+  linkOrderToVisit: (input: { visitId: string; orderId: string }): Promise<{ linkOrderToVisit: any }> =>
+    graphqlClient.mutation(GraphQLMutations.LINK_ORDER_TO_VISIT, {
+      variables: { input }
+    }),
+
+  // Queue Operations
+  getQueueTickets: (variables?: { 
+    station?: string; 
+    status?: string; 
+    pagination?: PaginationInput 
+  }): Promise<{ queueTickets: any[] }> =>
+    graphqlClient.query(GraphQLQueries.GET_QUEUE_TICKETS, { variables }),
+
+  createQueueTicket: (input: { visitId: string; station: string }): Promise<{ createQueueTicket: any }> =>
+    graphqlClient.mutation(GraphQLMutations.CREATE_QUEUE_TICKET, {
+      variables: { input }
+    }),
+
+  updateQueueStatus: (id: string, status: string, note?: string): Promise<{ updateQueueStatus: any }> =>
+    graphqlClient.mutation(GraphQLMutations.UPDATE_QUEUE_STATUS, {
+      variables: { id, status, note }
+    }),
 }; 

@@ -15,7 +15,7 @@ export default function NotificationsPage() {
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-xl font-semibold text-gray-500">รายการแจ้งเตือน</h1>
-        <Button variant="outline" className="text-purple-500 bg-white hover:bg-purple-50">
+        <Button variant="outline" className="text-teal-500 bg-white hover:bg-purple-50">
           ตั้งค่าแจ้งเตือน
         </Button>
       </div>
@@ -43,7 +43,7 @@ export default function NotificationsPage() {
                     <p className="text-gray-500 text-sm mt-1">{notification.message}</p>
                     <p className="text-xs text-gray-400 mt-2">{notification.timestamp}</p>
                   </div>
-                  <div className={`w-3 h-3 rounded-full ${notification.read ? "bg-gray-300" : "bg-purple-500"}`}></div>
+                  <div className={`w-3 h-3 rounded-full ${notification.read ? "bg-gray-300" : "bg-teal-500"}`}></div>
                 </div>
               </CardContent>
             </Card>

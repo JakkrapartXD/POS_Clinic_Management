@@ -662,7 +662,7 @@ function InventoryPage() {
                 {getViewTitle()}
               </h1>
               {viewMode === 'list' ? (
-                <Button className="text-purple-500 bg-white hover:bg-purple-50 border border-purple-200">
+                <Button className="text-teal-500 bg-white hover:bg-purple-50 border border-teal-200">
                   ตัวเลือก
                 </Button>
               ) : viewMode === 'add-product' ? (
@@ -670,7 +670,7 @@ function InventoryPage() {
                   <Button variant="outline" onClick={handleBackToList}>
                     ยกเลิก
                   </Button>
-                  <Button onClick={handleSaveButtonClick} className="bg-purple-500 hover:bg-purple-600">
+                  <Button onClick={handleSaveButtonClick} className="bg-teal-500 hover:bg-teal-600">
                     บันทึกสินค้า
                   </Button>
                 </div>
@@ -691,7 +691,7 @@ function InventoryPage() {
           {loading && viewMode === 'list' && (
             <div className="flex items-center justify-center h-64">
               <div className="text-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500 mx-auto mb-4"></div>
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-500 mx-auto mb-4"></div>
                 <div className="text-gray-600">กำลังโหลดข้อมูลสินค้า...</div>
               </div>
             </div>
@@ -707,7 +707,7 @@ function InventoryPage() {
                 <Button 
                   onClick={() => window.location.reload()} 
                   variant="outline"
-                  className="text-purple-600 border-purple-200"
+                  className="text-teal-600 border-teal-200"
                 >
                   ลองใหม่
                 </Button>

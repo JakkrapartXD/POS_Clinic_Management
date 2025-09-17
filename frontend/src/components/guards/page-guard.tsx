@@ -34,7 +34,10 @@ export default function PageGuard({ children, requiredPermission }: PageGuardPro
     // Check if user has permission to access this page
     const hasAccess = hasPermission(user.role as any, requiredPermission)
     
-    logger.auth.permissionCheck(requiredPermission, user.role, hasAccess)
+    // Only log permission check in development mode to reduce noise
+    if (process.env.NODE_ENV === 'development') {
+      logger.auth.permissionCheck(requiredPermission, user.role, hasAccess)
+    }
     
     if (!hasAccess) {
       setIsAuthorized(false)
@@ -50,7 +53,7 @@ export default function PageGuard({ children, requiredPermission }: PageGuardPro
       <div className="p-6 max-w-4xl mx-auto">
         <Card>
           <CardContent className="p-8 text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mx-auto mb-4"></div>
             <p className="text-gray-600">กำลังตรวจสอบสิทธิ์การเข้าถึง...</p>
           </CardContent>
         </Card>

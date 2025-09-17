@@ -445,7 +445,7 @@ export default function ImportProductsView({ onBack, onImport }: ImportProductsV
                       ลากไฟล์มาวางที่นี่ หรือ
                     </p>
                     <label className="cursor-pointer">
-                      <span className="text-purple-600 hover:text-purple-700 font-medium">
+                      <span className="text-teal-600 hover:text-teal-700 font-medium">
                         เลือกไฟล์
                       </span>
                       <input
@@ -552,7 +552,7 @@ export default function ImportProductsView({ onBack, onImport }: ImportProductsV
         <Card className="mt-6">
           <CardContent className="p-6">
             <div className="flex items-center justify-center space-x-3">
-              <RefreshCw className="h-5 w-5 animate-spin text-purple-500" />
+              <RefreshCw className="h-5 w-5 animate-spin text-teal-500" />
               <span className="text-gray-600">
                 {isLoadingProducts ? 'กำลังโหลดข้อมูลสินค้าจากฐานข้อมูลเพื่อตรวจสอบข้อมูลซ้ำ...' : 'กำลังประมวลผลไฟล์...'}
               </span>
@@ -778,7 +778,7 @@ export default function ImportProductsView({ onBack, onImport }: ImportProductsV
             <Button 
               onClick={handleImportClick}
               disabled={!previewResult || previewResult.validRows.length === 0 || isImporting || isLoadingProducts || isProcessing}
-              className="bg-purple-500 hover:bg-purple-600"
+              className="bg-teal-500 hover:bg-teal-600"
             >
               {isImporting ? (
                 <>
@@ -838,7 +838,7 @@ export default function ImportProductsView({ onBack, onImport }: ImportProductsV
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
-              <AlertDialogAction onClick={handleConfirmImport} className="bg-purple-500 hover:bg-purple-600">
+              <AlertDialogAction onClick={handleConfirmImport} className="bg-teal-500 hover:bg-teal-600">
                 ยืนยันการนำเข้า
               </AlertDialogAction>
             </AlertDialogFooter>

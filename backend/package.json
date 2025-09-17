@@ -2,7 +2,8 @@
   "name": "backend",
   "version": "1.0.50",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "bun test",
+    "test:clinic": "bun test tests/clinic*.test.ts",
     "dev": "bun run --watch src/index.ts",
     "setup-db": "./scripts/setup-db.sh"
   },

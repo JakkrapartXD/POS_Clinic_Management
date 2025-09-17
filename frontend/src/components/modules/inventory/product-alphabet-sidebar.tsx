@@ -16,7 +16,7 @@ export default function ProductAlphabetSidebar({ activeLetters, count, onLetterC
         {alphabet.map((letter) => (
           <div
             key={letter}
-            className={`text-xs ${activeLetters.includes(letter) ? "text-purple-600 font-medium" : "text-gray-500"} py-1 cursor-pointer`}
+            className={`text-xs ${activeLetters.includes(letter) ? "text-teal-600 font-medium" : "text-gray-500"} py-1 cursor-pointer`}
             onClick={() => onLetterClick && onLetterClick(letter)}
           >
             {letter}

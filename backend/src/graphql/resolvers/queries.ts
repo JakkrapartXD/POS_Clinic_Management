@@ -158,6 +158,7 @@ export const queries = {
     
     const patients = await context.prisma.patient.findMany({
       where: {
+        isDelete: false, // เพิ่ม filter เฉพาะผู้ป่วยที่ไม่ได้ถูกลบ
         OR: [
           { first_name: { contains: sanitizedQuery, mode: 'insensitive' } },
           { last_name: { contains: sanitizedQuery, mode: 'insensitive' } },

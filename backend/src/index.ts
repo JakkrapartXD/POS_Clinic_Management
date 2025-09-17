@@ -18,6 +18,7 @@ import { AuthRoutes } from "./routes/authRoutes";
 import { userRoutes } from "./routes/userRoutes";
 import { uploadRoutes } from "./routes/uploadRoutes";
 import { backupRoutes, oauthRoutes } from "./routes/backupRoutes";
+import { clinicRoutes } from "./routes/clinicRoutes";
 
 // Import logger
 import { logger } from "./lib/logger";
@@ -254,6 +255,7 @@ const app = new Elysia()
   .use(uploadRoutes)
   .use(oauthRoutes)
   .use(backupRoutes)
+  .use(clinicRoutes)
 
   // Default route
   .get("/", () => ({

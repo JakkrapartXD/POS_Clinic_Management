@@ -79,7 +79,7 @@ const roleColors = {
   admin: "text-yellow-600",
   doctor: "text-blue-600", 
   cashier: "text-green-600",
-  pharmacist: "text-purple-600",
+  pharmacist: "text-teal-600",
   staff: "text-gray-600"
 }
 
@@ -282,7 +282,7 @@ export default function UserManagementPage() {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-              <Shield className="h-8 w-8 text-purple-600" />
+              <Shield className="h-8 w-8 text-teal-600" />
               จัดการผู้ใช้งาน
             </h1>
             <p className="text-gray-600 mt-2">จัดการบัญชีผู้ใช้และสิทธิ์การเข้าถึงระบบ</p>
@@ -290,7 +290,7 @@ export default function UserManagementPage() {
           
           <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
             <DialogTrigger asChild>
-              <Button className="bg-purple-600 hover:bg-purple-700">
+              <Button className="bg-teal-600 hover:bg-teal-700">
                 <Plus className="w-4 h-4 mr-2" />
                 เพิ่มผู้ใช้ใหม่
               </Button>
@@ -440,7 +440,7 @@ export default function UserManagementPage() {
                             {searchTerm !== searchQuery && (
                               <button
                                 onClick={handleManualSearch}
-                                className="absolute right-2 top-1/2 transform -translate-y-1/2 text-xs text-purple-600 hover:text-purple-800 bg-purple-50 px-2 py-1 rounded"
+                                className="absolute right-2 top-1/2 transform -translate-y-1/2 text-xs text-teal-600 hover:text-teal-800 bg-teal-50 px-2 py-1 rounded"
                                 disabled={loading}
                               >
                                 ค้นหา

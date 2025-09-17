@@ -24,7 +24,7 @@ export default function ProductCard({ id, name, variant, price, status, onClick 
         </div>
         <h3 className="font-medium text-sm mb-1 line-clamp-2">{name}</h3>
         <div className="text-sm text-gray-500 mb-2">{variant}</div>
-        <div className="text-purple-600 font-medium">฿{price.toFixed(2)}</div>
+        <div className="text-teal-600 font-medium">฿{price.toFixed(2)}</div>
       </CardContent>
     </Card>
   )

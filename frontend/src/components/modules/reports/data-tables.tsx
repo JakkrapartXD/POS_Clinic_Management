@@ -440,7 +440,7 @@ export function DailyReportTable({ data, title = "รายงานรายว
           </Card>
           <Card>
             <CardContent className="p-4 text-center">
-              <div className="text-2xl font-bold text-purple-600">
+              <div className="text-2xl font-bold text-teal-600">
                 {totals.total_patients.toLocaleString()}
               </div>
               <div className="text-sm text-gray-600">ผู้ป่วยรวม</div>

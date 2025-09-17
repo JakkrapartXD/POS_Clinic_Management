@@ -41,11 +41,26 @@ export const typeDefs = /* GraphQL */ `
     id: String!
     first_name: String!
     last_name: String!
+    national_id: String
+    prefix: String
+    nickname: String
     date_of_birth: DateTime
+    age: Int
     gender: String
+    blood_group: String
     phone: String
     email: String
     address: String
+    subdistrict: String
+    district: String
+    province: String
+    zip_code: String
+    latitude: Float
+    longitude: Float
+    drug_allergies: String
+    drug_allergies_other: String
+    medical_conditions: String
+    notes: String
     photo_url: String
     photo_path: String
     created_at: DateTime!
@@ -54,26 +69,62 @@ export const typeDefs = /* GraphQL */ `
     medicalRecords: [MedicalRecord!]!
     orders: [Order!]!
     treatmentPlans: [TreatmentPlan!]!
+    visits: [Visit!]!
+    queueTickets: [QueueTicket!]!
   }
 
   input CreatePatientInput {
     first_name: String!
     last_name: String!
+    national_id: String
+    prefix: String
+    nickname: String
     date_of_birth: DateTime
+    age: Int
     gender: String
+    blood_group: String
     phone: String
     email: String
     address: String
+    subdistrict: String
+    district: String
+    province: String
+    zip_code: String
+    latitude: Float
+    longitude: Float
+    drug_allergies: String
+    drug_allergies_other: String
+    medical_conditions: String
+    notes: String
+    photo_url: String
+    photo_path: String
   }
 
   input UpdatePatientInput {
     first_name: String
     last_name: String
+    national_id: String
+    prefix: String
+    nickname: String
     date_of_birth: DateTime
+    age: Int
     gender: String
+    blood_group: String
     phone: String
     email: String
     address: String
+    subdistrict: String
+    district: String
+    province: String
+    zip_code: String
+    latitude: Float
+    longitude: Float
+    drug_allergies: String
+    drug_allergies_other: String
+    medical_conditions: String
+    notes: String
+    photo_url: String
+    photo_path: String
   }
 
   # Category Types
@@ -280,6 +331,7 @@ export const typeDefs = /* GraphQL */ `
     payments: [Payment!]!
     invoice: Invoice
     is_walkin: Boolean!
+    visitOrders: [VisitOrder!]!
   }
 
   type OrderItem {
@@ -481,6 +533,7 @@ export const typeDefs = /* GraphQL */ `
     created_at: DateTime!
     updated_at: DateTime!
     medicalRecords: [MedicalRecord!]!
+    visits: [Visit!]!
   }
 
   type MedicalRecord {
@@ -721,6 +774,14 @@ export const typeDefs = /* GraphQL */ `
     treatmentPlans(patientId: String, pagination: PaginationInput): [TreatmentPlan!]!
     treatmentPlan(id: String!): TreatmentPlan
 
+    # Clinic System Queries
+    visit(id: String!): Visit
+    visits(patientId: String, status: VisitStatus, pagination: PaginationInput): [Visit!]!
+    patientVisits(patientId: String!, pagination: PaginationInput): [Visit!]!
+    queueTickets(station: QueueStation, status: QueueStatus, pagination: PaginationInput): [QueueTicket!]!
+    queueTicket(id: String!): QueueTicket
+    queueStats(station: QueueStation): [QueueStats!]!
+
     # Stock & Reports
     stocks(productId: String, pagination: PaginationInput): [Stock!]!
     stockAlerts(acknowledged: Boolean, pagination: PaginationInput): [StockAlert!]!
@@ -801,5 +862,171 @@ export const typeDefs = /* GraphQL */ `
     generateSalesReports(date: DateTime!): SalesReportGenerationResult!
     generateStockAlerts: StockAlertGenerationResult!
     generateComprehensiveDailyReport(date: DateTime!): ComprehensiveDailyReport!
+
+    # Clinic System Mutations
+    createVisit(input: CreateVisitInput!): Visit!
+    updateVisit(id: String!, input: UpdateVisitInput!): Visit!
+    deleteVisit(id: String!): Boolean!
+    upsertVitals(input: UpsertVitalsInput!): Vitals!
+    createQueueTicket(input: CreateQueueTicketInput!): QueueTicket!
+    updateQueueStatus(id: String!, status: QueueStatus!, note: String): QueueTicket!
+    linkOrderToVisit(input: LinkOrderToVisitInput!): VisitOrder!
+  }
+
+  # ========== CLINIC SYSTEM TYPES ==========
+
+  enum VisitStatus {
+    open
+    triage
+    doctor
+    pharmacy
+    cashier
+    done
+    cancelled
+  }
+
+  enum QueueStation {
+    triage
+    doctor
+    pharmacy
+    cashier
+  }
+
+  enum QueueStatus {
+    waiting
+    called
+    in_service
+    done
+    skipped
+    cancelled
+  }
+
+  type Visit {
+    id: String!
+    patientId: String!
+    appointmentId: String
+    visit_date: DateTime!
+    status: VisitStatus!
+    chief_complaint: String
+    diagnosis: String
+    notes: String
+    created_at: DateTime!
+    updated_at: DateTime!
+    
+    # Relations
+    patient: Patient!
+    appointment: Appointment
+    vitals: Vitals
+    queueTickets: [QueueTicket!]!
+    visitOrders: [VisitOrder!]!
+  }
+
+  type Vitals {
+    visitId: String!
+    heightCm: Float
+    weightKg: Float
+    tempC: Float
+    sbp: Int
+    dbp: Int
+    hr: Int
+    rr: Int
+    spo2: Int
+    bmi: Float
+    created_at: DateTime!
+    updated_at: DateTime!
+    
+    # Relations
+    visit: Visit!
+  }
+
+  type QueueTicket {
+    id: String!
+    visitId: String!
+    patientId: String!
+    number: Int!
+    station: QueueStation!
+    status: QueueStatus!
+    priority: Int!
+    called_at: DateTime
+    started_at: DateTime
+    done_at: DateTime
+    created_at: DateTime!
+    updated_at: DateTime!
+    
+    # Relations
+    visit: Visit!
+    patient: Patient!
+    events: [QueueEvent!]!
+  }
+
+  type QueueEvent {
+    id: String!
+    ticketId: String!
+    station: QueueStation!
+    status: QueueStatus!
+    at: DateTime!
+    byUserId: String
+    note: String
+    
+    # Relations
+    ticket: QueueTicket!
+  }
+
+  type VisitOrder {
+    id: String!
+    visitId: String!
+    orderId: String!
+    created_at: DateTime!
+    
+    # Relations
+    visit: Visit!
+    order: Order!
+  }
+
+  # Input Types for Clinic System
+  input CreateVisitInput {
+    patientId: String!
+    appointmentId: String
+    chief_complaint: String
+    diagnosis: String
+    notes: String
+  }
+
+  input UpdateVisitInput {
+    status: VisitStatus
+    chief_complaint: String
+    diagnosis: String
+    notes: String
+  }
+
+  input UpsertVitalsInput {
+    visitId: String!
+    heightCm: Float
+    weightKg: Float
+    tempC: Float
+    sbp: Int
+    dbp: Int
+    hr: Int
+    rr: Int
+    spo2: Int
+    bmi: Float
+  }
+
+  input CreateQueueTicketInput {
+    visitId: String!
+    station: QueueStation!
+    priority: Int
+  }
+
+  input LinkOrderToVisitInput {
+    visitId: String!
+    orderId: String!
+  }
+
+  # Queue Statistics
+  type QueueStats {
+    station: QueueStation!
+    status: QueueStatus!
+    count: Int!
   }
 `; 

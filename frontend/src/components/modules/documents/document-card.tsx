@@ -9,7 +9,7 @@ interface DocumentCardProps {
   color?: string
 }
 
-export default function DocumentCard({ id, title, subtitle, href, color = "text-purple-600" }: DocumentCardProps) {
+export default function DocumentCard({ id, title, subtitle, href, color = "text-teal-600" }: DocumentCardProps) {
   return (
     <Link href={href}>
       <Card className="bg-white shadow-sm hover:shadow-md transition-shadow">

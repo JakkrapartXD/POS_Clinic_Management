@@ -782,7 +782,7 @@ export default function ReportsPage() {
             </CardHeader>
             <CardContent>
               <div className="text-center mb-4">
-                <p className="text-3xl font-bold text-purple-600">฿{summaryStats.totalSales.toLocaleString()}</p>
+                <p className="text-3xl font-bold text-teal-600">฿{summaryStats.totalSales.toLocaleString()}</p>
                 <p className="text-sm text-gray-600">
                   {summaryStats.totalSales > 0 ? 'ยอดขายรวมวันนี้' : 'ยังไม่พบการขายสินค้าวันนี้'}
                 </p>

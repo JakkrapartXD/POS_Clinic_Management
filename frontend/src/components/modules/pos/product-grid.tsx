@@ -38,7 +38,7 @@ export default function ProductGrid({ products, onProductClick }: ProductGridPro
             </div>
             <h3 className="font-medium text-sm mb-1 line-clamp-2">{product.name}</h3>
             <div className="text-sm text-gray-500 mb-2">{product.variant}</div>
-            <div className="text-purple-600 font-medium">฿{product.price.toFixed(2)}</div>
+            <div className="text-teal-600 font-medium">฿{product.price.toFixed(2)}</div>
           </CardContent>
         </Card>
       ))}

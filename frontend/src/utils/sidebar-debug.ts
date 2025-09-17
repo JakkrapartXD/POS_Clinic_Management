@@ -75,7 +75,7 @@ export const checkSidebarState = (): void => {
     
     menuItems.forEach((item, index) => {
       const label = item.textContent?.trim();
-      const isActive = item.classList.contains('bg-purple-100');
+      const isActive = item.classList.contains('bg-teal-100');
       console.log(`  ${index + 1}. ${label} ${isActive ? '(ACTIVE)' : ''}`);
     });
   } else {

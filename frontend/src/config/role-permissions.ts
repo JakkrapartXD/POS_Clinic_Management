@@ -18,6 +18,9 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
       'notifications',
       'pos', 
       'inventory',
+      'patients',
+      'visits',
+      'queue',
       'documents',
       'users',
       'orders',
@@ -29,7 +32,10 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
     menuItems: [
       'notifications',
       'pos',
-      'inventory', 
+      'inventory',
+      'patients',
+      'visits',
+      'queue', 
       'documents',
       'users',
       'orders',
@@ -67,6 +73,9 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
       'notifications',
       'pos',
       'inventory',
+      'patients',
+      'visits',
+      'queue',
       'documents',
       'users'
     ],
@@ -74,6 +83,9 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
       'notifications',
       'pos',
       'inventory',
+      'patients',
+      'visits',
+      'queue',
       'documents',
       'users'
     ]
@@ -81,18 +93,26 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
   staff: {
     allowedPages: [
       'notifications',
+      'patients',
+      'visits',
+      'queue',
       'orders',
       'reports'
     ],
     menuItems: [
-      'notifications', 
+      'notifications',
+      'patients',
+      'visits',
+      'queue', 
       'orders',
       'reports'
     ]
   }
 }
 
-export function hasPermission(userRole: UserRole, page: string): boolean {
+export function hasPermission(userRole: UserRole, permission: string): boolean {
+  // Handle permission format like "patients:read" -> "patients"
+  const page = permission.includes(':') ? permission.split(':')[0] : permission;
   return ROLE_PERMISSIONS[userRole]?.allowedPages.includes(page) || false
 }
 

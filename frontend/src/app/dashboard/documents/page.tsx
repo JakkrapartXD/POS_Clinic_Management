@@ -9,14 +9,14 @@ export default function DocumentsPage() {
       title: "CUSTOMER",
       subtitle: "ลูกค้า",
       href: "/dashboard/documents/customers",
-      color: "text-purple-600",
+      color: "text-teal-600",
     },
     {
       id: "rt",
       title: "RT",
       subtitle: "ใบเสร็จรับเงิน / Receipt",
       href: "/dashboard/documents/receipts",
-      color: "text-purple-600",
+      color: "text-teal-600",
     },
   ]
 

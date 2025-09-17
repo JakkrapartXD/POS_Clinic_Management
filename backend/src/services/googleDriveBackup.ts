@@ -49,8 +49,9 @@ export class GoogleDriveBackupService {
 
       this.drive = google.drive({ version: 'v3', auth: this.auth });
     } catch (error) {
-      logger.error('[GOOGLE_DRIVE] Initialization failed:', error as Error, 'GOOGLE_DRIVE');
-      throw new Error(`Google Drive initialization failed: ${(error as Error).message}`);
+      const errorObj = error instanceof Error ? error : new Error(String(error));
+      logger.error('[GOOGLE_DRIVE] Initialization failed:', errorObj, 'GOOGLE_DRIVE');
+      throw new Error(`Google Drive initialization failed: ${errorObj.message}`);
     }
   }
 
@@ -91,12 +92,13 @@ export class GoogleDriveBackupService {
         refresh_token: tokens.refresh_token,
       };
     } catch (error) {
+      const errorObj = error instanceof Error ? error : new Error(String(error));
       logger.error('[GOOGLE_DRIVE] Token exchange failed:', { 
-        error: error as Error,
+        error: errorObj,
         code: code.substring(0, 10) + '...',
         redirectUri: this.config.web.redirect_uris[0]
       }, 'GOOGLE_DRIVE');
-      throw new Error(`Token exchange failed: ${(error as Error).message}`);
+      throw new Error(`Token exchange failed: ${errorObj.message}`);
     }
   }
 
@@ -112,7 +114,8 @@ export class GoogleDriveBackupService {
       await this.drive.about.get({ fields: 'user' });
       return true;
     } catch (error) {
-      logger.error('[GOOGLE_DRIVE] Connection check failed:', error as Error, 'GOOGLE_DRIVE');
+      const errorObj = error instanceof Error ? error : new Error(String(error));
+      logger.error('[GOOGLE_DRIVE] Connection check failed:', errorObj, 'GOOGLE_DRIVE');
       return false;
     }
   }
@@ -152,8 +155,9 @@ export class GoogleDriveBackupService {
       
       return folderId;
     } catch (error) {
-      logger.error('[GOOGLE_DRIVE] Folder creation failed:', error as Error, 'GOOGLE_DRIVE');
-      throw new Error(`Backup folder creation failed: ${(error as Error).message}`);
+      const errorObj = error instanceof Error ? error : new Error(String(error));
+      logger.error('[GOOGLE_DRIVE] Folder creation failed:', errorObj, 'GOOGLE_DRIVE');
+      throw new Error(`Backup folder creation failed: ${errorObj.message}`);
     }
   }
 
@@ -194,8 +198,9 @@ export class GoogleDriveBackupService {
         url: response.data.webViewLink,
       };
     } catch (error) {
-      logger.error(`[GOOGLE_DRIVE] Upload failed:`, error as Error, 'GOOGLE_DRIVE');
-      throw new Error(`Google Drive upload failed: ${(error as Error).message}`);
+      const errorObj = error instanceof Error ? error : new Error(String(error));
+      logger.error(`[GOOGLE_DRIVE] Upload failed:`, errorObj, 'GOOGLE_DRIVE');
+      throw new Error(`Google Drive upload failed: ${errorObj.message}`);
     }
   }
 
@@ -221,8 +226,9 @@ export class GoogleDriveBackupService {
 
       return response.data.files || [];
     } catch (error) {
-      logger.error(`[GOOGLE_DRIVE] List failed:`, error as Error, 'GOOGLE_DRIVE');
-      throw new Error(`Google Drive list failed: ${(error as Error).message}`);
+      const errorObj = error instanceof Error ? error : new Error(String(error));
+      logger.error(`[GOOGLE_DRIVE] List failed:`, errorObj, 'GOOGLE_DRIVE');
+      throw new Error(`Google Drive list failed: ${errorObj.message}`);
     }
   }
 
@@ -237,8 +243,9 @@ export class GoogleDriveBackupService {
       
       logger.info(`[GOOGLE_DRIVE] File deleted: ${fileId}`);
     } catch (error) {
-      logger.error(`[GOOGLE_DRIVE] Delete failed:`, error as Error, 'GOOGLE_DRIVE');
-      throw new Error(`Google Drive delete failed: ${(error as Error).message}`);
+      const errorObj = error instanceof Error ? error : new Error(String(error));
+      logger.error(`[GOOGLE_DRIVE] Delete failed:`, errorObj, 'GOOGLE_DRIVE');
+      throw new Error(`Google Drive delete failed: ${errorObj.message}`);
     }
   }
 
@@ -256,8 +263,9 @@ export class GoogleDriveBackupService {
       
       logger.info(`[GOOGLE_DRIVE] File downloaded: ${destinationPath}`);
     } catch (error) {
-      logger.error(`[GOOGLE_DRIVE] Download failed:`, error as Error, 'GOOGLE_DRIVE');
-      throw new Error(`Google Drive download failed: ${(error as Error).message}`);
+      const errorObj = error instanceof Error ? error : new Error(String(error));
+      logger.error(`[GOOGLE_DRIVE] Download failed:`, errorObj, 'GOOGLE_DRIVE');
+      throw new Error(`Google Drive download failed: ${errorObj.message}`);
     }
   }
 
@@ -282,8 +290,9 @@ export class GoogleDriveBackupService {
         usageInDrive: quota.usageInDrive || '0',
       };
     } catch (error) {
-      logger.error(`[GOOGLE_DRIVE] Storage info failed:`, error as Error, 'GOOGLE_DRIVE');
-      throw new Error(`Google Drive storage info failed: ${(error as Error).message}`);
+      const errorObj = error instanceof Error ? error : new Error(String(error));
+      logger.error(`[GOOGLE_DRIVE] Storage info failed:`, errorObj, 'GOOGLE_DRIVE');
+      throw new Error(`Google Drive storage info failed: ${errorObj.message}`);
     }
   }
 
@@ -303,8 +312,9 @@ export class GoogleDriveBackupService {
         email: user.emailAddress || 'Unknown',
       };
     } catch (error) {
-      logger.error(`[GOOGLE_DRIVE] User info failed:`, error as Error, 'GOOGLE_DRIVE');
-      throw new Error(`Google Drive user info failed: ${(error as Error).message}`);
+      const errorObj = error instanceof Error ? error : new Error(String(error));
+      logger.error(`[GOOGLE_DRIVE] User info failed:`, errorObj, 'GOOGLE_DRIVE');
+      throw new Error(`Google Drive user info failed: ${errorObj.message}`);
     }
   }
 }

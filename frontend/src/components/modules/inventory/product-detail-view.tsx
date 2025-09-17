@@ -198,40 +198,40 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
   }
 
   // Load product function
-  const loadProduct = async () => {
-    try {
-      setLoading(true)
-      setError(null)
-      
-      logger.info('Loading product details', { productId }, 'INVENTORY')
-      
-      const response = await GraphQLAPI.getProduct(productId)
-      
-      if (response.product) {
-        setProduct(response.product)
+    const loadProduct = async () => {
+      try {
+        setLoading(true)
+        setError(null)
         
-        // If we have initial product variants, use them, otherwise create a single variant from the main product
-        if (initialProductVariants && initialProductVariants.length > 0) {
-          setProductVariants(initialProductVariants)
+        logger.info('Loading product details', { productId }, 'INVENTORY')
+        
+        const response = await GraphQLAPI.getProduct(productId)
+        
+        if (response.product) {
+          setProduct(response.product)
+          
+          // If we have initial product variants, use them, otherwise create a single variant from the main product
+          if (initialProductVariants && initialProductVariants.length > 0) {
+            setProductVariants(initialProductVariants)
+          } else {
+            // Create a single variant from the main product
+            setProductVariants([response.product])
+          }
+          
+          logger.info('Product loaded successfully', { 
+            productId,
+            productName: response.product.product_name 
+          }, 'INVENTORY')
         } else {
-          // Create a single variant from the main product
-          setProductVariants([response.product])
+          setError('ไม่พบข้อมูลสินค้า')
         }
-        
-        logger.info('Product loaded successfully', { 
-          productId,
-          productName: response.product.product_name 
-        }, 'INVENTORY')
-      } else {
-        setError('ไม่พบข้อมูลสินค้า')
+      } catch (err) {
+        logger.error('Failed to load product', err, 'INVENTORY')
+        setError(err instanceof Error ? err.message : 'ไม่สามารถโหลดข้อมูลสินค้าได้')
+      } finally {
+        setLoading(false)
       }
-    } catch (err) {
-      logger.error('Failed to load product', err, 'INVENTORY')
-      setError(err instanceof Error ? err.message : 'ไม่สามารถโหลดข้อมูลสินค้าได้')
-    } finally {
-      setLoading(false)
     }
-  }
 
   useEffect(() => {
     if (productId) {
@@ -753,17 +753,17 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
               if (oldImageUrl && newImageUrl && oldImageUrl !== newImageUrl) {
                 try {
                   // Extract filename from old URL
-                  const urlParts = oldImageUrl.split('/')
-                  const filename = urlParts[urlParts.length - 1]
-                  const category = urlParts[urlParts.length - 2]
-                  
-                  if (filename && category) {
-                    await GraphQLAPI.deleteImage(filename, category as 'product' | 'user' | 'patient')
+              const urlParts = oldImageUrl.split('/')
+              const filename = urlParts[urlParts.length - 1]
+              const category = urlParts[urlParts.length - 2]
+              
+              if (filename && category) {
+                await GraphQLAPI.deleteImage(filename, category as 'product' | 'user' | 'patient')
                     logger.info('Old image deleted successfully', { filename }, 'INVENTORY')
-                  }
-                } catch (error) {
-                  console.warn('Failed to delete old image:', error)
-                  // Continue even if old image deletion fails
+              }
+            } catch (error) {
+              console.warn('Failed to delete old image:', error)
+              // Continue even if old image deletion fails
                 }
               }
             } catch (error) {
@@ -1395,7 +1395,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-500 mx-auto mb-4"></div>
           <div className="text-gray-600">กำลังโหลดข้อมูลสินค้า...</div>
         </div>
       </div>
@@ -1420,7 +1420,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
               <Button 
                 onClick={() => window.location.reload()} 
                 variant="outline"
-                className="text-purple-600 border-purple-200"
+                className="text-teal-600 border-teal-200"
               >
                 ลองใหม่
               </Button>
@@ -1492,7 +1492,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
 
             </div>
           </div>
-          <Button onClick={handleEditClick} className="bg-purple-500 hover:bg-purple-600">
+          <Button onClick={handleEditClick} className="bg-teal-500 hover:bg-teal-600">
             <Edit2 className="h-4 w-4 mr-2" />
             แก้ไขสินค้า
           </Button>
@@ -1663,10 +1663,10 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                           <tr key={variant.id || index} className={`hover:bg-gray-50 ${isMain ? 'bg-purple-50' : ''}`}>
                             <td className="px-4 py-4">
                               <div className="flex items-center space-x-2">
-                                <span className={`font-medium ${isMain ? 'text-purple-600' : canDelete ? 'text-blue-600' : 'text-gray-600'}`}>
+                                <span className={`font-medium ${isMain ? 'text-teal-600' : canDelete ? 'text-blue-600' : 'text-gray-600'}`}>
                                   {variant.unit || 'หน่วย'}
                                 </span>
-                                <Badge variant={isMain ? 'default' : 'outline'} className={`text-xs ${isMain ? 'bg-purple-600' : 'border-gray-200 text-gray-700'}`}>
+                                <Badge variant={isMain ? 'default' : 'outline'} className={`text-xs ${isMain ? 'bg-teal-600' : 'border-gray-200 text-gray-700'}`}>
                                   {isMain ? 'หลัก' : 'รอง'}
                                 </Badge>
                               </div>
@@ -1705,7 +1705,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                                   variant="outline"
                                   size="sm"
                                   onClick={() => openUnitEditDialog(variant)}
-                                  className="text-purple-600 border-purple-200 hover:bg-purple-50"
+                                  className="text-teal-600 border-teal-200 hover:bg-purple-50"
                                 >
                                   แก้ไข
                                 </Button>
@@ -1764,30 +1764,30 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                 >
                   {stocksLoading ? 'กำลังโหลด...' : 'รีเฟรช'}
                 </Button>
-              </div>
-            </div>
+                  </div>
+                  </div>
 
 
             {/* สต๊อกแยกตามหน่วยนับ */}
             {stocksLoading ? (
-              <Card>
-                <CardContent className="p-6">
+            <Card>
+              <CardContent className="p-6">
                   <div className="flex items-center justify-center h-32">
                     <div className="text-center">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto mb-4"></div>
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600 mx-auto mb-4"></div>
                       <p className="text-gray-600">กำลังโหลดข้อมูลสต๊อก...</p>
-                    </div>
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </CardContent>
+            </Card>
             ) : groupStocksByUnit().length > 0 ? (
               groupStocksByUnit().map((unitData) => (
                 <Card key={unitData.unit}>
                   <CardHeader>
                     <div className="flex items-center justify-between">
-                      <div>
+                    <div>
                         <CardTitle className="text-xl font-bold">{unitData.unit}</CardTitle>
-                        <p className="text-purple-600 font-medium">
+                        <p className="text-teal-600 font-medium">
                           คงเหลือทั้งหมด {unitData.totalQuantity.toLocaleString()} {unitData.unitName}
                         </p>
                         {unitData.sku && (
@@ -1798,20 +1798,20 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                         {/* <Button 
                           variant="ghost" 
                           size="sm"
-                          className="text-purple-600 hover:text-purple-700"
+                          className="text-teal-600 hover:text-teal-700"
                         >
                           จัดเรียงสต๊อกสินค้า
                         </Button> */}
                         <Button 
                           variant="ghost" 
                           size="sm"
-                          className="text-purple-600 hover:text-purple-700"
+                          className="text-teal-600 hover:text-teal-700"
                           onClick={() => handleAddStockClick(unitData)}
                         >
                           เพิ่มสต๊อกสินค้าใหม่
                         </Button>
-                      </div>
-                    </div>
+                  </div>
+                </div>
                   </CardHeader>
                   <CardContent>
                     <div className="overflow-x-auto">
@@ -1835,14 +1835,14 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                             unitData.stocks.filter(stock => stock.quantity > 0).map((stock) => (
                               <tr key={stock.id} className="border-b hover:bg-gray-50">
                                 <td className="py-3 px-4">
-                                  <div>
+                    <div>
                                     <div className="font-medium">{formatDate(stock.created_at)}</div>
                                     <div className="text-sm text-blue-600">
-                                    </div>
+                      </div>
                                     {/* <div className="text-xs text-gray-500 mt-1">
                                       {stock.note || 'เพิ่มสต๊อกสินค้าจากการนำเข้าข้อมูลสินค้า (IMPORT)'}
                                     </div> */}
-                                  </div>
+                    </div>
                                 </td>
                                 <td className="py-3 px-4 text-gray-500">-</td>
                                 <td className="py-3 px-4 text-gray-500">{formatDate(stock.production_date)}</td>
@@ -1851,7 +1851,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                                 <td className="py-3 px-4 font-medium">฿{stock.product_sale_price?.toFixed(2) || '0.00'}</td>
                                 <td className="py-3 px-4 font-medium">{stock.quantity_in?.toLocaleString() || stock.quantity.toLocaleString()}x</td>
                                 <td className="py-3 px-4">
-                                  <div>
+                      <div>
                                     <div className="font-medium">{stock.quantity.toLocaleString()}x</div>
                                     <div className="text-sm text-blue-600">
                                       <button 
@@ -1860,8 +1860,8 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                                       >
                                         ปรับเพิ่ม/ลดสต๊อก
                                       </button>
-                                    </div>
-                                  </div>
+                        </div>
+                      </div>
                                 </td>
                                 <td className="py-3 px-4">
                                   {getStatusBadge(stock)}
@@ -1886,7 +1886,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                                     >
                                       <Trash2 className="h-4 w-4" />
                                     </Button>
-                                  </div>
+                    </div>
                                 </td>
                               </tr>
                             ))
@@ -1903,12 +1903,12 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                           )}
                         </tbody>
                       </table>
-                    </div>
-                  </CardContent>
-                </Card>
+                </div>
+              </CardContent>
+            </Card>
               ))
             ) : (
-              <Card>
+            <Card>
                 <CardContent className="p-8 text-center">
                   <div className="flex flex-col items-center space-y-4">
                     <div className="text-4xl">📦</div>
@@ -1917,9 +1917,9 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                       กรุณาเพิ่มหน่วยนับสินค้าก่อน<br/>
                       จากนั้นจึงสามารถเพิ่มสต๊อกได้
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
+                </div>
+              </CardContent>
+            </Card>
             )}
           </TabsContent>
 
@@ -1950,8 +1950,8 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
           })
         }
       }}>
-        <DialogContent className="max-w-2xl bg-white">
-          <DialogHeader className="bg-white">
+        <DialogContent className="max-w-2xl max-h-[90vh] bg-white flex flex-col">
+          <DialogHeader className="bg-white flex-shrink-0">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <Button 
@@ -1977,7 +1977,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
             </p>
           </DialogHeader>
           
-          <div className="space-y-6 py-4 bg-white">
+          <div className="space-y-6 py-4 bg-white overflow-y-auto flex-1">
             {/* Form content */}
             {(() => {
               const variantToUpdate = isCreatingNewUnit ? null : productVariants?.find(v => v.sku === unitFormData.sku)
@@ -2050,7 +2050,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                           className="flex-1 bg-white border-gray-300 text-gray-900 placeholder-gray-500"
                           placeholder="500"
                         />
-                        <div className="bg-purple-100 text-purple-600 px-3 py-2 rounded-md text-sm font-medium min-w-[50px] flex items-center justify-center">
+                        <div className="bg-teal-100 text-teal-600 px-3 py-2 rounded-md text-sm font-medium min-w-[50px] flex items-center justify-center">
                           mg
                         </div>
                       </div>
@@ -2164,7 +2164,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                     <Switch
                       checked={unitFormData.display_pos}
                       onCheckedChange={(checked) => setUnitFormData(prev => ({ ...prev, display_pos: checked }))}
-                      className="data-[state=checked]:bg-purple-500"
+                      className="data-[state=checked]:bg-teal-500"
                     />
                   </div>
                 </>
@@ -2172,7 +2172,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
             })()}
           </div>
 
-          <DialogFooter className="pt-4 border-t bg-white">
+          <DialogFooter className="pt-4 border-t bg-white flex-shrink-0">
             <div className="flex justify-between w-full">
               <div>
                 {/* Show delete button only for existing units with pack_size > 1 */}
@@ -2202,7 +2202,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                 </Button>
                 <Button 
                   onClick={handleUnitSave}
-                  className="bg-purple-500 hover:bg-purple-600 text-white"
+                  className="bg-teal-500 hover:bg-teal-600 text-white"
                 >
                   {isCreatingNewUnit ? 'เพิ่มหน่วยนับ' : 'บันทึก'}
                 </Button>
@@ -2245,7 +2245,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                   value={stockFormData.quantity}
                   onChange={(e) => handleStockFormChange('quantity', e.target.value)}
                   placeholder="กรอกจำนวนสต๊อก"
-                  className="border-purple-300 focus:border-purple-500"
+                  className="border-teal-300 focus:border-teal-500"
                 />
               </div>
               
@@ -2343,7 +2343,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
               <Button
                 onClick={handleAddStockSubmit}
                 disabled={stockLoading}
-                className="bg-purple-600 hover:bg-purple-700"
+                className="bg-teal-600 hover:bg-teal-700"
               >
                 <Check className="h-4 w-4 mr-2" />
                 {stockLoading ? 'กำลังเพิ่ม...' : 'เพิ่มสต๊อก'}
@@ -2417,7 +2417,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                 value={adjustFormData.quantity}
                 onChange={(e) => handleAdjustFormChange('quantity', e.target.value)}
                 placeholder="กรอกจำนวน"
-                className="border-purple-300 focus:border-purple-500"
+                className="border-purple-300 focus:border-teal-500"
               />
             </div>
 
