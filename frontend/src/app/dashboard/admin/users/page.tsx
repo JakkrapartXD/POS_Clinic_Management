@@ -440,7 +440,7 @@ export default function UserManagementPage() {
                             {searchTerm !== searchQuery && (
                               <button
                                 onClick={handleManualSearch}
-                                className="absolute right-2 top-1/2 transform -translate-y-1/2 text-xs text-teal-600 hover:text-teal-800 bg-purple-50 px-2 py-1 rounded"
+                                className="absolute right-2 top-1/2 transform -translate-y-1/2 text-xs text-teal-600 hover:text-teal-800 bg-teal-50 px-2 py-1 rounded"
                                 disabled={loading}
                               >
                                 ค้นหา

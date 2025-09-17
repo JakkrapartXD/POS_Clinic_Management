@@ -28,10 +28,12 @@ interface BackupResult {
 export class DatabaseBackupService {
   private googleDriveService?: GoogleDriveBackupService;
   private backupDir: string;
+  private pgpassPath: string;
 
   constructor(googleDriveService?: GoogleDriveBackupService) {
     this.googleDriveService = googleDriveService;
     this.backupDir = path.join(process.cwd(), 'backups');
+    this.pgpassPath = path.join(process.cwd(), '.pgpass');
   }
 
   /**
@@ -39,6 +41,44 @@ export class DatabaseBackupService {
    */
   setGoogleDriveService(service: GoogleDriveBackupService) {
     this.googleDriveService = service;
+  }
+
+  /**
+   * Create .pgpass file for secure password handling
+   */
+  private async createPgpassFile(host: string, port: string, database: string, username: string, password: string): Promise<void> {
+    try {
+      // Format: hostname:port:database:username:password
+      const pgpassContent = `${host}:${port}:${database}:${username}:${password}\n`;
+      
+      // Set restrictive permissions (600 = rw-------)
+      await fs.writeFile(this.pgpassPath, pgpassContent, { mode: 0o600 });
+      
+      logger.debug(`[BACKUP] Created .pgpass file with secure permissions`, { 
+        path: this.pgpassPath,
+        host,
+        port,
+        database,
+        username: username.substring(0, 3) + '***'
+      });
+    } catch (error) {
+      const errorObj = error instanceof Error ? error : new Error(String(error));
+      logger.warn(`[BACKUP] Failed to create .pgpass file:`, { error: errorObj.message });
+      // Continue without .pgpass file, will use environment variables instead
+    }
+  }
+
+  /**
+   * Remove .pgpass file after use
+   */
+  private async removePgpassFile(): Promise<void> {
+    try {
+      await fs.unlink(this.pgpassPath);
+      logger.debug(`[BACKUP] Removed .pgpass file`);
+    } catch (error) {
+      // Ignore errors when removing .pgpass file
+      logger.debug(`[BACKUP] Could not remove .pgpass file (may not exist)`);
+    }
   }
 
   /**
@@ -74,21 +114,46 @@ export class DatabaseBackupService {
       const username = decodeURIComponent(url.username);
       const password = decodeURIComponent(url.password);
       
-      // Use pg_dump with individual parameters to avoid URL parsing issues
-      const pgDumpCommand = `PGPASSWORD="${password}" pg_dump --host="${host}" --port="${port}" --username="${username}" --dbname="${database}" --verbose --clean --no-acl --no-owner`;
+      // Create .pgpass file for secure password handling
+      await this.createPgpassFile(host, port, database, username, password);
       
-      logger.info(`[BACKUP] Executing pg_dump command`, { backupId, command: pgDumpCommand.replace(/\/\/.*:.*@/, '//***:***@') });
-      
-      const { stdout, stderr } = await execAsync(pgDumpCommand);
-      
-      if (stderr) {
-        logger.warn(`[BACKUP] pg_dump stderr output:`, { stderr, backupId });
+      try {
+        // Set environment variables for secure password handling
+        const env = {
+          ...process.env,
+          PGPASSWORD: password,
+          PGHOST: host,
+          PGPORT: port,
+          PGUSER: username,
+          PGDATABASE: database
+        };
+        
+        // Use pg_dump with individual parameters (password is now in environment variable)
+        const pgDumpCommand = `pg_dump --host="${host}" --port="${port}" --username="${username}" --dbname="${database}" --verbose --clean --no-acl --no-owner`;
+        
+        logger.info(`[BACKUP] Executing pg_dump command`, { 
+          backupId, 
+          command: pgDumpCommand,
+          host,
+          port,
+          database,
+          username: username.substring(0, 3) + '***' // Mask username in logs
+        });
+        
+        const { stdout, stderr } = await execAsync(pgDumpCommand, { env });
+        
+        if (stderr) {
+          logger.warn(`[BACKUP] pg_dump stderr output:`, { stderr, backupId });
+        }
+        
+        // Write backup to file
+        await fs.writeFile(filePath, stdout);
+        
+        logger.info(`[BACKUP] Backup file written successfully`, { backupId, filePath });
+      } finally {
+        // Always remove .pgpass file after use
+        await this.removePgpassFile();
       }
-      
-      // Write backup to file
-      await fs.writeFile(filePath, stdout);
-      
-      logger.info(`[BACKUP] Backup file written successfully`, { backupId, filePath });
 
       // Get file size
       const stats = await fs.stat(filePath);
@@ -116,7 +181,8 @@ export class DatabaseBackupService {
             logger.warn('[BACKUP] Google Drive not connected, skipping upload', { backupId });
           }
         } catch (error) {
-          logger.error(`[BACKUP] Google Drive upload failed:`, { error, backupId }, 'BACKUP');
+          const errorObj = error instanceof Error ? error : new Error(String(error));
+          logger.error(`[BACKUP] Google Drive upload failed:`, { error: errorObj, backupId }, 'BACKUP');
           // Continue without failing the entire backup
         }
       }
@@ -130,7 +196,11 @@ export class DatabaseBackupService {
 
       return result;
     } catch (error) {
-      logger.error(`[BACKUP] Backup creation failed:`, { error, backupId }, 'BACKUP');
+      const errorObj = error instanceof Error ? error : new Error(String(error));
+      logger.error(`[BACKUP] Backup creation failed:`, { error: errorObj, backupId }, 'BACKUP');
+      
+      // Ensure .pgpass file is removed even if backup fails
+      await this.removePgpassFile();
       
       return {
         id: backupId,
@@ -139,7 +209,7 @@ export class DatabaseBackupService {
         timestamp: new Date(),
         type: 'full',
         status: 'failed',
-        error: (error as Error).message,
+        error: errorObj.message,
       };
     }
   }
@@ -170,14 +240,44 @@ export class DatabaseBackupService {
       // Check if file exists
       await fs.access(backupPath);
 
-      // Restore database using psql with individual parameters
-      const restoreCommand = `PGPASSWORD="${password}" psql --host="${host}" --port="${port}" --username="${username}" --dbname="${database}" < "${backupPath}"`;
-      await execAsync(restoreCommand);
+      // Create .pgpass file for secure password handling
+      await this.createPgpassFile(host, port, database, username, password);
+      
+      try {
+        // Set environment variables for secure password handling
+        const env = {
+          ...process.env,
+          PGPASSWORD: password,
+          PGHOST: host,
+          PGPORT: port,
+          PGUSER: username,
+          PGDATABASE: database
+        };
+
+        // Restore database using psql with individual parameters (password is now in environment variable)
+        const restoreCommand = `psql --host="${host}" --port="${port}" --username="${username}" --dbname="${database}" < "${backupPath}"`;
+        
+        logger.info(`[BACKUP] Executing restore command`, { 
+          command: restoreCommand,
+          host,
+          port,
+          database,
+          username: username.substring(0, 3) + '***' // Mask username in logs
+        });
+        
+        await execAsync(restoreCommand, { env });
+      } finally {
+        // Always remove .pgpass file after use
+        await this.removePgpassFile();
+      }
 
       logger.info(`[BACKUP] Database restored successfully from: ${backupPath}`);
     } catch (error) {
-      logger.error(`[BACKUP] Restore failed:`, error);
-      throw error;
+      const errorObj = error instanceof Error ? error : new Error(String(error));
+      logger.error(`[BACKUP] Restore failed:`, errorObj);
+      // Ensure .pgpass file is removed even if restore fails
+      await this.removePgpassFile();
+      throw errorObj;
     }
   }
 
@@ -203,8 +303,9 @@ export class DatabaseBackupService {
       
       logger.info(`[BACKUP] Restored from Google Drive: ${fileId}`);
     } catch (error) {
-      logger.error(`[BACKUP] Google Drive restore failed:`, error);
-      throw error;
+      const errorObj = error instanceof Error ? error : new Error(String(error));
+      logger.error(`[BACKUP] Google Drive restore failed:`, errorObj);
+      throw errorObj;
     }
   }
 
@@ -244,7 +345,8 @@ export class DatabaseBackupService {
 
       return backups.sort((a, b) => b.created.getTime() - a.created.getTime());
     } catch (error) {
-      logger.error(`[BACKUP] List local backups failed:`, error);
+      const errorObj = error instanceof Error ? error : new Error(String(error));
+      logger.error(`[BACKUP] List local backups failed:`, errorObj);
       return [];
     }
   }
@@ -281,7 +383,8 @@ export class DatabaseBackupService {
         type: 'full' as const,
       }));
     } catch (error) {
-      logger.error(`[BACKUP] List Google Drive backups failed:`, error);
+      const errorObj = error instanceof Error ? error : new Error(String(error));
+      logger.error(`[BACKUP] List Google Drive backups failed:`, errorObj);
       return [];
     }
   }
@@ -294,8 +397,9 @@ export class DatabaseBackupService {
       await fs.unlink(filePath);
       logger.info(`[BACKUP] Local backup deleted: ${filePath}`);
     } catch (error) {
-      logger.error(`[BACKUP] Delete local backup failed:`, error);
-      throw error;
+      const errorObj = error instanceof Error ? error : new Error(String(error));
+      logger.error(`[BACKUP] Delete local backup failed:`, errorObj);
+      throw errorObj;
     }
   }
 
@@ -311,8 +415,9 @@ export class DatabaseBackupService {
       await this.googleDriveService.deleteBackup(fileId);
       logger.info(`[BACKUP] Google Drive backup deleted: ${fileId}`);
     } catch (error) {
-      logger.error(`[BACKUP] Delete Google Drive backup failed:`, error);
-      throw error;
+      const errorObj = error instanceof Error ? error : new Error(String(error));
+      logger.error(`[BACKUP] Delete Google Drive backup failed:`, errorObj);
+      throw errorObj;
     }
   }
 
@@ -335,7 +440,8 @@ export class DatabaseBackupService {
 
       logger.info(`[BACKUP] Cleaned ${toDelete.length} old local backups`);
     } catch (error) {
-      logger.error(`[BACKUP] Clean old backups failed:`, error);
+      const errorObj = error instanceof Error ? error : new Error(String(error));
+      logger.error(`[BACKUP] Clean old backups failed:`, errorObj);
     }
   }
 
@@ -368,7 +474,8 @@ export class DatabaseBackupService {
         lastBackupTime,
       };
     } catch (error) {
-      logger.error(`[BACKUP] Get backup stats failed:`, error);
+      const errorObj = error instanceof Error ? error : new Error(String(error));
+      logger.error(`[BACKUP] Get backup stats failed:`, errorObj);
       return {
         totalLocalBackups: 0,
         totalGoogleDriveBackups: 0,

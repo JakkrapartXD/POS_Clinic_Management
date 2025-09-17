@@ -133,7 +133,8 @@ export class BackupScheduler {
         });
       }
     } catch (error) {
-      logger.error('[SCHEDULER] Scheduled backup error:', error);
+      const errorObj = error instanceof Error ? error : new Error(String(error));
+      logger.error('[SCHEDULER] Scheduled backup error:', { error: errorObj }, 'SCHEDULER');
     }
   }
 
@@ -159,9 +160,8 @@ export class BackupScheduler {
             created: backup.created,
           });
         } catch (error) {
-          logger.error('[SCHEDULER] Failed to delete old local backup', error, {
-            backupId: backup.id,
-          });
+          const errorObj = error instanceof Error ? error : new Error(String(error));
+          logger.error('[SCHEDULER] Failed to delete old local backup', { backupId: backup.id, error: errorObj }, 'SCHEDULER');
         }
       }
 
@@ -179,9 +179,8 @@ export class BackupScheduler {
             created: backup.created,
           });
         } catch (error) {
-          logger.error('[SCHEDULER] Failed to delete old Google Drive backup', error, {
-            backupId: backup.id,
-          });
+          const errorObj = error instanceof Error ? error : new Error(String(error));
+          logger.error('[SCHEDULER] Failed to delete old Google Drive backup', { backupId: backup.id, error: errorObj }, 'SCHEDULER');
         }
       }
 
@@ -191,7 +190,8 @@ export class BackupScheduler {
         retentionDays: this.config.retentionDays,
       });
     } catch (error) {
-      logger.error('[SCHEDULER] Cleanup failed:', error);
+      const errorObj = error instanceof Error ? error : new Error(String(error));
+      logger.error('[SCHEDULER] Cleanup failed:', { error: errorObj }, 'SCHEDULER');
     }
   }
 

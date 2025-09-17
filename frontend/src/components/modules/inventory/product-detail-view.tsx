@@ -2245,7 +2245,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                   value={stockFormData.quantity}
                   onChange={(e) => handleStockFormChange('quantity', e.target.value)}
                   placeholder="กรอกจำนวนสต๊อก"
-                  className="border-purple-300 focus:border-teal-500"
+                  className="border-teal-300 focus:border-teal-500"
                 />
               </div>
               
