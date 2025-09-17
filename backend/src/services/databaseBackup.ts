@@ -66,8 +66,16 @@ export class DatabaseBackupService {
       // Clean up DATABASE_URL for pg_dump (remove Prisma-specific parameters)
       const cleanDbUrl = dbUrl.split('?')[0]; // Remove query parameters like ?schema=clinic_dev
       
-      // Use pg_dump to create backup
-      const pgDumpCommand = `pg_dump "${cleanDbUrl}" --verbose --clean --no-acl --no-owner`;
+      // Parse DATABASE_URL to extract components safely
+      const url = new URL(cleanDbUrl);
+      const host = url.hostname;
+      const port = url.port || '5432';
+      const database = url.pathname.substring(1); // Remove leading slash
+      const username = decodeURIComponent(url.username);
+      const password = decodeURIComponent(url.password);
+      
+      // Use pg_dump with individual parameters to avoid URL parsing issues
+      const pgDumpCommand = `PGPASSWORD="${password}" pg_dump --host="${host}" --port="${port}" --username="${username}" --dbname="${database}" --verbose --clean --no-acl --no-owner`;
       
       logger.info(`[BACKUP] Executing pg_dump command`, { backupId, command: pgDumpCommand.replace(/\/\/.*:.*@/, '//***:***@') });
       
@@ -150,12 +158,20 @@ export class DatabaseBackupService {
 
       // Clean up DATABASE_URL for psql (remove Prisma-specific parameters)
       const cleanDbUrl = dbUrl.split('?')[0];
+      
+      // Parse DATABASE_URL to extract components safely
+      const url = new URL(cleanDbUrl);
+      const host = url.hostname;
+      const port = url.port || '5432';
+      const database = url.pathname.substring(1); // Remove leading slash
+      const username = decodeURIComponent(url.username);
+      const password = decodeURIComponent(url.password);
 
       // Check if file exists
       await fs.access(backupPath);
 
-      // Restore database using psql
-      const restoreCommand = `psql "${cleanDbUrl}" < "${backupPath}"`;
+      // Restore database using psql with individual parameters
+      const restoreCommand = `PGPASSWORD="${password}" psql --host="${host}" --port="${port}" --username="${username}" --dbname="${database}" < "${backupPath}"`;
       await execAsync(restoreCommand);
 
       logger.info(`[BACKUP] Database restored successfully from: ${backupPath}`);

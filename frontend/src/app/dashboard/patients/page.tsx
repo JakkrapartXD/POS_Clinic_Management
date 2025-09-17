@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -34,7 +36,9 @@ import {
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { GraphQLAPI } from '@/clients/graphql';
-import AddPatientForm from '@/components/forms/AddPatientForm';
+const AddPatientForm = dynamic(() => import('@/components/forms/AddPatientForm'), {
+  ssr: false
+});
 import PageGuard from '@/components/guards/page-guard';
 
 interface Patient {
@@ -66,7 +70,8 @@ interface UpdatePatientInput extends CreatePatientInput {
   id: string;
 }
 
-export default function PatientsPage() {
+function PatientsPage() {
+  const router = useRouter();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -308,7 +313,7 @@ export default function PatientsPage() {
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => window.location.href = `/dashboard/patients/${patient.id}`}
+                    onClick={() => router.push(`/dashboard/patients/${patient.id}`)}
                     title="ดูรายละเอียด"
                   >
                     <Eye className="w-4 h-4" />
@@ -550,3 +555,7 @@ export default function PatientsPage() {
     </PageGuard>
   );
 }
+
+export default dynamic(() => Promise.resolve(PatientsPage), {
+  ssr: false
+});

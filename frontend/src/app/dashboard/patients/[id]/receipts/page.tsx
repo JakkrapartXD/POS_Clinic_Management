@@ -115,7 +115,7 @@ export default function PatientReceiptsPage() {
 
       if (response.orders?.orders) {
         // กรองเฉพาะ orders ของผู้ป่วยนี้
-        const patientOrders = response.orders.orders.filter(order => 
+        const patientOrders = response.orders.orders.filter((order: any) => 
           order.patient?.id === patientId
         )
         setOrders(patientOrders)

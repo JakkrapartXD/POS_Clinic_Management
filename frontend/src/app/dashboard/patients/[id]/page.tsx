@@ -83,7 +83,6 @@ export default function PatientDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isCreatingVisit, setIsCreatingVisit] = useState(false);
   const [isFetching, setIsFetching] = useState(false);
-  const [isMounted, setIsMounted] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [visitToDelete, setVisitToDelete] = useState<string | null>(null);
@@ -116,15 +115,27 @@ export default function PatientDetailPage() {
 
       console.log('Patient data fetched successfully:', patientResult.patient);
       console.log('Visits data fetched successfully:', visitsResult.patientVisits);
+      console.log('Full patient result:', patientResult);
+      console.log('Full visits result:', visitsResult);
+      console.log('About to set patient state with:', patientResult.patient);
 
-      // Only update state if component is still mounted
-      if (isMounted) {
-        setPatient(patientResult.patient);
-        setVisits(visitsResult.patientVisits || []);
+      // Check if patient exists
+      if (!patientResult.patient) {
+        throw new Error('Patient not found');
       }
+
+      // Update state
+      console.log('Setting patient state...');
+      setPatient(patientResult.patient);
+      setVisits(visitsResult.patientVisits || []);
+      console.log('Patient state set successfully');
 
     } catch (error: any) {
       console.error('Error fetching patient data:', error);
+      
+      // Set patient to null when there's an error
+      setPatient(null);
+      setVisits([]);
       
       // Handle rate limiting specifically
       if (error.message?.includes('Rate limit exceeded') || error.message?.includes('RATE_LIMITED')) {
@@ -140,10 +151,12 @@ export default function PatientDetailPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [patientId, isFetching, isMounted]);
+  }, [patientId, isFetching]);
 
   useEffect(() => {
-    if (patientId) {
+    if (patientId && patientId.trim() !== '') {
+      console.log('Patient ID received:', patientId);
+      
       // Clear any existing timeout
       if (fetchTimeoutRef.current) {
         clearTimeout(fetchTimeoutRef.current);
@@ -169,15 +182,12 @@ export default function PatientDetailPage() {
           clearTimeout(fetchTimeoutRef.current);
         }
       };
+    } else {
+      console.log('No valid patient ID provided');
+      setIsLoading(false);
     }
   }, [patientId, fetchPatientData]);
 
-  // Cleanup function to prevent memory leaks
-  useEffect(() => {
-    return () => {
-      setIsMounted(false);
-    };
-  }, []);
 
   const handleCreateVisit = async () => {
     try {
@@ -188,9 +198,8 @@ export default function PatientDetailPage() {
       
       toast.success('New visit created successfully!');
       
-      // Navigate to the visit detail page in the same window
-      // Use window.location to ensure it opens in the same window
-      window.location.href = `/dashboard/visits/${newVisit.id}`;
+      // Navigate to the visit detail page
+      router.push(`/dashboard/visits/${newVisit.id}`);
 
     } catch (error: any) {
       console.error('Error creating visit:', error);
@@ -251,18 +260,43 @@ export default function PatientDetailPage() {
     );
   }
 
-  if (!patient) {
+  if (!patient && !isLoading && !isFetching) {
     return (
       <div className="container mx-auto p-6">
         <div className="text-center py-12">
           <h2 className="text-2xl font-bold text-gray-900">Patient not found</h2>
           <p className="text-gray-600 mt-2">The patient you're looking for doesn't exist.</p>
+          <div className="mt-4 p-4 bg-gray-100 rounded-lg text-left max-w-md mx-auto">
+            <p className="text-sm text-gray-600">
+              <strong>Debug Info:</strong><br/>
+              Patient ID: {patientId || 'undefined'}<br/>
+              Loading: {isLoading ? 'true' : 'false'}<br/>
+              Fetching: {isFetching ? 'true' : 'false'}<br/>
+              Mounted: N/A
+            </p>
+          </div>
           <Button 
             onClick={() => router.back()} 
             className="mt-4"
           >
             Go Back
           </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!patient) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="animate-pulse space-y-6">
+          <div className="h-8 bg-gray-200 rounded w-1/3"></div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 space-y-4">
+              <div className="h-64 bg-gray-200 rounded"></div>
+            </div>
+            <div className="h-96 bg-gray-200 rounded"></div>
+          </div>
         </div>
       </div>
     );
@@ -303,7 +337,7 @@ export default function PatientDetailPage() {
         
         <div className="flex gap-2">
           <Button 
-            onClick={() => window.location.href = `/dashboard/patients/${patient.id}/receipts`}
+            onClick={() => router.push(`/dashboard/patients/${patient.id}/receipts`)}
             variant="outline"
             className="border-green-600 text-green-600 hover:bg-green-50"
           >
@@ -489,7 +523,7 @@ export default function PatientDetailPage() {
                     <div 
                       key={visit.id}
                       className="border rounded-lg p-3 hover:bg-gray-50 cursor-pointer"
-                      onClick={() => window.location.href = `/dashboard/visits/${visit.id}`}
+                      onClick={() => router.push(`/dashboard/visits/${visit.id}`)}
                     >
                       <div className="flex items-center justify-between mb-2">
                         <Badge className={statusColors[visit.status] || 'bg-gray-100 text-gray-800'}>
@@ -530,7 +564,7 @@ export default function PatientDetailPage() {
                             size="sm"
                             onClick={(e) => {
                               e.stopPropagation();
-                              window.location.href = `/dashboard/visits/${visit.id}`;
+                              router.push(`/dashboard/visits/${visit.id}`);
                             }}
                           >
                             <Eye className="w-3 h-3 mr-1" />

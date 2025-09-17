@@ -1950,8 +1950,8 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
           })
         }
       }}>
-        <DialogContent className="max-w-2xl bg-white">
-          <DialogHeader className="bg-white">
+        <DialogContent className="max-w-2xl max-h-[90vh] bg-white flex flex-col">
+          <DialogHeader className="bg-white flex-shrink-0">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <Button 
@@ -1977,7 +1977,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
             </p>
           </DialogHeader>
           
-          <div className="space-y-6 py-4 bg-white">
+          <div className="space-y-6 py-4 bg-white overflow-y-auto flex-1">
             {/* Form content */}
             {(() => {
               const variantToUpdate = isCreatingNewUnit ? null : productVariants?.find(v => v.sku === unitFormData.sku)
@@ -2172,7 +2172,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
             })()}
           </div>
 
-          <DialogFooter className="pt-4 border-t bg-white">
+          <DialogFooter className="pt-4 border-t bg-white flex-shrink-0">
             <div className="flex justify-between w-full">
               <div>
                 {/* Show delete button only for existing units with pack_size > 1 */}

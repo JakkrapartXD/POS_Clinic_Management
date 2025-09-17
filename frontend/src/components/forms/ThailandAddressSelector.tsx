@@ -67,8 +67,6 @@ export default function ThailandAddressSelector({
         <ThailandAddressTypeahead
           value={addressValue}
           onValueChange={handleValueChange}
-          disabled={disabled}
-          className="space-y-3"
         >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div className="space-y-1">
@@ -118,9 +116,7 @@ export default function ThailandAddressSelector({
           </div>
         </div>
 
-        <ThailandAddressTypeahead.Suggestion 
-          className="absolute top-full left-0 right-0 z-50 bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-y-auto mt-1"
-        />
+        <ThailandAddressTypeahead.Suggestion />
         </ThailandAddressTypeahead>
       </div>
     </div>
