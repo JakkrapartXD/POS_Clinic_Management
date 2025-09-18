@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'doctor' | 'staff' | 'cashier' | 'pharmacist'
+export type UserRole = 'admin' | 'doctor' | 'staff' | 'cashier' | 'pharmacist' | 'nurse'
 
 export interface MenuItem {
   id: string
@@ -21,6 +21,8 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
       'patients',
       'visits',
       'queue',
+      'queue/triage',
+      'queue/doctor',
       'documents',
       'users',
       'orders',
@@ -36,6 +38,8 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
       'patients',
       'visits',
       'queue', 
+      'queue/triage',
+      'queue/doctor',
       'documents',
       'users',
       'orders',
@@ -76,6 +80,8 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
       'patients',
       'visits',
       'queue',
+      'queue/triage',
+      'queue/doctor',
       'documents',
       'users'
     ],
@@ -86,6 +92,8 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
       'patients',
       'visits',
       'queue',
+      'queue/triage',
+      'queue/doctor',
       'documents',
       'users'
     ]
@@ -96,6 +104,8 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
       'patients',
       'visits',
       'queue',
+      'queue/triage',
+      'queue/doctor',
       'orders',
       'reports'
     ],
@@ -104,8 +114,24 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
       'patients',
       'visits',
       'queue', 
+      'queue/triage',
+      'queue/doctor',
       'orders',
       'reports'
+    ]
+  },
+  nurse: {
+    allowedPages: [
+      'notifications',
+      'patients',
+      'queue',
+      'queue/triage'
+    ],
+    menuItems: [
+      'notifications',
+      'patients',
+      'queue',
+      'queue/triage'
     ]
   }
 }

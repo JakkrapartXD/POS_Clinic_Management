@@ -143,5 +143,90 @@ export const clinicMutations = {
     } catch (error: any) {
       throw new Error(error.message);
     }
+  },
+
+  // Triage Queue Mutations
+  createTriageTicket: async (
+    _: any,
+    { patientId, priority = 0 }: { patientId: string; priority?: number },
+    context: any
+  ) => {
+    if (!context.isAuthenticated) {
+      throw new Error("Authentication required");
+    }
+
+    // Allow nurses, doctors, admin, and staff to create triage tickets
+    if (!["nurse", "doctor", "admin", "staff"].includes(context.user.role)) {
+      throw new Error("FORBIDDEN");
+    }
+
+    try {
+      return await clinicService.createTriageTicket(patientId, priority);
+    } catch (error: any) {
+      throw new Error(error.message);
+    }
+  },
+
+  queueCall: async (
+    _: any,
+    { ticketId }: { ticketId: string },
+    context: any
+  ) => {
+    if (!context.isAuthenticated) {
+      throw new Error("Authentication required");
+    }
+
+    // Allow nurses, doctors, admin, and staff to call triage tickets
+    if (!["nurse", "doctor", "admin", "staff"].includes(context.user.role)) {
+      throw new Error("FORBIDDEN");
+    }
+
+    try {
+      return await clinicService.callTriageTicket(ticketId, context.user.id);
+    } catch (error: any) {
+      throw new Error(error.message);
+    }
+  },
+
+  queueStart: async (
+    _: any,
+    { ticketId }: { ticketId: string },
+    context: any
+  ) => {
+    if (!context.isAuthenticated) {
+      throw new Error("Authentication required");
+    }
+
+    // Allow nurses, doctors, admin, and staff to start triage service
+    if (!["nurse", "doctor", "admin", "staff"].includes(context.user.role)) {
+      throw new Error("FORBIDDEN");
+    }
+
+    try {
+      return await clinicService.startTriageTicket(ticketId, context.user.id);
+    } catch (error: any) {
+      throw new Error(error.message);
+    }
+  },
+
+  queueComplete: async (
+    _: any,
+    { ticketId }: { ticketId: string },
+    context: any
+  ) => {
+    if (!context.isAuthenticated) {
+      throw new Error("Authentication required");
+    }
+
+    // Allow nurses, doctors, admin, and staff to complete triage service
+    if (!["nurse", "doctor", "admin", "staff"].includes(context.user.role)) {
+      throw new Error("FORBIDDEN");
+    }
+
+    try {
+      return await clinicService.completeTriageTicket(ticketId, context.user.id);
+    } catch (error: any) {
+      throw new Error(error.message);
+    }
   }
 };

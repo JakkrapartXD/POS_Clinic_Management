@@ -1115,6 +1115,85 @@ export const GraphQLQueries = {
             national_id
             phone
           }
+          vitals {
+            id
+            visitId
+            heightCm
+            weightKg
+            tempC
+            sbp
+            dbp
+            hr
+            rr
+            spo2
+            bmi
+            created_at
+          }
+        }
+      }
+    }
+  `,
+
+  // Triage Queue Query
+  GET_TRIAGE_QUEUE: `
+    query GetTriageQueue($status: QueueStatus, $skip: Int, $take: Int, $search: String) {
+      triageQueue(status: $status, skip: $skip, take: $take, search: $search) {
+        total
+        tickets {
+          id
+          number
+          status
+          station
+          patientId
+          priority
+          called_at
+          started_at
+          done_at
+          created_at
+          patient {
+            id
+            first_name
+            last_name
+            phone
+            email
+          }
+          visit {
+            id
+            status
+            chief_complaint
+          }
+          events {
+            id
+            status
+            at
+            byUserId
+            note
+          }
+        }
+      }
+    }
+  `,
+
+  // Patient Vitals Query
+  GET_PATIENT_VITALS: `
+    query GetPatientVitals($patientId: String!) {
+      patientVitals(patientId: $patientId) {
+        id
+        visitId
+        heightCm
+        weightKg
+        tempC
+        sbp
+        dbp
+        hr
+        rr
+        spo2
+        bmi
+        created_at
+        visit {
+          id
+          visit_date
+          chief_complaint
         }
       }
     }
@@ -1646,6 +1725,58 @@ export const GraphQLMutations = {
       }
     }
   `,
+
+  // Triage Queue Operations
+  CREATE_TRIAGE_TICKET: `
+    mutation CreateTriageTicket($patientId: ID!, $priority: Int) {
+      createTriageTicket(patientId: $patientId, priority: $priority) {
+        id
+        number
+        status
+        station
+        patientId
+        priority
+        created_at
+        patient {
+          id
+          first_name
+          last_name
+          phone
+          email
+        }
+      }
+    }
+  `,
+
+  QUEUE_CALL: `
+    mutation QueueCall($ticketId: ID!) {
+      queueCall(ticketId: $ticketId) {
+        id
+        status
+        called_at
+      }
+    }
+  `,
+
+  QUEUE_START: `
+    mutation QueueStart($ticketId: ID!) {
+      queueStart(ticketId: $ticketId) {
+        id
+        status
+        started_at
+      }
+    }
+  `,
+
+  QUEUE_COMPLETE: `
+    mutation QueueComplete($ticketId: ID!) {
+      queueComplete(ticketId: $ticketId) {
+        id
+        status
+        done_at
+      }
+    }
+  `,
 };
 
 // Typed GraphQL API functions
@@ -2092,5 +2223,40 @@ export const GraphQLAPI = {
   updateQueueStatus: (id: string, status: string, note?: string): Promise<{ updateQueueStatus: any }> =>
     graphqlClient.mutation(GraphQLMutations.UPDATE_QUEUE_STATUS, {
       variables: { id, status, note }
+    }),
+
+  // Triage Queue Operations
+  getTriageQueue: (variables?: { 
+    status?: string; 
+    skip?: number; 
+    take?: number; 
+    search?: string 
+  }): Promise<{ triageQueue: { total: number; tickets: any[] } }> =>
+    graphqlClient.query(GraphQLQueries.GET_TRIAGE_QUEUE, { variables }),
+
+  createTriageTicket: (patientId: string, priority?: number): Promise<{ createTriageTicket: any }> =>
+    graphqlClient.mutation(GraphQLMutations.CREATE_TRIAGE_TICKET, {
+      variables: { patientId, priority }
+    }),
+
+  queueCall: (ticketId: string): Promise<{ queueCall: any }> =>
+    graphqlClient.mutation(GraphQLMutations.QUEUE_CALL, {
+      variables: { ticketId }
+    }),
+
+  queueStart: (ticketId: string): Promise<{ queueStart: any }> =>
+    graphqlClient.mutation(GraphQLMutations.QUEUE_START, {
+      variables: { ticketId }
+    }),
+
+  queueComplete: (ticketId: string): Promise<{ queueComplete: any }> =>
+    graphqlClient.mutation(GraphQLMutations.QUEUE_COMPLETE, {
+      variables: { ticketId }
+    }),
+
+  // Patient Vitals
+  getPatientVitals: (patientId: string): Promise<{ patientVitals: any[] }> =>
+    graphqlClient.query(GraphQLQueries.GET_PATIENT_VITALS, {
+      variables: { patientId }
     }),
 }; 

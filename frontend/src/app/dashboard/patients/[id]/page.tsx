@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { CalendarDays, User, Phone, Mail, MapPin, Plus, Clock, Eye, CreditCard, Trash2 } from 'lucide-react';
+import { CalendarDays, User, Phone, Mail, MapPin, Plus, Clock, Eye, CreditCard, Trash2, ClipboardList } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { API_CONFIG } from "@/config/api"
@@ -39,38 +39,31 @@ interface Patient {
   created_at: string;
 }
 
-interface Visit {
+interface TriageTicket {
   id: string;
-  visit_date: string;
+  number: number;
   status: string;
-  chief_complaint?: string;
-  diagnosis?: string;
-  notes?: string;
-  vitals?: {
-    heightCm?: number;
-    weightKg?: number;
-    tempC?: number;
-    sbp?: number;
-    dbp?: number;
-    hr?: number;
-    spo2?: number;
-  };
-  queueTickets: Array<{
+  station: string;
+  patientId: string;
+  priority: number;
+  called_at?: string;
+  started_at?: string;
+  done_at?: string;
+  created_at: string;
+  patient: {
     id: string;
-    station: string;
-    status: string;
-    number: number;
-  }>;
+    first_name: string;
+    last_name: string;
+    phone?: string;
+    email?: string;
+  };
 }
 
-const statusColors: Record<string, string> = {
-  open: 'bg-blue-100 text-blue-800',
-  triage: 'bg-yellow-100 text-yellow-800',
-  doctor: 'bg-teal-100 text-teal-800',
-  pharmacy: 'bg-green-100 text-green-800',
-  cashier: 'bg-orange-100 text-orange-800',
-  done: 'bg-gray-100 text-gray-800',
-  cancelled: 'bg-red-100 text-red-800',
+const triageStatusColors: Record<string, string> = {
+  waiting: 'bg-blue-100 text-blue-800',
+  called: 'bg-yellow-100 text-yellow-800',
+  in_service: 'bg-teal-100 text-teal-800',
+  done: 'bg-green-100 text-green-800',
 };
 
 export default function PatientDetailPage() {
@@ -79,13 +72,10 @@ export default function PatientDetailPage() {
   const patientId = params.id as string;
   
   const [patient, setPatient] = useState<Patient | null>(null);
-  const [visits, setVisits] = useState<Visit[]>([]);
+  const [triageTickets, setTriageTickets] = useState<TriageTicket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isCreatingVisit, setIsCreatingVisit] = useState(false);
+  const [isCreatingTriage, setIsCreatingTriage] = useState(false);
   const [isFetching, setIsFetching] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [visitToDelete, setVisitToDelete] = useState<string | null>(null);
   const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastFetchTimeRef = useRef<number>(0);
 
@@ -107,16 +97,11 @@ export default function PatientDetailPage() {
       
       console.log('Fetching patient data for ID:', patientId, forceRefresh ? '(force refresh)' : '');
       
-      // Fetch patient details and visits using GraphQL API
-      const [patientResult, visitsResult] = await Promise.all([
-        GraphQLAPI.getPatient(patientId),
-        GraphQLAPI.getPatientVisits(patientId, { take: 10 })
-      ]);
+      // Fetch patient details using GraphQL API
+      const patientResult = await GraphQLAPI.getPatient(patientId);
 
       console.log('Patient data fetched successfully:', patientResult.patient);
-      console.log('Visits data fetched successfully:', visitsResult.patientVisits);
       console.log('Full patient result:', patientResult);
-      console.log('Full visits result:', visitsResult);
       console.log('About to set patient state with:', patientResult.patient);
 
       // Check if patient exists
@@ -127,7 +112,7 @@ export default function PatientDetailPage() {
       // Update state
       console.log('Setting patient state...');
       setPatient(patientResult.patient);
-      setVisits(visitsResult.patientVisits || []);
+      setTriageTickets([]); // No triage tickets to fetch for individual patient
       console.log('Patient state set successfully');
 
     } catch (error: any) {
@@ -135,7 +120,7 @@ export default function PatientDetailPage() {
       
       // Set patient to null when there's an error
       setPatient(null);
-      setVisits([]);
+      setTriageTickets([]);
       
       // Handle rate limiting specifically
       if (error.message?.includes('Rate limit exceeded') || error.message?.includes('RATE_LIMITED')) {
@@ -189,60 +174,30 @@ export default function PatientDetailPage() {
   }, [patientId, fetchPatientData]);
 
 
-  const handleCreateVisit = async () => {
+  const handleCreateTriage = async () => {
     try {
-      setIsCreatingVisit(true);
+      setIsCreatingTriage(true);
       
-      const result = await GraphQLAPI.createVisit({ patientId });
-      const newVisit = result.createVisit;
+      const result = await GraphQLAPI.createTriageTicket(patientId, 0);
+      const newTicket = result.createTriageTicket;
       
-      toast.success('New visit created successfully!');
+      toast.success('เพิ่มคิวคัดกรองสำเร็จ!');
       
-      // Navigate to the visit detail page
-      router.push(`/dashboard/visits/${newVisit.id}`);
+      // Navigate to the triage queue page
+      router.push('/queue/triage');
 
     } catch (error: any) {
-      console.error('Error creating visit:', error);
-      toast.error(error.message || 'Failed to create visit');
+      console.error('Error creating triage ticket:', error);
+      if (error.message?.includes('DUPLICATE_TRIAGE_TICKET_TODAY')) {
+        toast.error('ผู้ป่วยนี้มีคิวคัดกรองที่ยังไม่เสร็จในวันนี้แล้ว');
+      } else {
+        toast.error(error.message || 'ไม่สามารถเพิ่มคิวคัดกรองได้');
+      }
     } finally {
-      setIsCreatingVisit(false);
+      setIsCreatingTriage(false);
     }
   };
 
-  const handleDeleteVisit = async () => {
-    if (!visitToDelete) return;
-
-    try {
-      setIsDeleting(true);
-      
-      await GraphQLAPI.deleteVisit(visitToDelete);
-      toast.success('ลบการเยี่ยมสำเร็จ!');
-      
-      // Clear current data and refresh
-      setPatient(null);
-      setVisits([]);
-      setIsLoading(true);
-      
-      // Add small delay to ensure backend processing is complete
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Force refresh patient data to update visits list
-      await fetchPatientData(true);
-
-    } catch (error: any) {
-      console.error('Error deleting visit:', error);
-      toast.error(error.message || 'ลบการเยี่ยมไม่สำเร็จ');
-    } finally {
-      setIsDeleting(false);
-      setShowDeleteDialog(false);
-      setVisitToDelete(null);
-    }
-  };
-
-  const openDeleteDialog = (visitId: string) => {
-    setVisitToDelete(visitId);
-    setShowDeleteDialog(true);
-  };
 
   if (isLoading) {
     return (
@@ -345,12 +300,12 @@ export default function PatientDetailPage() {
             ดูประวัติการซื้อ
           </Button>
           <Button 
-            onClick={handleCreateVisit}
-            disabled={isCreatingVisit}
+            onClick={handleCreateTriage}
+            disabled={isCreatingTriage}
             className="bg-blue-600 hover:bg-blue-700"
           >
-            <Plus className="w-4 h-4 mr-2" />
-            {isCreatingVisit ? 'Creating...' : 'เริ่มรอบตรวจ'}
+            <ClipboardList className="w-4 h-4 mr-2" />
+            {isCreatingTriage ? 'กำลังเพิ่มคิว...' : 'เพิ่มคิวคัดกรอง'}
           </Button>
         </div>
       </div>
@@ -502,131 +457,47 @@ export default function PatientDetailPage() {
           </Card>
         </div>
 
-        {/* Recent Visits */}
+        {/* Quick Actions */}
         <div>
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span className="flex items-center gap-2">
-                  <Clock className="w-5 h-5" />
-                  Recent Visits
-                </span>
-                <Badge variant="secondary">{visits.length}</Badge>
+              <CardTitle className="flex items-center gap-2">
+                <ClipboardList className="w-5 h-5" />
+                การดำเนินการ
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              {visits.length === 0 ? (
-                <p className="text-gray-500 text-center py-8">No visits yet</p>
-              ) : (
-                <div className="space-y-3">
-                  {visits.slice(0, 5).map((visit) => (
-                    <div 
-                      key={visit.id}
-                      className="border rounded-lg p-3 hover:bg-gray-50 cursor-pointer"
-                      onClick={() => router.push(`/dashboard/visits/${visit.id}`)}
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <Badge className={statusColors[visit.status] || 'bg-gray-100 text-gray-800'}>
-                          {visit.status.toUpperCase()}
-                        </Badge>
-                        <span className="text-xs text-gray-500">
-                          {format(new Date(visit.visit_date), 'dd/MM/yyyy HH:mm')}
-                        </span>
-                      </div>
-                      
-                      {visit.chief_complaint && (
-                        <p className="text-sm text-gray-700 mb-1">
-                          <strong>Chief Complaint:</strong> {visit.chief_complaint}
-                        </p>
-                      )}
-                      
-                      {visit.diagnosis && (
-                        <p className="text-sm text-gray-700 mb-1">
-                          <strong>Diagnosis:</strong> {visit.diagnosis}
-                        </p>
-                      )}
-                      
-                      {visit.queueTickets.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-2">
-                          {visit.queueTickets.map((ticket) => (
-                            <Badge key={ticket.id} variant="outline" className="text-xs">
-                              {ticket.station} #{ticket.number}
-                            </Badge>
-                          ))}
-                        </div>
-                      )}
-                      
-                      <div className="flex items-center justify-between mt-2">
-                        <span className="text-xs text-gray-500">Visit ID: {visit.id.slice(-8)}</span>
-                        <div className="flex gap-1">
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              router.push(`/dashboard/visits/${visit.id}`);
-                            }}
-                          >
-                            <Eye className="w-3 h-3 mr-1" />
-                            View
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openDeleteDialog(visit.id);
-                            }}
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  
-                  {visits.length > 5 && (
-                    <Button variant="outline" className="w-full">
-                      View All Visits ({visits.length})
-                    </Button>
-                  )}
-                </div>
-              )}
+            <CardContent className="space-y-3">
+              <Button 
+                onClick={handleCreateTriage}
+                disabled={isCreatingTriage}
+                className="w-full bg-blue-600 hover:bg-blue-700"
+              >
+                <ClipboardList className="w-4 h-4 mr-2" />
+                {isCreatingTriage ? 'กำลังเพิ่มคิว...' : 'เพิ่มคิวคัดกรอง'}
+              </Button>
+              
+              <Button 
+                onClick={() => router.push('/queue/triage')}
+                variant="outline"
+                className="w-full"
+              >
+                <Clock className="w-4 h-4 mr-2" />
+                ดูคิวคัดกรอง
+              </Button>
+              
+              <Button 
+                onClick={() => router.push(`/dashboard/patients/${patient.id}/receipts`)}
+                variant="outline"
+                className="w-full"
+              >
+                <CreditCard className="w-4 h-4 mr-2" />
+                ดูประวัติการซื้อ
+              </Button>
             </CardContent>
           </Card>
         </div>
       </div>
 
-      {/* Delete Confirmation Dialog */}
-      {showDeleteDialog && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              ยืนยันการลบการเยี่ยม
-            </h3>
-            <p className="text-gray-600 mb-6">
-              คุณแน่ใจหรือไม่ว่าต้องการลบการเยี่ยมนี้? การดำเนินการนี้ไม่สามารถย้อนกลับได้
-            </p>
-            <div className="flex gap-3 justify-end">
-              <Button
-                variant="outline"
-                onClick={() => setShowDeleteDialog(false)}
-                disabled={isDeleting}
-              >
-                ยกเลิก
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={handleDeleteVisit}
-                disabled={isDeleting}
-              >
-                {isDeleting ? 'กำลังลบ...' : 'ลบ'}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
     </PageGuard>
   );

@@ -437,7 +437,8 @@ model Visit {
 }
 
 model Vitals {
-  visitId   String @id
+  id        String @id @default(cuid())
+  visitId   String @unique
   heightCm  Float?
   weightKg  Float?
   tempC     Float?
@@ -456,7 +457,7 @@ model Vitals {
 
 model QueueTicket {
   id         String      @id @default(cuid())
-  visitId    String
+  visitId    String?     // Made optional to support triage-only tickets
   patientId  String
   number     Int
   station    QueueStation
@@ -469,7 +470,7 @@ model QueueTicket {
   updated_at DateTime    @updatedAt
 
   // Relations
-  visit   Visit        @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  visit   Visit?       @relation(fields: [visitId], references: [id], onDelete: SetNull)
   patient Patient      @relation(fields: [patientId], references: [id])
   events  QueueEvent[]
 

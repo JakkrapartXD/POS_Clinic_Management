@@ -198,5 +198,54 @@ export const clinicQueries = {
     } catch (error: any) {
       throw new Error(error.message);
     }
+  },
+
+  // Triage Queue Query
+  triageQueue: async (
+    _: any,
+    { status, skip = 0, take = 50, search }: { status?: string; skip?: number; take?: number; search?: string },
+    context: any
+  ) => {
+    if (!context.isAuthenticated) {
+      throw new Error("Authentication required");
+    }
+
+    // Allow nurses, doctors, admin, and staff to access triage queue
+    if (!["nurse", "doctor", "admin", "staff"].includes(context.user.role)) {
+      throw new Error("FORBIDDEN");
+    }
+
+    try {
+      return await clinicService.getTriageQueue({
+        status: status as any,
+        skip,
+        take,
+        search
+      });
+    } catch (error: any) {
+      throw new Error(error.message);
+    }
+  },
+
+  // Patient Vitals Query
+  patientVitals: async (
+    _: any,
+    { patientId }: { patientId: string },
+    context: any
+  ) => {
+    if (!context.isAuthenticated) {
+      throw new Error("Authentication required");
+    }
+
+    // Allow nurses, doctors, admin, and staff to access patient vitals
+    if (!["nurse", "doctor", "admin", "staff"].includes(context.user.role)) {
+      throw new Error("FORBIDDEN");
+    }
+
+    try {
+      return await clinicService.getPatientVitals(patientId);
+    } catch (error: any) {
+      throw new Error(error.message);
+    }
   }
 };
