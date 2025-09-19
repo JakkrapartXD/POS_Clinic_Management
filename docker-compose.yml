@@ -50,7 +50,7 @@ services:
 
   pgadmin:
     image: dpage/pgadmin4
-    restart: always
+    # restart: always
     env_file:
       - .env
     ports:

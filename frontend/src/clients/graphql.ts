@@ -1101,20 +1101,24 @@ export const GraphQLQueries = {
         station
         status
         priority
+        patientId
         called_at
         started_at
         done_at
         created_at
+        patient {
+          id
+          first_name
+          last_name
+          phone
+          email
+        }
         visit {
           id
+          status
           chief_complaint
-          patient {
-            id
-            first_name
-            last_name
-            national_id
-            phone
-          }
+          diagnosis
+          notes
           vitals {
             id
             visitId
@@ -1129,6 +1133,13 @@ export const GraphQLQueries = {
             bmi
             created_at
           }
+        }
+        events {
+          id
+          status
+          at
+          byUserId
+          note
         }
       }
     }
@@ -1777,6 +1788,30 @@ export const GraphQLMutations = {
       }
     }
   `,
+
+  // Appointment Mutations
+  CREATE_APPOINTMENT: `
+    mutation CreateAppointment($input: CreateAppointmentInput!) {
+      createAppointment(input: $input) {
+        id
+        appointment_time
+        status
+        reason
+        created_at
+        updated_at
+        patient {
+          id
+          first_name
+          last_name
+          phone
+        }
+        doctor {
+          id
+          username
+        }
+      }
+    }
+  `,
 };
 
 // Typed GraphQL API functions
@@ -2252,6 +2287,18 @@ export const GraphQLAPI = {
   queueComplete: (ticketId: string): Promise<{ queueComplete: any }> =>
     graphqlClient.mutation(GraphQLMutations.QUEUE_COMPLETE, {
       variables: { ticketId }
+    }),
+
+  // Appointment Operations
+  createAppointment: (input: {
+    patientId: string;
+    doctorId: string;
+    appointment_time: string;
+    reason?: string;
+    status?: string;
+  }): Promise<{ createAppointment: any }> =>
+    graphqlClient.mutation(GraphQLMutations.CREATE_APPOINTMENT, {
+      variables: { input }
     }),
 
   // Patient Vitals

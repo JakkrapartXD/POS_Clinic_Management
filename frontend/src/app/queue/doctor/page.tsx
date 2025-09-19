@@ -26,7 +26,8 @@ import {
   Zap,
   User,
   FileText,
-  Search
+  Search,
+  Save
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -97,6 +98,17 @@ export default function DoctorQueuePage() {
   // Vitals modal states
   const [isVitalsModalOpen, setIsVitalsModalOpen] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<DoctorTicket | null>(null);
+  
+  // Doctor consultation modal states
+  const [isConsultationModalOpen, setIsConsultationModalOpen] = useState(false);
+  const [consultationForm, setConsultationForm] = useState({
+    chief_complaint: '',
+    diagnosis: '',
+    notes: '',
+    next_appointment_date: '',
+    next_appointment_reason: ''
+  });
+  const [isSavingConsultation, setIsSavingConsultation] = useState(false);
 
   useEffect(() => {
     fetchDoctorQueue();
@@ -176,6 +188,100 @@ export default function DoctorQueuePage() {
   const openVitalsModal = (ticket: DoctorTicket) => {
     setSelectedTicket(ticket);
     setIsVitalsModalOpen(true);
+  };
+
+  const openConsultationModal = (ticket: DoctorTicket) => {
+    setSelectedTicket(ticket);
+    // Pre-fill form with existing data if available
+    setConsultationForm({
+      chief_complaint: ticket.visit?.chief_complaint || '',
+      diagnosis: ticket.visit?.diagnosis || '',
+      notes: ticket.visit?.notes || '',
+      next_appointment_date: '',
+      next_appointment_reason: ''
+    });
+    setIsConsultationModalOpen(true);
+  };
+
+  const handleSaveConsultation = async () => {
+    if (!selectedTicket?.visit) {
+      toast.error('No visit found for this ticket');
+      return;
+    }
+
+    console.log('Selected ticket:', selectedTicket);
+    console.log('Patient ID:', selectedTicket.patientId);
+
+    try {
+      setIsSavingConsultation(true);
+      
+      // Update visit with consultation data
+      await GraphQLAPI.updateVisit(selectedTicket.visit.id, {
+        chief_complaint: consultationForm.chief_complaint,
+        diagnosis: consultationForm.diagnosis,
+        notes: consultationForm.notes
+      });
+      
+      // Create next appointment if date and reason are provided
+      if (consultationForm.next_appointment_date && consultationForm.next_appointment_reason) {
+        try {
+          // Get current user to use as doctor
+          const currentUser = await GraphQLAPI.getCurrentUser();
+          
+          console.log('Current user:', currentUser.me);
+          console.log('User role:', currentUser.me.role);
+          
+          // Set time to 9:00 AM for the appointment date
+          const appointmentDate = new Date(consultationForm.next_appointment_date);
+          appointmentDate.setHours(9, 0, 0, 0); // 9:00 AM
+          
+          const patientId = selectedTicket.patientId || selectedTicket.patient?.id;
+          
+          console.log('Creating appointment with:', {
+            patientId: patientId,
+            doctorId: currentUser.me.id,
+            userRole: currentUser.me.role,
+            appointment_time: appointmentDate.toISOString(),
+            reason: consultationForm.next_appointment_reason
+          });
+          
+          if (!patientId) {
+            throw new Error('Patient ID is missing');
+          }
+          
+          await GraphQLAPI.createAppointment({
+            patientId: patientId,
+            doctorId: currentUser.me.id,
+            appointment_time: appointmentDate.toISOString(),
+            reason: consultationForm.next_appointment_reason
+          });
+          toast.success('บันทึกข้อมูลการตรวจและนัดหมายครั้งต่อไปสำเร็จ!');
+        } catch (appointmentError: any) {
+          console.error('Error creating appointment:', appointmentError);
+          toast.error('บันทึกข้อมูลการตรวจสำเร็จ แต่ไม่สามารถสร้างนัดหมายได้');
+        }
+      } else {
+        toast.success('บันทึกข้อมูลการตรวจสำเร็จ!');
+      }
+      
+      // Close modal and refresh data
+      setIsConsultationModalOpen(false);
+      setSelectedTicket(null);
+      setConsultationForm({
+        chief_complaint: '',
+        diagnosis: '',
+        notes: '',
+        next_appointment_date: '',
+        next_appointment_reason: ''
+      });
+      fetchDoctorQueue();
+
+    } catch (error: any) {
+      console.error('Error saving consultation:', error);
+      toast.error(error.message || 'ไม่สามารถบันทึกข้อมูลการตรวจได้');
+    } finally {
+      setIsSavingConsultation(false);
+    }
   };
 
   const getStatusCounts = (tickets: DoctorTicket[]) => {
@@ -285,15 +391,26 @@ export default function DoctorQueuePage() {
             {ticket.status === 'in_service' && (
               <>
                 {ticket.visit && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => openVitalsModal(ticket)}
-                    className="border-blue-600 text-blue-600 hover:bg-blue-50"
-                  >
-                    <Stethoscope className="w-3 h-3 mr-1" />
-                    View Vitals
-                  </Button>
+                  <>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => openVitalsModal(ticket)}
+                      className="border-blue-600 text-blue-600 hover:bg-blue-50"
+                    >
+                      <Stethoscope className="w-3 h-3 mr-1" />
+                      View Vitals
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => openConsultationModal(ticket)}
+                      className="border-purple-600 text-purple-600 hover:bg-purple-50"
+                    >
+                      <FileText className="w-3 h-3 mr-1" />
+                      บันทึกการตรวจ
+                    </Button>
+                  </>
                 )}
                 <Button
                   size="sm"
@@ -567,6 +684,113 @@ export default function DoctorQueuePage() {
                 </Button>
               </div>
             )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Doctor Consultation Modal */}
+        <Dialog open={isConsultationModalOpen} onOpenChange={setIsConsultationModalOpen}>
+          <DialogContent className="sm:max-w-2xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <FileText className="w-5 h-5" />
+                บันทึกการตรวจ - {selectedTicket?.patient?.first_name} {selectedTicket?.patient?.last_name}
+              </DialogTitle>
+            </DialogHeader>
+            
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="chief_complaint" className="text-sm font-medium">
+                  อาการสำคัญ (Chief Complaint)
+                </Label>
+                <Textarea
+                  id="chief_complaint"
+                  placeholder="กรุณาระบุอาการสำคัญที่ผู้ป่วยมาพบแพทย์..."
+                  value={consultationForm.chief_complaint}
+                  onChange={(e) => setConsultationForm(prev => ({ ...prev, chief_complaint: e.target.value }))}
+                  className="mt-1"
+                  rows={3}
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="diagnosis" className="text-sm font-medium">
+                  การวินิจฉัย (Diagnosis)
+                </Label>
+                <Textarea
+                  id="diagnosis"
+                  placeholder="กรุณาระบุการวินิจฉัยโรค..."
+                  value={consultationForm.diagnosis}
+                  onChange={(e) => setConsultationForm(prev => ({ ...prev, diagnosis: e.target.value }))}
+                  className="mt-1"
+                  rows={3}
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="notes" className="text-sm font-medium">
+                  แผนการรักษา (Treatment Plan)
+                </Label>
+                <Textarea
+                  id="notes"
+                  placeholder="กรุณาระบุแผนการรักษา แนวทางการให้ยา และคำแนะนำ..."
+                  value={consultationForm.notes}
+                  onChange={(e) => setConsultationForm(prev => ({ ...prev, notes: e.target.value }))}
+                  className="mt-1"
+                  rows={4}
+                />
+              </div>
+              
+              {/* Next Appointment Section */}
+              <div className="border-t pt-4">
+                <h4 className="text-sm font-medium text-gray-900 mb-3">นัดหมายครั้งต่อไป (ถ้ามี)</h4>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="next_appointment_date" className="text-sm font-medium">
+                      วันที่นัดหมาย
+                    </Label>
+                    <Input
+                      id="next_appointment_date"
+                      type="date"
+                      value={consultationForm.next_appointment_date}
+                      onChange={(e) => setConsultationForm(prev => ({ ...prev, next_appointment_date: e.target.value }))}
+                      className="mt-1"
+                    />
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="next_appointment_reason" className="text-sm font-medium">
+                      เหตุผลการนัดหมาย
+                    </Label>
+                    <Input
+                      id="next_appointment_reason"
+                      placeholder="เช่น ติดตามผลการรักษา, ตรวจเลือด..."
+                      value={consultationForm.next_appointment_reason}
+                      onChange={(e) => setConsultationForm(prev => ({ ...prev, next_appointment_reason: e.target.value }))}
+                      className="mt-1"
+                    />
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex gap-2 pt-4">
+                <Button
+                  onClick={handleSaveConsultation}
+                  disabled={isSavingConsultation}
+                  className="flex-1 bg-purple-600 hover:bg-purple-700"
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  {isSavingConsultation ? 'กำลังบันทึก...' : 'บันทึกการตรวจ'}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setIsConsultationModalOpen(false)}
+                  disabled={isSavingConsultation}
+                >
+                  ยกเลิก
+                </Button>
+              </div>
+            </div>
           </DialogContent>
         </Dialog>
       </div>
