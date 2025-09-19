@@ -107,6 +107,8 @@ export default function TriageQueuePage() {
     spo2: ''
   });
   const [isSavingVitals, setIsSavingVitals] = useState(false);
+  const [existingVitals, setExistingVitals] = useState<any>(null);
+  const [isLoadingVitals, setIsLoadingVitals] = useState(false);
 
   useEffect(() => {
     fetchTriageQueue();
@@ -232,10 +234,27 @@ export default function TriageQueuePage() {
     }
   };
 
-  const openVitalsModal = (ticket: TriageTicket) => {
+  const fetchExistingVitals = async (visitId: string) => {
+    try {
+      setIsLoadingVitals(true);
+      const result = await GraphQLAPI.getVisit(visitId);
+      return {
+        vitals: result.visit?.vitals || null,
+        queueTickets: result.visit?.queueTickets || []
+      };
+    } catch (error: any) {
+      console.error('Error fetching existing vitals:', error);
+      return { vitals: null, queueTickets: [] };
+    } finally {
+      setIsLoadingVitals(false);
+    }
+  };
+
+  const openVitalsModal = async (ticket: TriageTicket) => {
     setSelectedTicket(ticket);
     setIsVitalsModalOpen(true);
-    // Reset form
+    
+    // Reset form first
     setVitalsForm({
       heightCm: '',
       weightKg: '',
@@ -246,6 +265,35 @@ export default function TriageQueuePage() {
       rr: '',
       spo2: ''
     });
+    setExistingVitals(null);
+    
+    // Fetch existing vitals if visit exists
+    if (ticket.visit?.id) {
+      const existingData = await fetchExistingVitals(ticket.visit.id);
+      if (existingData.vitals) {
+        // Only set existingVitals if there are actual vitals data
+        setExistingVitals({
+          ...existingData.vitals,
+          queueTickets: existingData.queueTickets
+        });
+        // Populate form with existing data
+        setVitalsForm({
+          heightCm: existingData.vitals.heightCm?.toString() || '',
+          weightKg: existingData.vitals.weightKg?.toString() || '',
+          tempC: existingData.vitals.tempC?.toString() || '',
+          sbp: existingData.vitals.sbp?.toString() || '',
+          dbp: existingData.vitals.dbp?.toString() || '',
+          hr: existingData.vitals.hr?.toString() || '',
+          rr: existingData.vitals.rr?.toString() || '',
+          spo2: existingData.vitals.spo2?.toString() || ''
+        });
+      } else {
+        // If no vitals but we have queue tickets, store only queue tickets for later use
+        setExistingVitals({
+          queueTickets: existingData.queueTickets
+        });
+      }
+    }
   };
 
   const handleSaveVitals = async () => {
@@ -273,13 +321,30 @@ export default function TriageQueuePage() {
       await GraphQLAPI.upsertVitals(vitalsData);
       toast.success('Vitals saved successfully!');
       
-      // Create doctor queue ticket
-      await GraphQLAPI.createQueueTicket({
-        visitId: selectedTicket.visit.id,
-        station: 'doctor'
-      });
+      // Check if doctor queue ticket already exists
+      const hasDoctorQueueTicket = existingVitals?.queueTickets?.some(
+        (ticket: any) => ticket.station === 'doctor' && ticket.status !== 'done' && ticket.status !== 'cancelled'
+      );
       
-      toast.success('Patient sent to doctor queue for SOAP assessment');
+      if (!hasDoctorQueueTicket) {
+        // Create doctor queue ticket only if it doesn't exist
+        try {
+          await GraphQLAPI.createQueueTicket({
+            visitId: selectedTicket.visit.id,
+            station: 'doctor'
+          });
+          toast.success('Patient sent to doctor queue for SOAP assessment');
+        } catch (error: any) {
+          // If ticket already exists (race condition), that's fine
+          if (error.message?.includes('Active queue ticket already exists')) {
+            toast.success('Vitals updated successfully! Patient is already in doctor queue');
+          } else {
+            throw error; // Re-throw if it's a different error
+          }
+        }
+      } else {
+        toast.success('Vitals updated successfully! Patient is already in doctor queue');
+      }
       
       // Close modal and refresh data
       setIsVitalsModalOpen(false);
@@ -633,10 +698,31 @@ export default function TriageQueuePage() {
             <DialogTitle className="flex items-center gap-2">
               <Activity className="w-5 h-5" />
               บันทึกสัญญาณชีพ - {selectedTicket?.patient.first_name} {selectedTicket?.patient.last_name}
+              {existingVitals && existingVitals.heightCm && (
+                <Badge variant="outline" className="ml-2 text-green-600 border-green-600">
+                  มีข้อมูลแล้ว
+                </Badge>
+              )}
             </DialogTitle>
           </DialogHeader>
           
           <div className="space-y-4">
+            {isLoadingVitals && (
+              <div className="flex items-center justify-center py-4">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-2"></div>
+                <span className="text-sm text-gray-600">กำลังโหลดข้อมูลสัญญาณชีพ...</span>
+              </div>
+            )}
+            
+            {existingVitals && existingVitals.heightCm && !isLoadingVitals && (
+              <div className="bg-green-50 border border-green-200 rounded-md p-3">
+                <p className="text-sm text-green-800">
+                  <CheckCircle className="w-4 h-4 inline mr-1" />
+                  พบข้อมูลสัญญาณชีพที่บันทึกไว้แล้ว สามารถแก้ไขได้
+                </p>
+              </div>
+            )}
+            
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="heightCm" className="flex items-center gap-1">
@@ -746,16 +832,18 @@ export default function TriageQueuePage() {
             <div className="flex gap-2 pt-4">
               <Button
                 onClick={handleSaveVitals}
-                disabled={isSavingVitals}
+                disabled={isSavingVitals || isLoadingVitals}
                 className="flex-1 bg-blue-600 hover:bg-blue-700"
               >
                 <Save className="w-4 h-4 mr-2" />
-                {isSavingVitals ? 'Saving...' : 'บันทึกสัญญาณชีพ & ส่งคิวหมอ'}
+                {isSavingVitals ? 'กำลังบันทึก...' : 
+                 (existingVitals && existingVitals.heightCm) ? 'อัปเดตสัญญาณชีพ & ส่งคิวหมอ' : 
+                 'บันทึกสัญญาณชีพ & ส่งคิวหมอ'}
               </Button>
               <Button
                 variant="outline"
                 onClick={() => setIsVitalsModalOpen(false)}
-                disabled={isSavingVitals}
+                disabled={isSavingVitals || isLoadingVitals}
               >
                 ยกเลิก
               </Button>

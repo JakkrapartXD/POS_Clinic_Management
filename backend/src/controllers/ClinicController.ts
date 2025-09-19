@@ -67,7 +67,8 @@ const updateVisitModel = t.Object({
   ])),
   chief_complaint: t.Optional(t.String()),
   diagnosis: t.Optional(t.String()),
-  notes: t.Optional(t.String())
+  notes: t.Optional(t.String()),
+  appointmentId: t.Optional(t.String())
 });
 
 // Authentication middleware

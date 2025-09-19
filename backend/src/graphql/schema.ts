@@ -1010,6 +1010,7 @@ export const typeDefs = /* GraphQL */ `
     chief_complaint: String
     diagnosis: String
     notes: String
+    appointmentId: String
   }
 
   input UpsertVitalsInput {

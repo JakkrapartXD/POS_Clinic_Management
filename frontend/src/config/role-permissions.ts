@@ -23,6 +23,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
       'queue',
       'queue/triage',
       'queue/doctor',
+      'queue/cashier',
       'documents',
       'users',
       'orders',
@@ -40,6 +41,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
       'queue', 
       'queue/triage',
       'queue/doctor',
+      'queue/cashier',
       'documents',
       'users',
       'orders',
@@ -52,12 +54,16 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
     allowedPages: [
       'notifications',
       'pos',
-      'inventory'
+      'inventory',
+      'queue/cashier',
+      'orders'
     ],
     menuItems: [
       'notifications',
       'pos',
-      'inventory'
+      'inventory',
+      'queue/cashier',
+      'orders'
     ]
   },
   pharmacist: {

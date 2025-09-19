@@ -104,6 +104,7 @@ export default function Sidebar() {
     { id: "queue", icon: ClipboardList, href: "/dashboard/queue", label: "คิวทั่วไป" },
     { id: "queue/triage", icon: ClipboardList, href: "/queue/triage", label: "คิวคัดกรอง" },
     { id: "queue/doctor", icon: ClipboardList, href: "/queue/doctor", label: "คิวหมอ" },
+    { id: "queue/cashier", icon: ClipboardList, href: "/queue/cashier", label: "คิวแคชเชียร์" },
     { id: "documents", icon: LayoutGrid, href: "/dashboard/documents", label: "เอกสาร" },
     { id: "users", icon: Users, href: "/dashboard/users", label: "ผู้ใช้งาน" },
     { id: "orders", icon: Receipt, href: "/dashboard/orders", label: "ใบเสร็จรับเงินวันนี้" },

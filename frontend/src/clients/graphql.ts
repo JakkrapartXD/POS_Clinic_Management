@@ -1053,6 +1053,17 @@ export const GraphQLQueries = {
           phone
           email
         }
+        appointment {
+          id
+          appointment_time
+          reason
+          status
+          doctor {
+            id
+            username
+            email
+          }
+        }
         vitals {
           visitId
           heightCm
@@ -2212,7 +2223,7 @@ export const GraphQLAPI = {
       variables: { input }
     }),
 
-  updateVisit: (id: string, input: { chief_complaint?: string; diagnosis?: string; notes?: string }): Promise<{ updateVisit: any }> =>
+  updateVisit: (id: string, input: { chief_complaint?: string; diagnosis?: string; notes?: string; appointmentId?: string }): Promise<{ updateVisit: any }> =>
     graphqlClient.mutation(GraphQLMutations.UPDATE_VISIT, {
       variables: { id, input }
     }),

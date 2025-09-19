@@ -14,6 +14,7 @@ export interface UpdateVisitInput {
   chief_complaint?: string;
   diagnosis?: string;
   notes?: string;
+  appointmentId?: string;
 }
 
 export interface UpsertVitalsInput {

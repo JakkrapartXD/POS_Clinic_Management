@@ -109,6 +109,8 @@ export default function DoctorQueuePage() {
     next_appointment_reason: ''
   });
   const [isSavingConsultation, setIsSavingConsultation] = useState(false);
+  const [existingConsultation, setExistingConsultation] = useState<any>(null);
+  const [isLoadingConsultation, setIsLoadingConsultation] = useState(false);
 
   useEffect(() => {
     fetchDoctorQueue();
@@ -185,22 +187,64 @@ export default function DoctorQueuePage() {
     }
   };
 
+  const fetchExistingConsultation = async (visitId: string) => {
+    try {
+      setIsLoadingConsultation(true);
+      const result = await GraphQLAPI.getVisit(visitId);
+      return result.visit || null;
+    } catch (error: any) {
+      console.error('Error fetching existing consultation:', error);
+      return null;
+    } finally {
+      setIsLoadingConsultation(false);
+    }
+  };
+
   const openVitalsModal = (ticket: DoctorTicket) => {
     setSelectedTicket(ticket);
     setIsVitalsModalOpen(true);
   };
 
-  const openConsultationModal = (ticket: DoctorTicket) => {
+  const openConsultationModal = async (ticket: DoctorTicket) => {
     setSelectedTicket(ticket);
-    // Pre-fill form with existing data if available
+    setIsConsultationModalOpen(true);
+    
+    // Reset form first
     setConsultationForm({
-      chief_complaint: ticket.visit?.chief_complaint || '',
-      diagnosis: ticket.visit?.diagnosis || '',
-      notes: ticket.visit?.notes || '',
+      chief_complaint: '',
+      diagnosis: '',
+      notes: '',
       next_appointment_date: '',
       next_appointment_reason: ''
     });
-    setIsConsultationModalOpen(true);
+    setExistingConsultation(null);
+    
+    // Fetch existing consultation data if visit exists
+    if (ticket.visit?.id) {
+      const existingData = await fetchExistingConsultation(ticket.visit.id);
+      if (existingData) {
+        setExistingConsultation(existingData);
+        
+        // Format appointment date for input field
+        let appointmentDate = '';
+        let appointmentReason = '';
+        
+        if (existingData.appointment) {
+          const appointmentTime = new Date(existingData.appointment.appointment_time);
+          appointmentDate = appointmentTime.toISOString().split('T')[0]; // YYYY-MM-DD format
+          appointmentReason = existingData.appointment.reason || '';
+        }
+        
+        // Populate form with existing data
+        setConsultationForm({
+          chief_complaint: existingData.chief_complaint || '',
+          diagnosis: existingData.diagnosis || '',
+          notes: existingData.notes || '',
+          next_appointment_date: appointmentDate,
+          next_appointment_reason: appointmentReason
+        });
+      }
+    }
   };
 
   const handleSaveConsultation = async () => {
@@ -215,15 +259,30 @@ export default function DoctorQueuePage() {
     try {
       setIsSavingConsultation(true);
       
-      // Update visit with consultation data
-      await GraphQLAPI.updateVisit(selectedTicket.visit.id, {
-        chief_complaint: consultationForm.chief_complaint,
-        diagnosis: consultationForm.diagnosis,
-        notes: consultationForm.notes
-      });
+      // Check if consultation data has changed
+      const hasDataChanged = 
+        existingConsultation?.chief_complaint !== consultationForm.chief_complaint ||
+        existingConsultation?.diagnosis !== consultationForm.diagnosis ||
+        existingConsultation?.notes !== consultationForm.notes;
       
-      // Create next appointment if date and reason are provided
-      if (consultationForm.next_appointment_date && consultationForm.next_appointment_reason) {
+      // Check if appointment data has changed
+      const hasAppointmentChanged = 
+        consultationForm.next_appointment_date && consultationForm.next_appointment_reason &&
+        (!existingConsultation?.appointment || 
+         existingConsultation.appointment.reason !== consultationForm.next_appointment_reason ||
+         new Date(existingConsultation.appointment.appointment_time).toISOString().split('T')[0] !== consultationForm.next_appointment_date);
+      
+      // Update visit with consultation data only if data has changed
+      if (hasDataChanged || !existingConsultation) {
+        await GraphQLAPI.updateVisit(selectedTicket.visit.id, {
+          chief_complaint: consultationForm.chief_complaint,
+          diagnosis: consultationForm.diagnosis,
+          notes: consultationForm.notes
+        });
+      }
+      
+      // Create next appointment if date and reason are provided and appointment has changed
+      if (consultationForm.next_appointment_date && consultationForm.next_appointment_reason && hasAppointmentChanged) {
         try {
           // Get current user to use as doctor
           const currentUser = await GraphQLAPI.getCurrentUser();
@@ -249,19 +308,48 @@ export default function DoctorQueuePage() {
             throw new Error('Patient ID is missing');
           }
           
-          await GraphQLAPI.createAppointment({
+          const appointmentResult = await GraphQLAPI.createAppointment({
             patientId: patientId,
             doctorId: currentUser.me.id,
             appointment_time: appointmentDate.toISOString(),
             reason: consultationForm.next_appointment_reason
           });
-          toast.success('บันทึกข้อมูลการตรวจและนัดหมายครั้งต่อไปสำเร็จ!');
+          
+          // Update visit with appointmentId
+          await GraphQLAPI.updateVisit(selectedTicket.visit.id, {
+            appointmentId: appointmentResult.createAppointment.id
+          });
+          
+          toast.success(hasDataChanged || !existingConsultation ? 
+            'บันทึกข้อมูลการตรวจและนัดหมายครั้งต่อไปสำเร็จ!' : 
+            'อัปเดตนัดหมายครั้งต่อไปสำเร็จ!');
         } catch (appointmentError: any) {
           console.error('Error creating appointment:', appointmentError);
-          toast.error('บันทึกข้อมูลการตรวจสำเร็จ แต่ไม่สามารถสร้างนัดหมายได้');
+          toast.error(hasDataChanged || !existingConsultation ? 
+            'บันทึกข้อมูลการตรวจสำเร็จ แต่ไม่สามารถสร้างนัดหมายได้' : 
+            'ไม่สามารถอัปเดตนัดหมายได้');
         }
       } else {
-        toast.success('บันทึกข้อมูลการตรวจสำเร็จ!');
+        const hasAnyChanges = hasDataChanged || hasAppointmentChanged;
+        toast.success(hasAnyChanges || !existingConsultation ? 
+          'บันทึกข้อมูลการตรวจสำเร็จ!' : 
+          'ไม่มีการเปลี่ยนแปลงข้อมูล');
+      }
+      
+      // Create cashier queue ticket
+      try {
+        await GraphQLAPI.createQueueTicket({
+          visitId: selectedTicket.visit.id,
+          station: 'cashier'
+        });
+        toast.success('Patient sent to cashier queue');
+      } catch (error: any) {
+        // If ticket already exists, that's fine
+        if (error.message?.includes('Active queue ticket already exists')) {
+          toast.success('Patient is already in cashier queue');
+        } else {
+          console.error('Error creating cashier queue ticket:', error);
+        }
       }
       
       // Close modal and refresh data
@@ -694,10 +782,39 @@ export default function DoctorQueuePage() {
               <DialogTitle className="flex items-center gap-2">
                 <FileText className="w-5 h-5" />
                 บันทึกการตรวจ - {selectedTicket?.patient?.first_name} {selectedTicket?.patient?.last_name}
+                {existingConsultation && (existingConsultation.chief_complaint || existingConsultation.diagnosis || existingConsultation.notes || existingConsultation.appointment) && (
+                  <Badge variant="outline" className="ml-2 text-green-600 border-green-600">
+                    มีข้อมูลแล้ว
+                  </Badge>
+                )}
               </DialogTitle>
             </DialogHeader>
             
             <div className="space-y-4">
+              {isLoadingConsultation && (
+                <div className="flex items-center justify-center py-4">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-600 mr-2"></div>
+                  <span className="text-sm text-gray-600">กำลังโหลดข้อมูลการตรวจ...</span>
+                </div>
+              )}
+              
+              {existingConsultation && !isLoadingConsultation && (existingConsultation.chief_complaint || existingConsultation.diagnosis || existingConsultation.notes || existingConsultation.appointment) && (
+                <div className="bg-green-50 border border-green-200 rounded-md p-3">
+                  <p className="text-sm text-green-800">
+                    <CheckCircle className="w-4 h-4 inline mr-1" />
+                    พบข้อมูลการตรวจที่บันทึกไว้แล้ว สามารถแก้ไขได้
+                  </p>
+                  {existingConsultation.appointment && (
+                    <div className="mt-2 p-2 bg-blue-50 rounded border border-blue-200">
+                      <p className="text-xs text-blue-800 font-medium">นัดหมายครั้งต่อไป:</p>
+                      <p className="text-xs text-blue-700">
+                        {format(new Date(existingConsultation.appointment.appointment_time), 'dd/MM/yyyy HH:mm')} - {existingConsultation.appointment.reason}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+              
               <div>
                 <Label htmlFor="chief_complaint" className="text-sm font-medium">
                   อาการสำคัญ (Chief Complaint)
@@ -776,16 +893,18 @@ export default function DoctorQueuePage() {
               <div className="flex gap-2 pt-4">
                 <Button
                   onClick={handleSaveConsultation}
-                  disabled={isSavingConsultation}
+                  disabled={isSavingConsultation || isLoadingConsultation}
                   className="flex-1 bg-purple-600 hover:bg-purple-700"
                 >
                   <Save className="w-4 h-4 mr-2" />
-                  {isSavingConsultation ? 'กำลังบันทึก...' : 'บันทึกการตรวจ'}
+                  {isSavingConsultation ? 'กำลังบันทึก...' : 
+                   existingConsultation && (existingConsultation.chief_complaint || existingConsultation.diagnosis || existingConsultation.notes || existingConsultation.appointment) ? 'อัปเดตการตรวจ' : 
+                   'บันทึกการตรวจ'}
                 </Button>
                 <Button
                   variant="outline"
                   onClick={() => setIsConsultationModalOpen(false)}
-                  disabled={isSavingConsultation}
+                  disabled={isSavingConsultation || isLoadingConsultation}
                 >
                   ยกเลิก
                 </Button>
