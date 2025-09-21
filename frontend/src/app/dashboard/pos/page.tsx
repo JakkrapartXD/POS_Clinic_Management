@@ -487,6 +487,13 @@ export default function POSPage() {
       setPaymentAmount(0)
       setPromptPayAmount(0)
       
+      // ลบข้อมูลการสั่งยาจากหมอหลังจากชำระเงินเสร็จ
+      if (prescriptionVisitData) {
+        setPrescriptionVisitData(null)
+        setPrescriptionItems([])
+        console.log(`🧹 [${paymentSessionId}] Prescription data cleared after payment`)
+      }
+      
       // ส่ง event เพื่ออัพเดตจำนวนใบเสร็จรับเงินวันนี้ใน sidebar
       window.dispatchEvent(new CustomEvent('receiptsUpdated'))
       
@@ -519,6 +526,9 @@ export default function POSPage() {
     setSelectedCustomer(null)
     setCustomerPhone("")
     setCustomerSearchResults([])
+    // ลบข้อมูลการสั่งยาจากหมอ
+    setPrescriptionVisitData(null)
+    setPrescriptionItems([])
   }
 
   // สร้าง barcode เมื่อมี completedOrder
