@@ -883,6 +883,10 @@ export const typeDefs = /* GraphQL */ `
     queueCall(ticketId: ID!): QueueTicket!
     queueStart(ticketId: ID!): QueueTicket!
     queueComplete(ticketId: ID!): QueueTicket!
+    
+    # Queue Management Mutations
+    deleteAllQueueTickets: Boolean!
+    deleteQueueTicketsByDate(date: DateTime!): Boolean!
   }
 
   # ========== CLINIC SYSTEM TYPES ==========

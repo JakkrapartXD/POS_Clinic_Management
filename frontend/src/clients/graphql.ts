@@ -1064,6 +1064,17 @@ export const GraphQLQueries = {
         chief_complaint
         diagnosis
         notes
+        appointment {
+          id
+          appointment_time
+          reason
+          status
+          doctor {
+            id
+            username
+            email
+          }
+        }
         vitals {
           heightCm
           weightKg
@@ -1870,6 +1881,47 @@ export const GraphQLMutations = {
       }
     }
   `,
+
+  UPDATE_APPOINTMENT: `
+    mutation UpdateAppointment($id: String!, $input: UpdateAppointmentInput!) {
+      updateAppointment(id: $id, input: $input) {
+        id
+        appointment_time
+        status
+        reason
+        created_at
+        updated_at
+        patient {
+          id
+          first_name
+          last_name
+          phone
+        }
+        doctor {
+          id
+          username
+        }
+      }
+    }
+  `,
+
+  DELETE_APPOINTMENT: `
+    mutation DeleteAppointment($id: String!) {
+      deleteAppointment(id: $id)
+    }
+  `,
+
+  DELETE_ALL_QUEUE_TICKETS: `
+    mutation DeleteAllQueueTickets {
+      deleteAllQueueTickets
+    }
+  `,
+
+  DELETE_QUEUE_TICKETS_BY_DATE: `
+    mutation DeleteQueueTicketsByDate($date: DateTime!) {
+      deleteQueueTicketsByDate(date: $date)
+    }
+  `,
 };
 
 // Typed GraphQL API functions
@@ -2362,6 +2414,29 @@ export const GraphQLAPI = {
   }): Promise<{ createAppointment: any }> =>
     graphqlClient.mutation(GraphQLMutations.CREATE_APPOINTMENT, {
       variables: { input }
+    }),
+
+  updateAppointment: (id: string, input: {
+    status?: string;
+    reason?: string;
+    appointment_time?: string;
+  }): Promise<{ updateAppointment: any }> =>
+    graphqlClient.mutation(GraphQLMutations.UPDATE_APPOINTMENT, {
+      variables: { id, input }
+    }),
+
+  deleteAppointment: (id: string): Promise<{ deleteAppointment: boolean }> =>
+    graphqlClient.mutation(GraphQLMutations.DELETE_APPOINTMENT, {
+      variables: { id }
+    }),
+
+  // Queue Management
+  deleteAllQueueTickets: (): Promise<{ deleteAllQueueTickets: boolean }> =>
+    graphqlClient.mutation(GraphQLMutations.DELETE_ALL_QUEUE_TICKETS),
+
+  deleteQueueTicketsByDate: (date: string): Promise<{ deleteQueueTicketsByDate: boolean }> =>
+    graphqlClient.mutation(GraphQLMutations.DELETE_QUEUE_TICKETS_BY_DATE, {
+      variables: { date }
     }),
 
   // Patient Vitals

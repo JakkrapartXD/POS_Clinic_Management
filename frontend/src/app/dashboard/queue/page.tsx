@@ -23,7 +23,8 @@ import {
   Thermometer,
   Weight,
   Ruler,
-  Zap
+  Zap,
+  Trash2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -75,7 +76,6 @@ interface QueueTicket {
 const stations = [
   { value: 'triage', label: 'Triage', color: 'bg-yellow-100 text-yellow-800' },
   { value: 'doctor', label: 'Doctor', color: 'bg-teal-100 text-teal-800' },
-  { value: 'pharmacy', label: 'Pharmacy', color: 'bg-green-100 text-green-800' },
   { value: 'cashier', label: 'Cashier', color: 'bg-orange-100 text-orange-800' }
 ];
 
@@ -94,6 +94,8 @@ export default function QueueManagementPage() {
   const [selectedStation, setSelectedStation] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
+  const [isClearing, setIsClearing] = useState(false);
+  const [isClearModalOpen, setIsClearModalOpen] = useState(false);
   
   // Vitals modal states
   const [isVitalsModalOpen, setIsVitalsModalOpen] = useState(false);
@@ -132,6 +134,37 @@ export default function QueueManagementPage() {
       toast.error(error.message || 'Failed to load queue data');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const openClearModal = () => {
+    setIsClearModalOpen(true);
+  };
+
+  const closeClearModal = () => {
+    setIsClearModalOpen(false);
+    setIsClearing(false);
+  };
+
+  const handleConfirmClearQueues = async () => {
+    try {
+      setIsClearing(true);
+      
+      // Call GraphQL mutation to delete all queue tickets
+      await GraphQLAPI.deleteAllQueueTickets();
+      
+      toast.success('เคลียร์คิวทั้งหมดสำเร็จ');
+      
+      // Refresh queue data
+      await fetchQueueData();
+      
+      // Close modal
+      closeClearModal();
+    } catch (error: any) {
+      console.error('Error clearing all queues:', error);
+      toast.error('ไม่สามารถเคลียร์คิวได้: ' + (error.message || 'เกิดข้อผิดพลาด'));
+    } finally {
+      setIsClearing(false);
     }
   };
 
@@ -406,12 +439,31 @@ export default function QueueManagementPage() {
             <RefreshCw className="w-4 h-4 mr-2" />
             Refresh
           </Button>
+          
+          <Button 
+            onClick={openClearModal} 
+            variant="outline"
+            disabled={isClearing}
+            className="border-red-600 text-red-600 hover:bg-red-50"
+          >
+            {isClearing ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-600 mr-2"></div>
+                กำลังเคลียร์...
+              </>
+            ) : (
+              <>
+                <Trash2 className="w-4 h-4 mr-2" />
+                เคลียร์คิวทั้งหมด
+              </>
+            )}
+          </Button>
         </div>
       </div>
 
       {/* Station Tabs */}
       <Tabs defaultValue="all" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="all">All Stations</TabsTrigger>
           {stations.map((station) => (
             <TabsTrigger key={station.value} value={station.value}>
@@ -775,6 +827,88 @@ export default function QueueManagementPage() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Clear Queue Confirmation Modal */}
+      <Dialog open={isClearModalOpen} onOpenChange={setIsClearModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <Trash2 className="w-5 h-5" />
+              ยืนยันการเคลียร์คิว
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0">
+                  <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
+                    <Trash2 className="w-4 h-4 text-red-600" />
+                  </div>
+                </div>
+                <div>
+                  <h4 className="text-sm font-medium text-red-800">คำเตือน</h4>
+                  <p className="text-sm text-red-700 mt-1">
+                    คุณแน่ใจหรือไม่ที่จะเคลียร์คิวทั้งหมด?
+                  </p>
+                  <p className="text-xs text-red-600 mt-2">
+                    การดำเนินการนี้จะลบคิวทั้งหมดในทุก station และไม่สามารถย้อนกลับได้
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-gray-50 p-3 rounded-lg">
+              <div className="text-sm text-gray-700">
+                <strong>คิวที่จะถูกลบ:</strong>
+                <ul className="mt-1 space-y-1">
+                  {stations.map((station) => {
+                    const stationTickets = getStationTickets(station.value);
+                    return (
+                      <li key={station.value} className="flex justify-between">
+                        <span>{station.label}:</span>
+                        <span className="font-medium">{stationTickets.length} คิว</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+                <div className="border-t pt-2 mt-2 flex justify-between font-medium">
+                  <span>รวมทั้งหมด:</span>
+                  <span className="text-red-600">{queueTickets.length} คิว</span>
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex gap-3 pt-2">
+              <Button
+                variant="outline"
+                onClick={closeClearModal}
+                disabled={isClearing}
+                className="flex-1"
+              >
+                ยกเลิก
+              </Button>
+              <Button
+                onClick={handleConfirmClearQueues}
+                disabled={isClearing}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+              >
+                {isClearing ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    กำลังเคลียร์...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    เคลียร์คิวทั้งหมด
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

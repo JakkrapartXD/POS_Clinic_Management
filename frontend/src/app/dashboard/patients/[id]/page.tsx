@@ -5,7 +5,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { CalendarDays, User, Phone, Mail, MapPin, Plus, Clock, Eye, CreditCard, Trash2, ClipboardList } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { CalendarDays, User, Phone, Mail, MapPin, Plus, Clock, Eye, CreditCard, Trash2, ClipboardList, History, Stethoscope, Calendar } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { API_CONFIG } from "@/config/api"
@@ -78,6 +79,18 @@ export default function PatientDetailPage() {
   const [isFetching, setIsFetching] = useState(false);
   const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastFetchTimeRef = useRef<number>(0);
+  
+  // Medical history modal states
+  const [isMedicalHistoryModalOpen, setIsMedicalHistoryModalOpen] = useState(false);
+  const [medicalHistoryData, setMedicalHistoryData] = useState<any>(null);
+  const [isLoadingMedicalHistory, setIsLoadingMedicalHistory] = useState(false);
+  const [appointmentHistory, setAppointmentHistory] = useState<any[]>([]);
+  const [isLoadingAppointments, setIsLoadingAppointments] = useState(false);
+  
+  // Delete confirmation modal states
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [appointmentToDelete, setAppointmentToDelete] = useState<any>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const fetchPatientData = useCallback(async (forceRefresh = false) => {
     // Prevent multiple simultaneous requests unless force refresh
@@ -159,6 +172,7 @@ export default function PatientDetailPage() {
       // Add a longer delay to prevent rapid successive calls
       fetchTimeoutRef.current = setTimeout(() => {
         fetchPatientData();
+        fetchAppointmentHistory(); // Also fetch appointment history when page loads
         lastFetchTimeRef.current = Date.now();
       }, 500);
 
@@ -195,6 +209,151 @@ export default function PatientDetailPage() {
       }
     } finally {
       setIsCreatingTriage(false);
+    }
+  };
+
+  const fetchMedicalHistory = async () => {
+    try {
+      setIsLoadingMedicalHistory(true);
+      setIsLoadingAppointments(true);
+      
+      // Fetch patient visits (medical history)
+      const visitsResult = await GraphQLAPI.getPatientVisits(patientId, { take: 50 });
+      const visits = visitsResult.patientVisits || [];
+      
+      console.log('Fetched visits:', visits);
+      console.log('Visits with appointments:', visits.filter((visit: any) => visit.appointment));
+      
+      setMedicalHistoryData(visits);
+      
+      // Extract appointments from visits and filter out cancelled appointments
+      const appointments = visits
+        .filter((visit: any) => visit.appointment && visit.appointment.status !== 'cancelled')
+        .map((visit: any) => ({
+          ...visit.appointment,
+          visitId: visit.id,
+          visitDate: visit.visit_date
+        }))
+        .sort((a: any, b: any) => new Date(b.appointment_time).getTime() - new Date(a.appointment_time).getTime());
+      
+      console.log('Extracted appointments:', appointments);
+      setAppointmentHistory(appointments);
+      
+    } catch (error: any) {
+      console.error('Error fetching medical history:', error);
+      toast.error('ไม่สามารถโหลดประวัติการรักษาได้');
+    } finally {
+      setIsLoadingMedicalHistory(false);
+      setIsLoadingAppointments(false);
+    }
+  };
+
+  const fetchAppointmentHistory = async () => {
+    try {
+      setIsLoadingAppointments(true);
+      
+      // Fetch patient visits to get appointments
+      const visitsResult = await GraphQLAPI.getPatientVisits(patientId, { take: 50 });
+      const visits = visitsResult.patientVisits || [];
+      
+      // Extract appointments from visits and filter out cancelled appointments
+      const appointments = visits
+        .filter((visit: any) => visit.appointment && visit.appointment.status !== 'cancelled')
+        .map((visit: any) => ({
+          ...visit.appointment,
+          visitId: visit.id,
+          visitDate: visit.visit_date
+        }))
+        .sort((a: any, b: any) => new Date(b.appointment_time).getTime() - new Date(a.appointment_time).getTime());
+      
+      setAppointmentHistory(appointments);
+      
+    } catch (error: any) {
+      console.error('Error fetching appointment history:', error);
+      toast.error('ไม่สามารถโหลดประวัติการนัดหมายได้');
+    } finally {
+      setIsLoadingAppointments(false);
+    }
+  };
+
+  const openMedicalHistoryModal = async () => {
+    setIsMedicalHistoryModalOpen(true);
+    await fetchMedicalHistory();
+  };
+
+  const openDeleteModal = (appointment: any) => {
+    setAppointmentToDelete(appointment);
+    setIsDeleteModalOpen(true);
+  };
+
+  const closeDeleteModal = () => {
+    setAppointmentToDelete(null);
+    setIsDeleteModalOpen(false);
+    setIsDeleting(false);
+  };
+
+  const confirmDeleteAppointment = async () => {
+    if (!appointmentToDelete) return;
+
+    try {
+      setIsDeleting(true);
+      
+      // Update appointment status to "cancelled" (soft delete)
+      await GraphQLAPI.updateAppointment(appointmentToDelete.id, { 
+        status: 'cancelled' 
+      });
+      toast.success('ลบนัดหมายสำเร็จ');
+      
+      // Refresh appointment history data
+      await fetchAppointmentHistory();
+      
+      // Close modal
+      closeDeleteModal();
+    } catch (error: any) {
+      console.error('Error deleting appointment:', error);
+      toast.error('ไม่สามารถลบนัดหมายได้');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const markAppointmentAsVisited = async (appointmentId: string) => {
+    try {
+      // Note: Appointment status update is not available in current GraphQLAPI
+      toast.error('ฟีเจอร์อัปเดตสถานะนัดหมายยังไม่พร้อมใช้งาน');
+    } catch (error: any) {
+      console.error('Error updating appointment status:', error);
+      toast.error('ไม่สามารถอัปเดตสถานะนัดหมายได้');
+    }
+  };
+
+  const createQueueFromAppointment = async (appointmentId: string) => {
+    try {
+      if (patientId) {
+        // Create new visit
+        const visitResult = await GraphQLAPI.createVisit({
+          patientId: patientId
+        });
+        
+        // Create queue ticket for the new visit
+        await GraphQLAPI.createQueueTicket({
+          visitId: visitResult.createVisit.id,
+          station: 'triage'
+        });
+        
+        // Update appointment status to "visited"
+        await GraphQLAPI.updateAppointment(appointmentId, { 
+          status: 'visited' 
+        });
+        
+        toast.success('สร้างคิวใหม่สำเร็จ และอัปเดตสถานะนัดหมาย');
+        
+        // Refresh appointment history data
+        await fetchAppointmentHistory();
+      }
+    } catch (error: any) {
+      console.error('Error creating queue from appointment:', error);
+      toast.error('ไม่สามารถสร้างคิวใหม่ได้');
     }
   };
 
@@ -477,6 +636,15 @@ export default function PatientDetailPage() {
               </Button>
               
               <Button 
+                onClick={openMedicalHistoryModal}
+                variant="outline"
+                className="w-full border-green-600 text-green-600 hover:bg-green-50"
+              >
+                <History className="w-4 h-4 mr-2" />
+                ดูประวัติการรักษา
+              </Button>
+              
+              <Button 
                 onClick={() => router.push('/queue/triage')}
                 variant="outline"
                 className="w-full"
@@ -498,7 +666,312 @@ export default function PatientDetailPage() {
         </div>
       </div>
 
+      {/* Appointment History Section */}
+      <div className="mt-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="w-5 h-5" />
+              ประวัติการนัดหมาย
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {/* Loading State */}
+            {isLoadingAppointments && (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-3"></div>
+                <span className="text-sm text-gray-600">กำลังโหลดประวัติการนัดหมาย...</span>
+              </div>
+            )}
+
+            {/* Appointment History */}
+            {!isLoadingAppointments && appointmentHistory && appointmentHistory.length > 0 && (
+              <div className="space-y-3">
+                {appointmentHistory.map((appointment: any) => (
+                  <Card key={appointment.id} className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Badge 
+                            variant={appointment.status === 'visited' ? 'default' : 
+                                    appointment.status === 'scheduled' ? 'secondary' : 'destructive'}
+                          >
+                            {appointment.status === 'visited' ? 'มาแล้ว' :
+                             appointment.status === 'scheduled' ? 'นัดแล้ว' : appointment.status}
+                          </Badge>
+                          <span className="text-sm font-medium">
+                            {format(new Date(appointment.appointment_time), 'dd/MM/yyyy HH:mm')}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-600">{appointment.reason}</p>
+                        {appointment.doctor && (
+                          <p className="text-xs text-gray-500 mt-1">
+                            หมอ: {appointment.doctor.username}
+                          </p>
+                        )}
+                        <p className="text-xs text-gray-400 mt-1">
+                          จาก visit: {format(new Date(appointment.visitDate), 'dd/MM/yyyy')}
+                        </p>
+                      </div>
+                      
+                      <div className="flex gap-2">
+                        {appointment.status === 'scheduled' && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => createQueueFromAppointment(appointment.id)}
+                            className="text-blue-600 border-blue-600 hover:bg-blue-50"
+                          >
+                            <Plus className="w-3 h-3 mr-1" />
+                            เพิ่มคิว
+                          </Button>
+                        )}
+                        {appointment.status === 'scheduled' && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => openDeleteModal(appointment)}
+                            className="text-red-600 border-red-600 hover:bg-red-50"
+                          >
+                            <Trash2 className="w-3 h-3 mr-1" />
+                            ลบ
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            )}
+
+            {/* Empty State */}
+            {!isLoadingAppointments && (!appointmentHistory || appointmentHistory.length === 0) && (
+              <div className="text-center py-8">
+                <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-500">ไม่มีประวัติการนัดหมาย</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
     </div>
+
+    {/* Medical History Modal */}
+    <Dialog open={isMedicalHistoryModalOpen} onOpenChange={setIsMedicalHistoryModalOpen}>
+      <DialogContent className="sm:max-w-4xl max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <History className="w-5 h-5" />
+            ประวัติการรักษา - {patient?.first_name} {patient?.last_name}
+          </DialogTitle>
+        </DialogHeader>
+        
+        <div className="space-y-6">
+          {/* Loading States */}
+          {(isLoadingMedicalHistory || isLoadingAppointments) && (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mr-3"></div>
+              <span className="text-sm text-gray-600">กำลังโหลดประวัติการรักษา...</span>
+            </div>
+          )}
+
+          {/* Medical History Section */}
+          {!isLoadingMedicalHistory && medicalHistoryData && medicalHistoryData.length > 0 && (
+            <div className="space-y-4">
+              {/* <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                <Stethoscope className="w-5 h-5" />
+                ประวัติการรักษา
+              </h3> */}
+              
+              <div className="space-y-4">
+                {medicalHistoryData.map((visit: any) => (
+                  <Card key={visit.id} className="p-4">
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-gray-500">
+                            {format(new Date(visit.visit_date), 'dd/MM/yyyy HH:mm')}
+                          </span>
+                        </div>
+                      </div>
+                      
+                      {visit.chief_complaint && (
+                        <div>
+                          <p className="text-sm font-medium text-gray-700">อาการสำคัญ:</p>
+                          <p className="text-sm text-gray-600">{visit.chief_complaint}</p>
+                        </div>
+                      )}
+                      
+                      {visit.diagnosis && (
+                        <div>
+                          <p className="text-sm font-medium text-gray-700">การวินิจฉัย:</p>
+                          <p className="text-sm text-gray-600">{visit.diagnosis}</p>
+                        </div>
+                      )}
+                      
+                      {visit.notes && (
+                        <div>
+                          <p className="text-sm font-medium text-gray-700">แผนการรักษา:</p>
+                          <p className="text-sm text-gray-600">{visit.notes}</p>
+                        </div>
+                      )}
+                      
+                      {visit.vitals && (
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                          {visit.vitals.heightCm && (
+                            <div className="bg-blue-50 p-2 rounded">
+                              <p className="font-medium text-blue-800">ส่วนสูง</p>
+                              <p className="text-blue-600">{visit.vitals.heightCm} cm</p>
+                            </div>
+                          )}
+                          {visit.vitals.weightKg && (
+                            <div className="bg-green-50 p-2 rounded">
+                              <p className="font-medium text-green-800">น้ำหนัก</p>
+                              <p className="text-green-600">{visit.vitals.weightKg} kg</p>
+                            </div>
+                          )}
+                          {visit.vitals.tempC && (
+                            <div className="bg-orange-50 p-2 rounded">
+                              <p className="font-medium text-orange-800">อุณหภูมิ</p>
+                              <p className="text-orange-600">{visit.vitals.tempC} °C</p>
+                            </div>
+                          )}
+                          {visit.vitals.hr && (
+                            <div className="bg-red-50 p-2 rounded">
+                              <p className="font-medium text-red-800">อัตราการเต้นหัวใจ</p>
+                              <p className="text-red-600">{visit.vitals.hr} bpm</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      
+                      {visit.appointment && (
+                        <div className="bg-blue-50 p-3 rounded border border-blue-200">
+                          <p className="text-sm font-medium text-blue-800">นัดหมายครั้งต่อไป:</p>
+                          <p className="text-sm text-blue-700">
+                            {format(new Date(visit.appointment.appointment_time), 'dd/MM/yyyy HH:mm')} - {visit.appointment.reason}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Empty States */}
+          {!isLoadingMedicalHistory && !isLoadingAppointments && 
+           (!medicalHistoryData || medicalHistoryData.length === 0) && (
+            <div className="text-center py-8">
+              <History className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-500">ไม่มีประวัติการรักษา</p>
+            </div>
+          )}
+
+          {/* Empty State for Appointments */}
+          {!isLoadingAppointments && appointmentHistory && appointmentHistory.length === 0 && (
+            <div className="text-center py-6">
+              <Calendar className="w-10 h-10 text-gray-400 mx-auto mb-3" />
+              <p className="text-gray-500 text-sm">ไม่มีประวัติการนัดหมาย</p>
+            </div>
+          )}
+          
+          <div className="flex gap-2 pt-4">
+            <Button
+              variant="outline"
+              onClick={() => setIsMedicalHistoryModalOpen(false)}
+              className="flex-1"
+            >
+              ปิด
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+
+    {/* Delete Confirmation Modal */}
+    <Dialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-red-600">
+            <Trash2 className="w-5 h-5" />
+            ยืนยันการลบนัดหมาย
+          </DialogTitle>
+        </DialogHeader>
+        
+        <div className="space-y-4">
+          {appointmentToDelete && (
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-gray-500" />
+                  <span className="text-sm font-medium">วันที่นัดหมาย:</span>
+                  <span className="text-sm">
+                    {format(new Date(appointmentToDelete.appointment_time), 'dd/MM/yyyy HH:mm')}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium">เหตุผล:</span>
+                  <span className="text-sm text-gray-600">{appointmentToDelete.reason}</span>
+                </div>
+                {appointmentToDelete.doctor && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">หมอ:</span>
+                    <span className="text-sm text-gray-600">{appointmentToDelete.doctor.username}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <div className="flex-shrink-0">
+                <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
+                  <Trash2 className="w-4 h-4 text-red-600" />
+                </div>
+              </div>
+              <div>
+                <h4 className="text-sm font-medium text-red-800">คำเตือน</h4>
+                <p className="text-sm text-red-700 mt-1">
+                  คุณแน่ใจหรือไม่ที่จะลบนัดหมายนี้? การดำเนินการนี้ไม่สามารถย้อนกลับได้
+                </p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="flex gap-3 pt-2">
+            <Button
+              variant="outline"
+              onClick={closeDeleteModal}
+              disabled={isDeleting}
+              className="flex-1"
+            >
+              ยกเลิก
+            </Button>
+            <Button
+              onClick={confirmDeleteAppointment}
+              disabled={isDeleting}
+              className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+            >
+              {isDeleting ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  กำลังลบ...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  ลบ
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
     </PageGuard>
   );
 }
