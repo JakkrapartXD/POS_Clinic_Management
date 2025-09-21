@@ -499,6 +499,7 @@ export const GraphQLQueries = {
           phone
           email
           address
+          photo_url
           created_at
           updated_at
         }
@@ -519,6 +520,9 @@ export const GraphQLQueries = {
         email
         date_of_birth
         gender
+        photo_url
+        drug_allergies
+        medical_conditions
       }
     }
   `,
@@ -534,6 +538,7 @@ export const GraphQLQueries = {
           product_type
           short_name
           status
+          vat_percent
           sale_price
           unit
           pack_size
@@ -626,6 +631,7 @@ export const GraphQLQueries = {
         stock_quantity
         sku
         barcode
+        vat_percent
         category {
           id
           name
@@ -1016,6 +1022,8 @@ export const GraphQLQueries = {
         stock_quantity
         reorder_point
         unit
+        vat_percent
+        sale_price
         category {
           name
         }

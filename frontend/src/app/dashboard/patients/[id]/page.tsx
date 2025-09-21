@@ -587,15 +587,57 @@ export default function PatientDetailPage() {
                 <div className="border-t pt-4">
                   <h4 className="text-sm font-medium text-gray-700 mb-3">ข้อมูลทางการแพทย์</h4>
                   
-                  {patient.drug_allergies && patient.drug_allergies !== 'none' && (
-                    <div className="mb-2">
-                      <label className="text-sm font-medium text-gray-500">การแพ้ยา</label>
-                      <p className="text-sm text-red-600">⚠️ {patient.drug_allergies}</p>
-                      {patient.drug_allergies_other && (
-                        <p className="text-sm text-red-600 ml-4">- {patient.drug_allergies_other}</p>
-                      )}
-                    </div>
-                  )}
+                  {(() => {
+                    // Parse drug allergies from string or array
+                    let drugAllergies: string[] = []
+                    
+                    if (patient.drug_allergies) {
+                      try {
+                        if (typeof patient.drug_allergies === 'string') {
+                          if (patient.drug_allergies.startsWith('[')) {
+                            // JSON array string เช่น '["penicillin", "aspirin"]'
+                            drugAllergies = JSON.parse(patient.drug_allergies)
+                          } else if (patient.drug_allergies.trim() !== '' && patient.drug_allergies !== 'none') {
+                            // String ธรรมดา เช่น 'penicillin'
+                            drugAllergies = [patient.drug_allergies]
+                          }
+                        } else if (Array.isArray(patient.drug_allergies)) {
+                          // Array อยู่แล้ว
+                          drugAllergies = patient.drug_allergies
+                        }
+                      } catch (error) {
+                        console.warn('Error parsing drug_allergies:', error)
+                      }
+                    }
+                    
+                    // Filter out empty values
+                    drugAllergies = drugAllergies.filter(drug => 
+                      drug && 
+                      typeof drug === 'string' && 
+                      drug.trim() !== '' && 
+                      drug !== 'none' && 
+                      drug !== 'other'
+                    )
+                    
+                    return drugAllergies.length > 0 && (
+                      <div className="mb-2">
+                        <label className="text-sm font-medium text-gray-500">การแพ้ยา</label>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {drugAllergies.map((drug, index) => (
+                            <span 
+                              key={index}
+                              className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800"
+                            >
+                              ⚠️ {drug}
+                            </span>
+                          ))}
+                        </div>
+                        {patient.drug_allergies_other && (
+                          <p className="text-sm text-red-600 mt-1">- {patient.drug_allergies_other}</p>
+                        )}
+                      </div>
+                    )
+                  })()}
 
                   {patient.medical_conditions && patient.medical_conditions !== '-' && (
                     <div className="mb-2">
