@@ -85,6 +85,10 @@ export default function POSPage() {
   const [customerSearchResults, setCustomerSearchResults] = useState<Patient[]>([])
   const [isSearchingCustomer, setIsSearchingCustomer] = useState(false)
   const [showCustomerSearch, setShowCustomerSearch] = useState(false)
+  
+  // Prescription visit states
+  const [prescriptionVisitData, setPrescriptionVisitData] = useState<any>(null)
+  const [prescriptionItems, setPrescriptionItems] = useState<any[]>([])
 
   // Handle keyboard input for numpad
   useEffect(() => {
@@ -167,7 +171,57 @@ export default function POSPage() {
 
   useEffect(() => {
     fetchProducts()
+    loadPrescriptionVisitData()
   }, [])
+
+  // Load prescription visit data from sessionStorage
+  const loadPrescriptionVisitData = () => {
+    try {
+      const storedData = sessionStorage.getItem('prescriptionVisitData')
+      if (storedData) {
+        const visitData = JSON.parse(storedData)
+        setPrescriptionVisitData(visitData)
+        
+        // Set customer data if available
+        if (visitData.patientId) {
+          setSelectedCustomer({
+            id: visitData.patientId,
+            first_name: visitData.patientName?.split(' ')[0] || '',
+            last_name: visitData.patientName?.split(' ').slice(1).join(' ') || '',
+            phone: visitData.patientPhone,
+            email: visitData.patientEmail
+          })
+        }
+        
+        // Parse prescription items from visit notes if available
+        if (visitData.visitData?.notes) {
+          try {
+            const notes = visitData.visitData.notes
+            // Look for prescription items in the notes
+            // This is a simple parser - you might need to adjust based on your note format
+            const prescriptionMatch = notes.match(/ยา:\s*([^]+?)(?=\n|$)/i)
+            if (prescriptionMatch) {
+              const prescriptionText = prescriptionMatch[1]
+              // Parse prescription items (this is a basic implementation)
+              const items = prescriptionText.split('\n').filter((line: string) => line.trim())
+              setPrescriptionItems(items.map((item: string, index: number) => ({
+                id: `prescription-${index}`,
+                name: item.trim(),
+                type: 'prescription'
+              })))
+            }
+          } catch (error) {
+            console.error('Error parsing prescription items:', error)
+          }
+        }
+        
+        // Clear the stored data after loading
+        sessionStorage.removeItem('prescriptionVisitData')
+      }
+    } catch (error) {
+      console.error('Error loading prescription visit data:', error)
+    }
+  }
 
   // กรองสินค้าตามการค้นหาและหมวดหมู่
   const filteredProducts = products.filter(product => {
@@ -386,6 +440,20 @@ export default function POSPage() {
       const receiptNumber = generateReceiptNumber(orderId)
       
       console.log(`🎉 [${paymentSessionId}] ชำระเงินสำเร็จ! เลขใบเสร็จ: ${receiptNumber}`)
+      
+      // Link order to visit if this is a prescription visit
+      if (prescriptionVisitData?.visitId) {
+        try {
+          await GraphQLAPI.linkOrderToVisit({
+            visitId: prescriptionVisitData.visitId,
+            orderId: orderId
+          })
+          console.log(`✅ [${paymentSessionId}] Order linked to visit successfully`)
+        } catch (linkError) {
+          console.error('Error linking order to visit:', linkError)
+          // Don't fail the payment if linking fails
+        }
+      }
       
       // เตรียมข้อมูล order สำหรับแสดงผล
       const orderData = {
@@ -644,6 +712,30 @@ export default function POSPage() {
         </div>
 
         <div className="flex-1 overflow-auto p-4">
+          {/* Prescription Section */}
+          {prescriptionVisitData && (
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-center mb-2">
+                <div className="w-2 h-2 bg-blue-500 rounded-full mr-2"></div>
+                <h3 className="font-medium text-blue-900">ข้อมูลการสั่งยาจากหมอ</h3>
+              </div>
+              <div className="text-sm text-blue-800 space-y-1">
+                <p><strong>ผู้ป่วย:</strong> {prescriptionVisitData.patientName}</p>
+                <p><strong>อาการ:</strong> {prescriptionVisitData.visitData?.chief_complaint || '-'}</p>
+                <p><strong>การวินิจฉัย:</strong> {prescriptionVisitData.visitData?.diagnosis || '-'}</p>
+                {prescriptionVisitData.visitData?.notes && (
+                  <div className="mt-2">
+                    <p><strong>แผนการรักษา:</strong></p>
+                    <div className="bg-white p-2 rounded border text-xs text-gray-700 whitespace-pre-wrap">
+                      {prescriptionVisitData.visitData.notes}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Cart Items */}
           {cartItems.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-gray-400">
               <div className="text-6xl mb-4">🛒</div>

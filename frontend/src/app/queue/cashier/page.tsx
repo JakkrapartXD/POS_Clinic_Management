@@ -17,17 +17,13 @@ import {
   RefreshCw,
   Activity,
   ShoppingCart,
-  CreditCard,
-  Package,
-  Search,
-  Plus,
-  Minus,
-  Receipt
+  Search
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { GraphQLAPI } from '@/clients/graphql';
 import PageGuard from '@/components/guards/page-guard';
+import { useRouter } from 'next/navigation';
 
 interface CashierTicket {
   id: string;
@@ -69,20 +65,6 @@ interface CashierTicket {
   }>;
 }
 
-interface Product {
-  id: string;
-  product_name: string;
-  sale_price: number;
-  unit: string;
-  stock_quantity: number;
-}
-
-interface CartItem {
-  product: Product;
-  quantity: number;
-  unit_price: number;
-  total_price: number;
-}
 
 const statusConfig = {
   waiting: { label: 'Waiting', color: 'bg-blue-100 text-blue-800', icon: Clock },
@@ -93,20 +75,12 @@ const statusConfig = {
 };
 
 export default function CashierQueuePage() {
+  const router = useRouter();
   const [cashierTickets, setCashierTickets] = useState<CashierTicket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
-  
-  // POS Modal states
-  const [isPOSModalOpen, setIsPOSModalOpen] = useState(false);
-  const [selectedTicket, setSelectedTicket] = useState<CashierTicket | null>(null);
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [searchProducts, setSearchProducts] = useState('');
-  const [products, setProducts] = useState<Product[]>([]);
-  const [isSearchingProducts, setIsSearchingProducts] = useState(false);
-  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
   useEffect(() => {
     fetchCashierQueue();
@@ -183,119 +157,24 @@ export default function CashierQueuePage() {
     }
   };
 
-  const openPOSModal = (ticket: CashierTicket) => {
-    setSelectedTicket(ticket);
-    setCart([]);
-    setSearchProducts('');
-    setProducts([]);
-    setIsPOSModalOpen(true);
-  };
-
-  const searchProductsByName = async (query: string) => {
-    if (query.length < 2) {
-      setProducts([]);
-      return;
-    }
-
-    try {
-      setIsSearchingProducts(true);
-      const result = await GraphQLAPI.searchProducts(query);
-      setProducts(result.searchProducts || []);
-    } catch (error: any) {
-      console.error('Error searching products:', error);
-      toast.error('Failed to search products');
-    } finally {
-      setIsSearchingProducts(false);
-    }
-  };
-
-  const addToCart = (product: Product) => {
-    const existingItem = cart.find(item => item.product.id === product.id);
+  const openPOS = (ticket: CashierTicket) => {
+    // Navigate to POS page with visit data
+    const visitData = {
+      visitId: ticket.visit?.id,
+      patientId: ticket.patientId,
+      patientName: `${ticket.patient?.first_name} ${ticket.patient?.last_name}`,
+      patientPhone: ticket.patient?.phone,
+      patientEmail: ticket.patient?.email,
+      visitData: ticket.visit
+    };
     
-    if (existingItem) {
-      setCart(cart.map(item => 
-        item.product.id === product.id 
-          ? { ...item, quantity: item.quantity + 1, total_price: (item.quantity + 1) * item.unit_price }
-          : item
-      ));
-    } else {
-      setCart([...cart, {
-        product,
-        quantity: 1,
-        unit_price: product.sale_price,
-        total_price: product.sale_price
-      }]);
-    }
+    // Store visit data in sessionStorage for POS page to use
+    sessionStorage.setItem('prescriptionVisitData', JSON.stringify(visitData));
+    
+    // Navigate to POS page
+    router.push('/dashboard/pos');
   };
 
-  const updateCartQuantity = (productId: string, quantity: number) => {
-    if (quantity <= 0) {
-      setCart(cart.filter(item => item.product.id !== productId));
-    } else {
-      setCart(cart.map(item => 
-        item.product.id === productId 
-          ? { ...item, quantity, total_price: quantity * item.unit_price }
-          : item
-      ));
-    }
-  };
-
-  const getTotalAmount = () => {
-    return cart.reduce((total, item) => total + item.total_price, 0);
-  };
-
-  const processPayment = async () => {
-    if (!selectedTicket?.visit || cart.length === 0) {
-      toast.error('Please add items to cart');
-      return;
-    }
-
-    try {
-      setIsProcessingPayment(true);
-      
-      // Create order
-      const orderResult = await GraphQLAPI.createOrder({
-        patientId: selectedTicket.patientId,
-        status: 'completed',
-        total_amount: getTotalAmount(),
-        is_walkin: false,
-        orderItems: cart.map(item => ({
-          productId: item.product.id,
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-          total_price: item.total_price
-        }))
-      });
-
-      // Link order to visit
-      await GraphQLAPI.linkOrderToVisit({
-        visitId: selectedTicket.visit.id,
-        orderId: orderResult.createOrder.id
-      });
-
-      // Process payment
-      await GraphQLAPI.processPayment({
-        orderId: orderResult.createOrder.id,
-        payment_type: 'cash',
-        amount: getTotalAmount(),
-        details: 'Payment processed at cashier station'
-      });
-
-      toast.success('Payment processed successfully!');
-      
-      // Close modal and refresh data
-      setIsPOSModalOpen(false);
-      setSelectedTicket(null);
-      setCart([]);
-      fetchCashierQueue();
-
-    } catch (error: any) {
-      console.error('Error processing payment:', error);
-      toast.error(error.message || 'Failed to process payment');
-    } finally {
-      setIsProcessingPayment(false);
-    }
-  };
 
   const getStatusCounts = (tickets: CashierTicket[]) => {
     const counts = {
@@ -407,11 +286,11 @@ export default function CashierQueuePage() {
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => openPOSModal(ticket)}
+                    onClick={() => openPOS(ticket)}
                     className="border-green-600 text-green-600 hover:bg-green-50"
                   >
                     <ShoppingCart className="w-3 h-3 mr-1" />
-                    POS
+                    Open POS
                   </Button>
                 )}
                 <Button
@@ -587,142 +466,6 @@ export default function CashierQueuePage() {
           ))}
         </Tabs>
 
-        {/* POS Modal */}
-        <Dialog open={isPOSModalOpen} onOpenChange={setIsPOSModalOpen}>
-          <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <ShoppingCart className="w-5 h-5" />
-                POS - {selectedTicket?.patient?.first_name} {selectedTicket?.patient?.last_name}
-              </DialogTitle>
-            </DialogHeader>
-            
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Product Search & Selection */}
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="searchProducts" className="text-sm font-medium">
-                    Search Products
-                  </Label>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                    <Input
-                      id="searchProducts"
-                      placeholder="Search by product name..."
-                      value={searchProducts}
-                      onChange={(e) => {
-                        setSearchProducts(e.target.value);
-                        searchProductsByName(e.target.value);
-                      }}
-                      className="pl-10"
-                    />
-                  </div>
-                </div>
-                
-                {/* Product Results */}
-                {products.length > 0 && (
-                  <div className="max-h-60 overflow-y-auto border rounded-md">
-                    {products.map((product) => (
-                      <div
-                        key={product.id}
-                        className="p-3 hover:bg-gray-50 cursor-pointer border-b last:border-b-0"
-                        onClick={() => addToCart(product)}
-                      >
-                        <div className="flex justify-between items-center">
-                          <div>
-                            <div className="font-medium">{product.product_name}</div>
-                            <div className="text-sm text-gray-600">
-                              ฿{product.sale_price} / {product.unit}
-                            </div>
-                            <div className="text-xs text-gray-500">
-                              Stock: {product.stock_quantity}
-                            </div>
-                          </div>
-                          <Button size="sm" variant="outline">
-                            <Plus className="w-3 h-3" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                
-                {isSearchingProducts && (
-                  <div className="text-center py-4">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-green-600 mx-auto"></div>
-                  </div>
-                )}
-              </div>
-              
-              {/* Cart & Payment */}
-              <div className="space-y-4">
-                <div>
-                  <h3 className="text-lg font-semibold mb-3">Cart</h3>
-                  {cart.length === 0 ? (
-                    <div className="text-center py-8 text-gray-500">
-                      <ShoppingCart className="w-12 h-12 mx-auto mb-2 text-gray-300" />
-                      <p>No items in cart</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-2 max-h-60 overflow-y-auto">
-                      {cart.map((item) => (
-                        <div key={item.product.id} className="flex items-center justify-between p-3 border rounded-md">
-                          <div className="flex-1">
-                            <div className="font-medium">{item.product.product_name}</div>
-                            <div className="text-sm text-gray-600">
-                              ฿{item.unit_price} / {item.product.unit}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => updateCartQuantity(item.product.id, item.quantity - 1)}
-                            >
-                              <Minus className="w-3 h-3" />
-                            </Button>
-                            <span className="w-8 text-center">{item.quantity}</span>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => updateCartQuantity(item.product.id, item.quantity + 1)}
-                            >
-                              <Plus className="w-3 h-3" />
-                            </Button>
-                            <div className="ml-4 font-semibold">
-                              ฿{item.total_price.toFixed(2)}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                
-                {/* Total & Payment */}
-                {cart.length > 0 && (
-                  <div className="border-t pt-4">
-                    <div className="flex justify-between items-center mb-4">
-                      <span className="text-lg font-semibold">Total:</span>
-                      <span className="text-xl font-bold text-green-600">
-                        ฿{getTotalAmount().toFixed(2)}
-                      </span>
-                    </div>
-                    
-                    <Button
-                      onClick={processPayment}
-                      disabled={isProcessingPayment}
-                      className="w-full bg-green-600 hover:bg-green-700"
-                    >
-                      <CreditCard className="w-4 h-4 mr-2" />
-                      {isProcessingPayment ? 'Processing...' : 'Process Payment'}
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
       </div>
     </PageGuard>
   );

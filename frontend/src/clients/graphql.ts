@@ -835,6 +835,53 @@ export const GraphQLQueries = {
     }
   `,
 
+  PATIENT_ORDERS: `
+    query GetPatientOrders($patientId: String!, $pagination: PaginationInput) {
+      orders(filter: { patientId: $patientId }, pagination: $pagination) {
+        orders {
+          id
+          order_date
+          status
+          total_amount
+          is_walkin
+          created_at
+          updated_at
+          patient {
+            id
+            first_name
+            last_name
+          }
+          user {
+            id
+            username
+          }
+          orderItems {
+            id
+            quantity
+            unit_price
+            total_price
+            product_name
+            product_unit
+            product {
+              id
+              product_name
+              sku
+              unit
+            }
+          }
+          payments {
+            id
+            payment_type
+            amount
+            payment_date
+            details
+          }
+        }
+        total
+      }
+    }
+  `,
+
   GET_ORDER: `
     query GetOrder($id: String!) {
       order(id: $id) {
@@ -1941,6 +1988,11 @@ export const GraphQLAPI = {
 
   getTodayOrders: (variables?: { date_from?: string; date_to?: string }): Promise<{ orders: any }> =>
     graphqlClient.query(GraphQLQueries.TODAY_ORDERS, { variables }),
+
+  getPatientOrders: (patientId: string, pagination?: { skip?: number; take?: number }): Promise<{ orders: any }> =>
+    graphqlClient.query(GraphQLQueries.PATIENT_ORDERS, {
+      variables: { patientId, pagination: pagination || { skip: 0, take: 50 } }
+    }),
 
   getOrder: (id: string): Promise<{ order: any }> =>
     graphqlClient.query(GraphQLQueries.GET_ORDER, {

@@ -291,7 +291,7 @@ export default function PatientDetailPage() {
         </div>
         
         <div className="flex gap-2">
-          <Button 
+          {/* <Button 
             onClick={() => router.push(`/dashboard/patients/${patient.id}/receipts`)}
             variant="outline"
             className="border-green-600 text-green-600 hover:bg-green-50"
@@ -306,7 +306,7 @@ export default function PatientDetailPage() {
           >
             <ClipboardList className="w-4 h-4 mr-2" />
             {isCreatingTriage ? 'กำลังเพิ่มคิว...' : 'เพิ่มคิวคัดกรอง'}
-          </Button>
+          </Button> */}
         </div>
       </div>
 
