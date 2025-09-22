@@ -1,5 +1,6 @@
 import { PrismaClient, VisitStatus, QueueStation, QueueStatus } from "@prisma/client";
 import { fromZonedTime, toZonedTime } from "date-fns-tz";
+import { QUEUE_TICKET_STATUS, QUEUE_TICKET_STATION, VISIT_STATUS, MESSAGES, ERROR_MESSAGES } from '../constants';
 
 export interface CreateVisitInput {
   patientId: string;
@@ -89,7 +90,7 @@ export class ClinicService {
         chief_complaint: input.chief_complaint,
         diagnosis: input.diagnosis,
         notes: input.notes,
-        status: 'open'
+        status: VISIT_STATUS.OPEN
       },
       include: {
         patient: {
@@ -412,7 +413,7 @@ export class ClinicService {
         station: input.station,
         number: nextNumber,
         priority: input.priority || 0,
-        status: 'waiting'
+        status: QUEUE_TICKET_STATUS.WAITING
       },
       include: {
         visit: {
@@ -438,7 +439,7 @@ export class ClinicService {
       data: {
         ticketId: queueTicket.id,
         station: input.station,
-        status: 'waiting'
+        status: QUEUE_TICKET_STATUS.WAITING
       }
     });
 
@@ -753,10 +754,10 @@ export class ClinicService {
       const queueTicket = await tx.queueTicket.create({
         data: {
           patientId,
-          station: 'triage',
+          station: QUEUE_TICKET_STATION.TRIAGE,
           number: nextNumber,
           priority,
-          status: 'waiting'
+          status: QUEUE_TICKET_STATUS.WAITING
         },
         include: {
           patient: {
@@ -778,8 +779,8 @@ export class ClinicService {
       await tx.queueEvent.create({
         data: {
           ticketId: queueTicket.id,
-          station: 'triage',
-          status: 'waiting'
+          station: QUEUE_TICKET_STATION.TRIAGE,
+          status: QUEUE_TICKET_STATUS.WAITING
         }
       });
 
@@ -800,18 +801,18 @@ export class ClinicService {
         throw new Error('Queue ticket not found');
       }
 
-      if (ticket.station !== 'triage') {
+      if (ticket.station !== QUEUE_TICKET_STATION.TRIAGE) {
         throw new Error('INVALID_STATION');
       }
 
-      if (ticket.status !== 'waiting') {
+      if (ticket.status !== QUEUE_TICKET_STATUS.WAITING) {
         throw new Error('INVALID_STATE');
       }
 
       const updatedTicket = await tx.queueTicket.update({
         where: { id: ticketId },
         data: {
-          status: 'called',
+          status: QUEUE_TICKET_STATUS.CALLED,
           called_at: new Date()
         },
         include: {
@@ -834,8 +835,8 @@ export class ClinicService {
       await tx.queueEvent.create({
         data: {
           ticketId,
-          station: 'triage',
-          status: 'called',
+          station: QUEUE_TICKET_STATION.TRIAGE,
+          status: QUEUE_TICKET_STATUS.CALLED,
           byUserId
         }
       });
@@ -858,11 +859,11 @@ export class ClinicService {
         throw new Error('Queue ticket not found');
       }
 
-      if (ticket.station !== 'triage') {
+      if (ticket.station !== QUEUE_TICKET_STATION.TRIAGE) {
         throw new Error('INVALID_STATION');
       }
 
-      if (!['waiting', 'called'].includes(ticket.status)) {
+      if (![QUEUE_TICKET_STATUS.WAITING, QUEUE_TICKET_STATUS.CALLED].includes(ticket.status as any)) {
         throw new Error('INVALID_STATE');
       }
 
@@ -872,8 +873,8 @@ export class ClinicService {
         const visit = await tx.visit.create({
           data: {
             patientId: ticket.patientId,
-            status: 'triage',
-            chief_complaint: 'Triage Assessment'
+            status: VISIT_STATUS.TRIAGE,
+            chief_complaint: MESSAGES.TRIAGE_ASSESSMENT
           }
         });
         visitId = visit.id;
@@ -888,7 +889,7 @@ export class ClinicService {
       const updatedTicket = await tx.queueTicket.update({
         where: { id: ticketId },
         data: {
-          status: 'in_service',
+          status: QUEUE_TICKET_STATUS.IN_SERVICE,
           started_at: new Date()
         },
         include: {
@@ -918,8 +919,8 @@ export class ClinicService {
       await tx.queueEvent.create({
         data: {
           ticketId,
-          station: 'triage',
-          status: 'in_service',
+          station: QUEUE_TICKET_STATION.TRIAGE,
+          status: QUEUE_TICKET_STATUS.IN_SERVICE,
           byUserId
         }
       });
@@ -941,18 +942,18 @@ export class ClinicService {
         throw new Error('Queue ticket not found');
       }
 
-      if (ticket.station !== 'triage') {
+      if (ticket.station !== QUEUE_TICKET_STATION.TRIAGE) {
         throw new Error('INVALID_STATION');
       }
 
-      if (ticket.status !== 'in_service') {
+      if (ticket.status !== QUEUE_TICKET_STATUS.IN_SERVICE) {
         throw new Error('INVALID_STATE');
       }
 
       const updatedTicket = await tx.queueTicket.update({
         where: { id: ticketId },
         data: {
-          status: 'done',
+          status: QUEUE_TICKET_STATUS.DONE,
           done_at: new Date()
         },
         include: {
@@ -975,8 +976,8 @@ export class ClinicService {
       await tx.queueEvent.create({
         data: {
           ticketId,
-          station: 'triage',
-          status: 'done',
+          station: QUEUE_TICKET_STATION.TRIAGE,
+          status: QUEUE_TICKET_STATUS.DONE,
           byUserId
         }
       });
