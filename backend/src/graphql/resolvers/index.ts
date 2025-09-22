@@ -421,6 +421,9 @@ const relationshipResolvers = {
 
   QueueTicket: {
     async visit(parent: any, args: any, context: any) {
+      if (!parent.visitId) {
+        return null;
+      }
       return context.prisma.visit.findUnique({
         where: { id: parent.visitId }
       });

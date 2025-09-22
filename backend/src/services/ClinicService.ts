@@ -1,4 +1,6 @@
 import { PrismaClient, VisitStatus, QueueStation, QueueStatus } from "@prisma/client";
+import { fromZonedTime, toZonedTime } from "date-fns-tz";
+import { QUEUE_TICKET_STATUS, QUEUE_TICKET_STATION, VISIT_STATUS, MESSAGES, ERROR_MESSAGES, USER_ROLES } from '../constants';
 
 export interface CreateVisitInput {
   patientId: string;
@@ -13,6 +15,7 @@ export interface UpdateVisitInput {
   chief_complaint?: string;
   diagnosis?: string;
   notes?: string;
+  appointmentId?: string;
 }
 
 export interface UpsertVitalsInput {
@@ -87,7 +90,7 @@ export class ClinicService {
         chief_complaint: input.chief_complaint,
         diagnosis: input.diagnosis,
         notes: input.notes,
-        status: 'open'
+        status: VISIT_STATUS.OPEN
       },
       include: {
         patient: {
@@ -410,7 +413,7 @@ export class ClinicService {
         station: input.station,
         number: nextNumber,
         priority: input.priority || 0,
-        status: 'waiting'
+        status: QUEUE_TICKET_STATUS.WAITING
       },
       include: {
         visit: {
@@ -436,7 +439,7 @@ export class ClinicService {
       data: {
         ticketId: queueTicket.id,
         station: input.station,
-        status: 'waiting'
+        status: QUEUE_TICKET_STATUS.WAITING
       }
     });
 
@@ -466,9 +469,9 @@ export class ClinicService {
       case 'in_service':
         updateData.started_at = new Date();
         break;
-      case 'done':
-      case 'skipped':
-      case 'cancelled':
+      case QUEUE_TICKET_STATUS.DONE:
+      case QUEUE_TICKET_STATUS.SKIPPED:
+      case QUEUE_TICKET_STATUS.CANCELLED:
         updateData.done_at = new Date();
         break;
     }
@@ -637,25 +640,6 @@ export class ClinicService {
     return visitOrder;
   }
 
-  async getNextQueueNumber(station: QueueStation): Promise<number> {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-
-    const lastTicket = await this.prisma.queueTicket.findFirst({
-      where: {
-        station,
-        created_at: {
-          gte: today,
-          lt: tomorrow
-        }
-      },
-      orderBy: { number: 'desc' }
-    });
-
-    return (lastTicket?.number || 0) + 1;
-  }
 
   async getQueueStats(station?: QueueStation) {
     const today = new Date();
@@ -683,5 +667,438 @@ export class ClinicService {
     });
 
     return stats;
+  }
+
+  // ========== TRIAGE QUEUE METHODS ==========
+
+  /**
+   * Get today's date range in Asia/Bangkok timezone
+   */
+  private getTodayRange(tz: string = "Asia/Bangkok") {
+    const now = new Date();
+    const zonedNow = toZonedTime(now, tz);
+    
+    // Start of today in Bangkok timezone
+    const startOfToday = new Date(zonedNow);
+    startOfToday.setHours(0, 0, 0, 0);
+    const startOfTodayUTC = fromZonedTime(startOfToday, tz);
+    
+    // End of today in Bangkok timezone
+    const endOfToday = new Date(zonedNow);
+    endOfToday.setHours(23, 59, 59, 999);
+    const endOfTodayUTC = fromZonedTime(endOfToday, tz);
+    
+    return {
+      startOfToday: startOfTodayUTC,
+      endOfToday: endOfTodayUTC
+    };
+  }
+
+  /**
+   * Get next queue number for a station on the current day
+   */
+  private async getNextQueueNumber(station: QueueStation = "triage"): Promise<number> {
+    const { startOfToday, endOfToday } = this.getTodayRange();
+    
+    const lastTicket = await this.prisma.queueTicket.findFirst({
+      where: {
+        station,
+        created_at: {
+          gte: startOfToday,
+          lt: endOfToday
+        }
+      },
+      orderBy: { number: 'desc' }
+    });
+
+    return (lastTicket?.number || 0) + 1;
+  }
+
+  /**
+   * Create a triage-only queue ticket (without visit)
+   */
+  async createTriageTicket(patientId: string, priority: number = 0) {
+    // Verify patient exists
+    const patient = await this.prisma.patient.findUnique({
+      where: { id: patientId, isDelete: false }
+    });
+
+    if (!patient) {
+      throw new Error('Patient not found');
+    }
+
+    const { startOfToday, endOfToday } = this.getTodayRange();
+
+    // Check for existing active triage ticket for this patient today
+    const existingTicket = await this.prisma.queueTicket.findFirst({
+      where: {
+        patientId,
+        station: 'triage',
+        status: {
+          in: ['waiting', 'called', 'in_service']
+        },
+        created_at: {
+          gte: startOfToday,
+          lt: endOfToday
+        }
+      }
+    });
+
+    if (existingTicket) {
+      throw new Error('DUPLICATE_TRIAGE_TICKET_TODAY');
+    }
+
+    const nextNumber = await this.getNextQueueNumber('triage');
+
+    return await this.prisma.$transaction(async (tx) => {
+      const queueTicket = await tx.queueTicket.create({
+        data: {
+          patientId,
+          station: QUEUE_TICKET_STATION.TRIAGE,
+          number: nextNumber,
+          priority,
+          status: QUEUE_TICKET_STATUS.WAITING
+        },
+        include: {
+          patient: {
+            select: {
+              id: true,
+              first_name: true,
+              last_name: true,
+              phone: true,
+              email: true
+            }
+          },
+          events: {
+            orderBy: { at: 'desc' }
+          }
+        }
+      });
+
+      // Create initial queue event
+      await tx.queueEvent.create({
+        data: {
+          ticketId: queueTicket.id,
+          station: QUEUE_TICKET_STATION.TRIAGE,
+          status: QUEUE_TICKET_STATUS.WAITING
+        }
+      });
+
+      return queueTicket;
+    });
+  }
+
+  /**
+   * Call a triage ticket (waiting -> called)
+   */
+  async callTriageTicket(ticketId: string, byUserId?: string) {
+    return await this.prisma.$transaction(async (tx) => {
+      const ticket = await tx.queueTicket.findUnique({
+        where: { id: ticketId }
+      });
+
+      if (!ticket) {
+        throw new Error('Queue ticket not found');
+      }
+
+      if (ticket.station !== QUEUE_TICKET_STATION.TRIAGE) {
+        throw new Error('INVALID_STATION');
+      }
+
+      if (ticket.status !== QUEUE_TICKET_STATUS.WAITING) {
+        throw new Error('INVALID_STATE');
+      }
+
+      const updatedTicket = await tx.queueTicket.update({
+        where: { id: ticketId },
+        data: {
+          status: QUEUE_TICKET_STATUS.CALLED,
+          called_at: new Date()
+        },
+        include: {
+          patient: {
+            select: {
+              id: true,
+              first_name: true,
+              last_name: true,
+              phone: true,
+              email: true
+            }
+          },
+          events: {
+            orderBy: { at: 'desc' }
+          }
+        }
+      });
+
+      // Create queue event
+      await tx.queueEvent.create({
+        data: {
+          ticketId,
+          station: QUEUE_TICKET_STATION.TRIAGE,
+          status: QUEUE_TICKET_STATUS.CALLED,
+          byUserId
+        }
+      });
+
+      return updatedTicket;
+    });
+  }
+
+  /**
+   * Start triage service (waiting|called -> in_service)
+   * Automatically creates a Visit for triage assessment
+   */
+  async startTriageTicket(ticketId: string, byUserId?: string) {
+    return await this.prisma.$transaction(async (tx) => {
+      const ticket = await tx.queueTicket.findUnique({
+        where: { id: ticketId }
+      });
+
+      if (!ticket) {
+        throw new Error('Queue ticket not found');
+      }
+
+      if (ticket.station !== QUEUE_TICKET_STATION.TRIAGE) {
+        throw new Error('INVALID_STATION');
+      }
+
+      if (![QUEUE_TICKET_STATUS.WAITING, QUEUE_TICKET_STATUS.CALLED].includes(ticket.status as any)) {
+        throw new Error('INVALID_STATE');
+      }
+
+      // Create Visit automatically for triage assessment
+      let visitId = ticket.visitId;
+      if (!visitId) {
+        const visit = await tx.visit.create({
+          data: {
+            patientId: ticket.patientId,
+            status: VISIT_STATUS.TRIAGE,
+            chief_complaint: MESSAGES.TRIAGE_ASSESSMENT
+          }
+        });
+        visitId = visit.id;
+
+        // Update ticket to link with the new visit
+        await tx.queueTicket.update({
+          where: { id: ticketId },
+          data: { visitId }
+        });
+      }
+
+      const updatedTicket = await tx.queueTicket.update({
+        where: { id: ticketId },
+        data: {
+          status: QUEUE_TICKET_STATUS.IN_SERVICE,
+          started_at: new Date()
+        },
+        include: {
+          patient: {
+            select: {
+              id: true,
+              first_name: true,
+              last_name: true,
+              phone: true,
+              email: true
+            }
+          },
+          visit: {
+            select: {
+              id: true,
+              status: true,
+              chief_complaint: true
+            }
+          },
+          events: {
+            orderBy: { at: 'desc' }
+          }
+        }
+      });
+
+      // Create queue event
+      await tx.queueEvent.create({
+        data: {
+          ticketId,
+          station: QUEUE_TICKET_STATION.TRIAGE,
+          status: QUEUE_TICKET_STATUS.IN_SERVICE,
+          byUserId
+        }
+      });
+
+      return updatedTicket;
+    });
+  }
+
+  /**
+   * Complete triage service (in_service -> done)
+   */
+  async completeTriageTicket(ticketId: string, byUserId?: string) {
+    return await this.prisma.$transaction(async (tx) => {
+      const ticket = await tx.queueTicket.findUnique({
+        where: { id: ticketId }
+      });
+
+      if (!ticket) {
+        throw new Error('Queue ticket not found');
+      }
+
+      if (ticket.station !== QUEUE_TICKET_STATION.TRIAGE) {
+        throw new Error('INVALID_STATION');
+      }
+
+      if (ticket.status !== QUEUE_TICKET_STATUS.IN_SERVICE) {
+        throw new Error('INVALID_STATE');
+      }
+
+      const updatedTicket = await tx.queueTicket.update({
+        where: { id: ticketId },
+        data: {
+          status: QUEUE_TICKET_STATUS.DONE,
+          done_at: new Date()
+        },
+        include: {
+          patient: {
+            select: {
+              id: true,
+              first_name: true,
+              last_name: true,
+              phone: true,
+              email: true
+            }
+          },
+          events: {
+            orderBy: { at: 'desc' }
+          }
+        }
+      });
+
+      // Create queue event
+      await tx.queueEvent.create({
+        data: {
+          ticketId,
+          station: QUEUE_TICKET_STATION.TRIAGE,
+          status: QUEUE_TICKET_STATUS.DONE,
+          byUserId
+        }
+      });
+
+      return updatedTicket;
+    });
+  }
+
+  /**
+   * Get triage queue with pagination and search
+   */
+  async getTriageQueue(options: {
+    status?: QueueStatus;
+    skip?: number;
+    take?: number;
+    search?: string;
+  } = {}) {
+    const { status, skip = 0, take = 50, search } = options;
+    const { startOfToday, endOfToday } = this.getTodayRange();
+
+    const where: any = {
+      station: 'triage',
+      created_at: {
+        gte: startOfToday,
+        lt: endOfToday
+      }
+    };
+
+    if (status) {
+      where.status = status;
+    }
+
+    if (search) {
+      where.OR = [
+        {
+          patient: {
+            first_name: {
+              contains: search,
+              mode: 'insensitive'
+            }
+          }
+        },
+        {
+          patient: {
+            last_name: {
+              contains: search,
+              mode: 'insensitive'
+            }
+          }
+        },
+        {
+          patientId: search
+        }
+      ];
+    }
+
+    const [tickets, total] = await Promise.all([
+      this.prisma.queueTicket.findMany({
+        where,
+        skip,
+        take,
+        orderBy: [
+          { status: 'asc' },
+          { created_at: 'asc' }
+        ],
+        include: {
+          patient: {
+            select: {
+              id: true,
+              first_name: true,
+              last_name: true,
+              phone: true,
+              email: true
+            }
+          },
+          visit: {
+            select: {
+              id: true,
+              status: true,
+              chief_complaint: true
+            }
+          },
+          events: {
+            orderBy: { at: 'desc' },
+            take: 1
+          }
+        }
+      }),
+      this.prisma.queueTicket.count({ where })
+    ]);
+
+    return {
+      tickets,
+      total
+    };
+  }
+
+  /**
+   * Get all vitals for a specific patient
+   */
+  async getPatientVitals(patientId: string) {
+    const vitals = await this.prisma.vitals.findMany({
+      where: {
+        visit: {
+          patientId
+        }
+      },
+      include: {
+        visit: {
+          select: {
+            id: true,
+            visit_date: true,
+            chief_complaint: true
+          }
+        }
+      },
+      orderBy: {
+        created_at: 'desc'
+      }
+    });
+
+    return vitals;
   }
 }

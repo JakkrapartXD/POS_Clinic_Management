@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
-import { Bell, ShoppingCart, Pill, LayoutGrid, Package, BarChart3, Settings, Users, FileText, Shield, Receipt, ChevronDown, ChevronRight, LogOut, LucideIcon, UserCheck } from "lucide-react"
+import { Bell, ShoppingCart, Pill, LayoutGrid, Package, BarChart3, Settings, FileText, Shield, Receipt, ChevronDown, ChevronRight, LogOut, LucideIcon, UserCheck, ClipboardList } from "lucide-react"
 
 interface MenuItem {
   id: string
@@ -101,8 +101,11 @@ export default function Sidebar() {
     { id: "pos", icon: ShoppingCart, href: "/dashboard/pos", label: "จุดขาย" },
     { id: "inventory", icon: Pill, href: "/dashboard/inventory", label: "คลังสินค้า" },
     { id: "patients", icon: UserCheck, href: "/dashboard/patients", label: "ผู้ป่วย" },
+    { id: "queue", icon: ClipboardList, href: "/dashboard/queue", label: "คิวทั่วไป" },
+    { id: "queue/triage", icon: ClipboardList, href: "/queue/triage", label: "คิวคัดกรอง" },
+    { id: "queue/doctor", icon: ClipboardList, href: "/queue/doctor", label: "คิวหมอ" },
+    { id: "queue/cashier", icon: ClipboardList, href: "/queue/cashier", label: "คิวแคชเชียร์" },
     { id: "documents", icon: LayoutGrid, href: "/dashboard/documents", label: "เอกสาร" },
-    { id: "users", icon: Users, href: "/dashboard/users", label: "ผู้ใช้งาน" },
     { id: "orders", icon: Receipt, href: "/dashboard/orders", label: "ใบเสร็จรับเงินวันนี้" },
     { 
       id: "reports", 

@@ -781,6 +781,12 @@ export const typeDefs = /* GraphQL */ `
     queueTickets(station: QueueStation, status: QueueStatus, pagination: PaginationInput): [QueueTicket!]!
     queueTicket(id: String!): QueueTicket
     queueStats(station: QueueStation): [QueueStats!]!
+    
+    # Triage Queue Queries
+    triageQueue(status: QueueStatus, skip: Int = 0, take: Int = 50, search: String): TriageQueuePage!
+    
+    # Patient Vitals Queries
+    patientVitals(patientId: String!): [Vitals!]!
 
     # Stock & Reports
     stocks(productId: String, pagination: PaginationInput): [Stock!]!
@@ -871,6 +877,16 @@ export const typeDefs = /* GraphQL */ `
     createQueueTicket(input: CreateQueueTicketInput!): QueueTicket!
     updateQueueStatus(id: String!, status: QueueStatus!, note: String): QueueTicket!
     linkOrderToVisit(input: LinkOrderToVisitInput!): VisitOrder!
+    
+    # Triage Queue Mutations
+    createTriageTicket(patientId: ID!, priority: Int): QueueTicket!
+    queueCall(ticketId: ID!): QueueTicket!
+    queueStart(ticketId: ID!): QueueTicket!
+    queueComplete(ticketId: ID!): QueueTicket!
+    
+    # Queue Management Mutations
+    deleteAllQueueTickets: Boolean!
+    deleteQueueTicketsByDate(date: DateTime!): Boolean!
   }
 
   # ========== CLINIC SYSTEM TYPES ==========
@@ -922,6 +938,7 @@ export const typeDefs = /* GraphQL */ `
   }
 
   type Vitals {
+    id: String!
     visitId: String!
     heightCm: Float
     weightKg: Float
@@ -941,7 +958,7 @@ export const typeDefs = /* GraphQL */ `
 
   type QueueTicket {
     id: String!
-    visitId: String!
+    visitId: String
     patientId: String!
     number: Int!
     station: QueueStation!
@@ -954,7 +971,7 @@ export const typeDefs = /* GraphQL */ `
     updated_at: DateTime!
     
     # Relations
-    visit: Visit!
+    visit: Visit
     patient: Patient!
     events: [QueueEvent!]!
   }
@@ -997,6 +1014,7 @@ export const typeDefs = /* GraphQL */ `
     chief_complaint: String
     diagnosis: String
     notes: String
+    appointmentId: String
   }
 
   input UpsertVitalsInput {
@@ -1028,5 +1046,11 @@ export const typeDefs = /* GraphQL */ `
     station: QueueStation!
     status: QueueStatus!
     count: Int!
+  }
+
+  # Triage Queue Types
+  type TriageQueuePage {
+    tickets: [QueueTicket!]!
+    total: Int!
   }
 `; 

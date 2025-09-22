@@ -499,6 +499,7 @@ export const GraphQLQueries = {
           phone
           email
           address
+          photo_url
           created_at
           updated_at
         }
@@ -519,6 +520,9 @@ export const GraphQLQueries = {
         email
         date_of_birth
         gender
+        photo_url
+        drug_allergies
+        medical_conditions
       }
     }
   `,
@@ -534,6 +538,7 @@ export const GraphQLQueries = {
           product_type
           short_name
           status
+          vat_percent
           sale_price
           unit
           pack_size
@@ -626,6 +631,7 @@ export const GraphQLQueries = {
         stock_quantity
         sku
         barcode
+        vat_percent
         category {
           id
           name
@@ -835,6 +841,53 @@ export const GraphQLQueries = {
     }
   `,
 
+  PATIENT_ORDERS: `
+    query GetPatientOrders($patientId: String!, $pagination: PaginationInput) {
+      orders(filter: { patientId: $patientId }, pagination: $pagination) {
+        orders {
+          id
+          order_date
+          status
+          total_amount
+          is_walkin
+          created_at
+          updated_at
+          patient {
+            id
+            first_name
+            last_name
+          }
+          user {
+            id
+            username
+          }
+          orderItems {
+            id
+            quantity
+            unit_price
+            total_price
+            product_name
+            product_unit
+            product {
+              id
+              product_name
+              sku
+              unit
+            }
+          }
+          payments {
+            id
+            payment_type
+            amount
+            payment_date
+            details
+          }
+        }
+        total
+      }
+    }
+  `,
+
   GET_ORDER: `
     query GetOrder($id: String!) {
       order(id: $id) {
@@ -969,6 +1022,8 @@ export const GraphQLQueries = {
         stock_quantity
         reorder_point
         unit
+        vat_percent
+        sale_price
         category {
           name
         }
@@ -1017,6 +1072,17 @@ export const GraphQLQueries = {
         chief_complaint
         diagnosis
         notes
+        appointment {
+          id
+          appointment_time
+          reason
+          status
+          doctor {
+            id
+            username
+            email
+          }
+        }
         vitals {
           heightCm
           weightKg
@@ -1052,6 +1118,17 @@ export const GraphQLQueries = {
           national_id
           phone
           email
+        }
+        appointment {
+          id
+          appointment_time
+          reason
+          status
+          doctor {
+            id
+            username
+            email
+          }
         }
         vitals {
           visitId
@@ -1101,20 +1178,110 @@ export const GraphQLQueries = {
         station
         status
         priority
+        patientId
         called_at
         started_at
         done_at
         created_at
+        patient {
+          id
+          first_name
+          last_name
+          phone
+          email
+        }
         visit {
           id
+          status
           chief_complaint
+          diagnosis
+          notes
+          vitals {
+            id
+            visitId
+            heightCm
+            weightKg
+            tempC
+            sbp
+            dbp
+            hr
+            rr
+            spo2
+            bmi
+            created_at
+          }
+        }
+        events {
+          id
+          status
+          at
+          byUserId
+          note
+        }
+      }
+    }
+  `,
+
+  // Triage Queue Query
+  GET_TRIAGE_QUEUE: `
+    query GetTriageQueue($status: QueueStatus, $skip: Int, $take: Int, $search: String) {
+      triageQueue(status: $status, skip: $skip, take: $take, search: $search) {
+        total
+        tickets {
+          id
+          number
+          status
+          station
+          patientId
+          priority
+          called_at
+          started_at
+          done_at
+          created_at
           patient {
             id
             first_name
             last_name
-            national_id
             phone
+            email
           }
+          visit {
+            id
+            status
+            chief_complaint
+          }
+          events {
+            id
+            status
+            at
+            byUserId
+            note
+          }
+        }
+      }
+    }
+  `,
+
+  // Patient Vitals Query
+  GET_PATIENT_VITALS: `
+    query GetPatientVitals($patientId: String!) {
+      patientVitals(patientId: $patientId) {
+        id
+        visitId
+        heightCm
+        weightKg
+        tempC
+        sbp
+        dbp
+        hr
+        rr
+        spo2
+        bmi
+        created_at
+        visit {
+          id
+          visit_date
+          chief_complaint
         }
       }
     }
@@ -1646,6 +1813,123 @@ export const GraphQLMutations = {
       }
     }
   `,
+
+  // Triage Queue Operations
+  CREATE_TRIAGE_TICKET: `
+    mutation CreateTriageTicket($patientId: ID!, $priority: Int) {
+      createTriageTicket(patientId: $patientId, priority: $priority) {
+        id
+        number
+        status
+        station
+        patientId
+        priority
+        created_at
+        patient {
+          id
+          first_name
+          last_name
+          phone
+          email
+        }
+      }
+    }
+  `,
+
+  QUEUE_CALL: `
+    mutation QueueCall($ticketId: ID!) {
+      queueCall(ticketId: $ticketId) {
+        id
+        status
+        called_at
+      }
+    }
+  `,
+
+  QUEUE_START: `
+    mutation QueueStart($ticketId: ID!) {
+      queueStart(ticketId: $ticketId) {
+        id
+        status
+        started_at
+      }
+    }
+  `,
+
+  QUEUE_COMPLETE: `
+    mutation QueueComplete($ticketId: ID!) {
+      queueComplete(ticketId: $ticketId) {
+        id
+        status
+        done_at
+      }
+    }
+  `,
+
+  // Appointment Mutations
+  CREATE_APPOINTMENT: `
+    mutation CreateAppointment($input: CreateAppointmentInput!) {
+      createAppointment(input: $input) {
+        id
+        appointment_time
+        status
+        reason
+        created_at
+        updated_at
+        patient {
+          id
+          first_name
+          last_name
+          phone
+        }
+        doctor {
+          id
+          username
+        }
+      }
+    }
+  `,
+
+  UPDATE_APPOINTMENT: `
+    mutation UpdateAppointment($id: String!, $input: UpdateAppointmentInput!) {
+      updateAppointment(id: $id, input: $input) {
+        id
+        appointment_time
+        status
+        reason
+        created_at
+        updated_at
+        patient {
+          id
+          first_name
+          last_name
+          phone
+        }
+        doctor {
+          id
+          username
+        }
+      }
+    }
+  `,
+
+  DELETE_APPOINTMENT: `
+    mutation DeleteAppointment($id: String!) {
+      deleteAppointment(id: $id)
+    }
+  `,
+
+  DELETE_ALL_QUEUE_TICKETS: `
+    mutation DeleteAllQueueTickets {
+      deleteAllQueueTickets
+    }
+  `,
+
+  DELETE_QUEUE_TICKETS_BY_DATE: `
+    mutation DeleteQueueTicketsByDate($date: DateTime!) {
+      deleteQueueTicketsByDate(date: $date)
+    }
+  `,
 };
 
 // Typed GraphQL API functions
@@ -1764,6 +2048,11 @@ export const GraphQLAPI = {
 
   getTodayOrders: (variables?: { date_from?: string; date_to?: string }): Promise<{ orders: any }> =>
     graphqlClient.query(GraphQLQueries.TODAY_ORDERS, { variables }),
+
+  getPatientOrders: (patientId: string, pagination?: { skip?: number; take?: number }): Promise<{ orders: any }> =>
+    graphqlClient.query(GraphQLQueries.PATIENT_ORDERS, {
+      variables: { patientId, pagination: pagination || { skip: 0, take: 50 } }
+    }),
 
   getOrder: (id: string): Promise<{ order: any }> =>
     graphqlClient.query(GraphQLQueries.GET_ORDER, {
@@ -2046,7 +2335,7 @@ export const GraphQLAPI = {
       variables: { input }
     }),
 
-  updateVisit: (id: string, input: { chief_complaint?: string; diagnosis?: string; notes?: string }): Promise<{ updateVisit: any }> =>
+  updateVisit: (id: string, input: { chief_complaint?: string; diagnosis?: string; notes?: string; appointmentId?: string }): Promise<{ updateVisit: any }> =>
     graphqlClient.mutation(GraphQLMutations.UPDATE_VISIT, {
       variables: { id, input }
     }),
@@ -2092,5 +2381,75 @@ export const GraphQLAPI = {
   updateQueueStatus: (id: string, status: string, note?: string): Promise<{ updateQueueStatus: any }> =>
     graphqlClient.mutation(GraphQLMutations.UPDATE_QUEUE_STATUS, {
       variables: { id, status, note }
+    }),
+
+  // Triage Queue Operations
+  getTriageQueue: (variables?: { 
+    status?: string; 
+    skip?: number; 
+    take?: number; 
+    search?: string 
+  }): Promise<{ triageQueue: { total: number; tickets: any[] } }> =>
+    graphqlClient.query(GraphQLQueries.GET_TRIAGE_QUEUE, { variables }),
+
+  createTriageTicket: (patientId: string, priority?: number): Promise<{ createTriageTicket: any }> =>
+    graphqlClient.mutation(GraphQLMutations.CREATE_TRIAGE_TICKET, {
+      variables: { patientId, priority }
+    }),
+
+  queueCall: (ticketId: string): Promise<{ queueCall: any }> =>
+    graphqlClient.mutation(GraphQLMutations.QUEUE_CALL, {
+      variables: { ticketId }
+    }),
+
+  queueStart: (ticketId: string): Promise<{ queueStart: any }> =>
+    graphqlClient.mutation(GraphQLMutations.QUEUE_START, {
+      variables: { ticketId }
+    }),
+
+  queueComplete: (ticketId: string): Promise<{ queueComplete: any }> =>
+    graphqlClient.mutation(GraphQLMutations.QUEUE_COMPLETE, {
+      variables: { ticketId }
+    }),
+
+  // Appointment Operations
+  createAppointment: (input: {
+    patientId: string;
+    doctorId: string;
+    appointment_time: string;
+    reason?: string;
+    status?: string;
+  }): Promise<{ createAppointment: any }> =>
+    graphqlClient.mutation(GraphQLMutations.CREATE_APPOINTMENT, {
+      variables: { input }
+    }),
+
+  updateAppointment: (id: string, input: {
+    status?: string;
+    reason?: string;
+    appointment_time?: string;
+  }): Promise<{ updateAppointment: any }> =>
+    graphqlClient.mutation(GraphQLMutations.UPDATE_APPOINTMENT, {
+      variables: { id, input }
+    }),
+
+  deleteAppointment: (id: string): Promise<{ deleteAppointment: boolean }> =>
+    graphqlClient.mutation(GraphQLMutations.DELETE_APPOINTMENT, {
+      variables: { id }
+    }),
+
+  // Queue Management
+  deleteAllQueueTickets: (): Promise<{ deleteAllQueueTickets: boolean }> =>
+    graphqlClient.mutation(GraphQLMutations.DELETE_ALL_QUEUE_TICKETS),
+
+  deleteQueueTicketsByDate: (date: string): Promise<{ deleteQueueTicketsByDate: boolean }> =>
+    graphqlClient.mutation(GraphQLMutations.DELETE_QUEUE_TICKETS_BY_DATE, {
+      variables: { date }
+    }),
+
+  // Patient Vitals
+  getPatientVitals: (patientId: string): Promise<{ patientVitals: any[] }> =>
+    graphqlClient.query(GraphQLQueries.GET_PATIENT_VITALS, {
+      variables: { patientId }
     }),
 }; 

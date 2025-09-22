@@ -1,5 +1,5 @@
 /**
- * Frontend constants for better maintainability and consistency
+ * Application constants for better maintainability and internationalization support
  */
 
 // Queue Ticket Statuses
@@ -31,6 +31,11 @@ export const VISIT_STATUS = {
   CANCELLED: 'cancelled'
 } as const;
 
+// Common Messages and Labels
+export const MESSAGES = {
+  TRIAGE_ASSESSMENT: 'Triage Assessment'
+} as const;
+
 // User Roles
 export const USER_ROLES = {
   ADMIN: 'admin',
@@ -41,18 +46,10 @@ export const USER_ROLES = {
   NURSE: 'nurse'
 } as const;
 
-// Appointment Statuses
-export const APPOINTMENT_STATUS = {
-  SCHEDULED: 'scheduled',
-  VISITED: 'visited',
-  CANCELLED: 'cancelled'
-} as const;
-
-// App Constants
-export const APP_CONSTANTS = {
-  COOKIES: {
-    AUTH_TOKEN: 'auth-token'
-  }
+// Error Messages
+export const ERROR_MESSAGES = {
+  INVALID_STATION: 'INVALID_STATION',
+  INVALID_STATE: 'INVALID_STATE'
 } as const;
 
 // Type definitions for better type safety
@@ -60,4 +57,3 @@ export type QueueTicketStatus = typeof QUEUE_TICKET_STATUS[keyof typeof QUEUE_TI
 export type QueueTicketStation = typeof QUEUE_TICKET_STATION[keyof typeof QUEUE_TICKET_STATION];
 export type VisitStatus = typeof VISIT_STATUS[keyof typeof VISIT_STATUS];
 export type UserRole = typeof USER_ROLES[keyof typeof USER_ROLES];
-export type AppointmentStatus = typeof APPOINTMENT_STATUS[keyof typeof APPOINTMENT_STATUS];

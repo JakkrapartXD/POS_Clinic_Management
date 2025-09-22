@@ -15,6 +15,8 @@ import { logger } from "@/lib/logger"
 import { useUser } from "@/hooks/use-user"
 import { API_CONFIG } from "@/config/api"
 import JsBarcode from 'jsbarcode'
+import { parseDrugAllergies } from '@/utils/patient-utils'
+import { calculateItemVAT, calculateTotalVAT, calculateSubtotal, calculateGrandTotal, createOrderItemWithVAT } from '@/utils/vat-utils'
 
 
 
@@ -33,6 +35,7 @@ interface Product {
     name: string
   }
   status: string
+  vat_percent?: number
 }
 
 interface CartItem {
@@ -45,6 +48,7 @@ interface CartItem {
   sku: string
   barcode: string
   stock_quantity: number
+  vat_percent?: number
 }
 
 interface Category {
@@ -59,6 +63,8 @@ interface Patient {
   last_name: string
   phone?: string
   email?: string
+  drug_allergies?: string
+  medical_conditions?: string
 }
 
 export default function POSPage() {
@@ -85,6 +91,12 @@ export default function POSPage() {
   const [customerSearchResults, setCustomerSearchResults] = useState<Patient[]>([])
   const [isSearchingCustomer, setIsSearchingCustomer] = useState(false)
   const [showCustomerSearch, setShowCustomerSearch] = useState(false)
+  const [customerMedicalInfo, setCustomerMedicalInfo] = useState<any>(null)
+  const [isLoadingMedicalInfo, setIsLoadingMedicalInfo] = useState(false)
+  
+  // Prescription visit states
+  const [prescriptionVisitData, setPrescriptionVisitData] = useState<any>(null)
+  const [prescriptionItems, setPrescriptionItems] = useState<any[]>([])
 
   // Handle keyboard input for numpad
   useEffect(() => {
@@ -167,7 +179,57 @@ export default function POSPage() {
 
   useEffect(() => {
     fetchProducts()
+    loadPrescriptionVisitData()
   }, [])
+
+  // Load prescription visit data from sessionStorage
+  const loadPrescriptionVisitData = () => {
+    try {
+      const storedData = sessionStorage.getItem('prescriptionVisitData')
+      if (storedData) {
+        const visitData = JSON.parse(storedData)
+        setPrescriptionVisitData(visitData)
+        
+        // Set customer data if available
+        if (visitData.patientId) {
+          setSelectedCustomer({
+            id: visitData.patientId,
+            first_name: visitData.patientName?.split(' ')[0] || '',
+            last_name: visitData.patientName?.split(' ').slice(1).join(' ') || '',
+            phone: visitData.patientPhone,
+            email: visitData.patientEmail
+          })
+        }
+        
+        // Parse prescription items from visit notes if available
+        if (visitData.visitData?.notes) {
+          try {
+            const notes = visitData.visitData.notes
+            // Look for prescription items in the notes
+            // This is a simple parser - you might need to adjust based on your note format
+            const prescriptionMatch = notes.match(/ยา:\s*([^]+?)(?=\n|$)/i)
+            if (prescriptionMatch) {
+              const prescriptionText = prescriptionMatch[1]
+              // Parse prescription items (this is a basic implementation)
+              const items = prescriptionText.split('\n').filter((line: string) => line.trim())
+              setPrescriptionItems(items.map((item: string, index: number) => ({
+                id: `prescription-${index}`,
+                name: item.trim(),
+                type: 'prescription'
+              })))
+            }
+          } catch (error) {
+            console.error('Error parsing prescription items:', error)
+          }
+        }
+        
+        // Clear the stored data after loading
+        sessionStorage.removeItem('prescriptionVisitData')
+      }
+    } catch (error) {
+      console.error('Error loading prescription visit data:', error)
+    }
+  }
 
   // กรองสินค้าตามการค้นหาและหมวดหมู่
   const filteredProducts = products.filter(product => {
@@ -195,7 +257,8 @@ export default function POSPage() {
         quantity: 1,
         sku: product.sku || '',
         barcode: product.barcode || '',
-        stock_quantity: product.stock_quantity || 0
+        stock_quantity: product.stock_quantity || 0,
+        vat_percent: product.vat_percent || 0
       }
       setCartItems([...cartItems, cartItem])
     }
@@ -218,8 +281,19 @@ export default function POSPage() {
     ))
   }
 
+  // คำนวณยอดรวมก่อน VAT
+  const calculateCartSubtotal = () => {
+    return calculateSubtotal(cartItems)
+  }
+
+  // คำนวณ VAT รวม
+  const calculateCartTotalVAT = () => {
+    return calculateTotalVAT(cartItems)
+  }
+
+  // คำนวณยอดรวมสุทธิ (รวม VAT)
   const calculateTotal = () => {
-    return cartItems.reduce((total, item) => total + item.sale_price * item.quantity, 0)
+    return calculateGrandTotal(cartItems)
   }
 
   const calculateChange = () => {
@@ -260,12 +334,49 @@ export default function POSPage() {
     setCustomerPhone(customer.phone || "")
     setShowCustomerSearch(false)
     setCustomerSearchResults([])
+    
+    // ดึงข้อมูลทางการแพทย์
+    fetchCustomerMedicalInfo(customer)
   }
 
   const clearCustomer = () => {
     setSelectedCustomer(null)
     setCustomerPhone("")
     setCustomerSearchResults([])
+    setCustomerMedicalInfo(null)
+  }
+
+  // ดึงข้อมูลทางการแพทย์ของลูกค้า
+  const fetchCustomerMedicalInfo = async (patient: Patient) => {
+    try {
+      setIsLoadingMedicalInfo(true)
+      
+      // ดึงข้อมูลแพ้ยาและโรคประจำตัวจากข้อมูลผู้ป่วย
+      const allergies: string[] = []
+      const chronicDiseases: string[] = []
+      
+      // ประมวลผลข้อมูลแพ้ยา
+      if (patient.drug_allergies) {
+        const drugAllergies = parseDrugAllergies(patient.drug_allergies)
+        allergies.push(...drugAllergies)
+      }
+      
+      // ประมวลผลข้อมูลโรคประจำตัว
+      if (patient.medical_conditions && patient.medical_conditions.trim() !== '') {
+        chronicDiseases.push(patient.medical_conditions)
+      }
+      
+      setCustomerMedicalInfo({
+        allergies: [...new Set(allergies)].slice(0, 5), // เอาแค่ 5 อันแรก
+        chronicDiseases: [...new Set(chronicDiseases)].slice(0, 5)
+      })
+      
+    } catch (error: any) {
+      console.error('Error fetching medical info:', error)
+      setCustomerMedicalInfo(null)
+    } finally {
+      setIsLoadingMedicalInfo(false)
+    }
   }
 
   const handleCheckout = () => {
@@ -316,18 +427,14 @@ export default function POSPage() {
         method: paymentMethod
       }, 'POS')
 
-      // สร้าง Order Items
-      const orderItems = cartItems.map(item => ({
-        productId: item.id,
-        quantity: item.quantity,
-        unit_price: item.sale_price,
-        total_price: item.sale_price * item.quantity
-      }))
+      // สร้าง Order Items พร้อม VAT ของแต่ละรายการ
+      const orderItems = cartItems.map(item => createOrderItemWithVAT(item))
 
       // สร้าง Order
       const orderInput = {
         status: "completed",
         total_amount: calculateTotal(),
+        vat_amount: calculateCartTotalVAT(),
         is_walkin: !selectedCustomer, // ถ้ามีลูกค้าเลือกแล้วไม่ใช่ walk-in
         patientId: selectedCustomer?.id || null, // เพิ่ม patientId
         orderItems: orderItems
@@ -387,6 +494,20 @@ export default function POSPage() {
       
       console.log(`🎉 [${paymentSessionId}] ชำระเงินสำเร็จ! เลขใบเสร็จ: ${receiptNumber}`)
       
+      // Link order to visit if this is a prescription visit
+      if (prescriptionVisitData?.visitId) {
+        try {
+          await GraphQLAPI.linkOrderToVisit({
+            visitId: prescriptionVisitData.visitId,
+            orderId: orderId
+          })
+          console.log(`✅ [${paymentSessionId}] Order linked to visit successfully`)
+        } catch (linkError) {
+          console.error('Error linking order to visit:', linkError)
+          // Don't fail the payment if linking fails
+        }
+      }
+      
       // เตรียมข้อมูล order สำหรับแสดงผล
       const orderData = {
         id: orderId,
@@ -418,6 +539,13 @@ export default function POSPage() {
       setCartItems([])
       setPaymentAmount(0)
       setPromptPayAmount(0)
+      
+      // ลบข้อมูลการสั่งยาจากหมอหลังจากชำระเงินเสร็จ
+      if (prescriptionVisitData) {
+        setPrescriptionVisitData(null)
+        setPrescriptionItems([])
+        console.log(`🧹 [${paymentSessionId}] Prescription data cleared after payment`)
+      }
       
       // ส่ง event เพื่ออัพเดตจำนวนใบเสร็จรับเงินวันนี้ใน sidebar
       window.dispatchEvent(new CustomEvent('receiptsUpdated'))
@@ -451,6 +579,10 @@ export default function POSPage() {
     setSelectedCustomer(null)
     setCustomerPhone("")
     setCustomerSearchResults([])
+    setCustomerMedicalInfo(null)
+    // ลบข้อมูลการสั่งยาจากหมอ
+    setPrescriptionVisitData(null)
+    setPrescriptionItems([])
   }
 
   // สร้าง barcode เมื่อมี completedOrder
@@ -644,6 +776,30 @@ export default function POSPage() {
         </div>
 
         <div className="flex-1 overflow-auto p-4">
+          {/* Prescription Section */}
+          {prescriptionVisitData && (
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-center mb-2">
+                <div className="w-2 h-2 bg-blue-500 rounded-full mr-2"></div>
+                <h3 className="font-medium text-blue-900">ข้อมูลการสั่งยาจากหมอ</h3>
+              </div>
+              <div className="text-sm text-blue-800 space-y-1">
+                <p><strong>ผู้ป่วย:</strong> {prescriptionVisitData.patientName}</p>
+                <p><strong>อาการ:</strong> {prescriptionVisitData.visitData?.chief_complaint || '-'}</p>
+                <p><strong>การวินิจฉัย:</strong> {prescriptionVisitData.visitData?.diagnosis || '-'}</p>
+                {prescriptionVisitData.visitData?.notes && (
+                  <div className="mt-2">
+                    <p><strong>แผนการรักษา:</strong></p>
+                    <div className="bg-white p-2 rounded border text-xs text-gray-700 whitespace-pre-wrap">
+                      {prescriptionVisitData.visitData.notes}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Cart Items */}
           {cartItems.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-gray-400">
               <div className="text-6xl mb-4">🛒</div>
@@ -658,6 +814,9 @@ export default function POSPage() {
                     <h3 className="font-medium text-sm text-gray-700">{item.product_name}</h3>
                     <div className="text-sm text-gray-500">{item.pack_size} {item.unit}</div>
                     <div className="text-teal-600">฿{item.sale_price.toFixed(2)}</div>
+                    {(item.vat_percent ?? 0) > 0 && (
+                      <div className="text-xs text-orange-600">VAT {item.vat_percent}%</div>
+                    )}
                   </div>
                   <div className="flex items-center text-gray-500">
                     <Button
@@ -688,31 +847,84 @@ export default function POSPage() {
           {/* Customer Selection */}
           <div className="mb-4">
             {selectedCustomer ? (
-              <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg border border-blue-200">
-                <div className="flex items-center">
-                  <Avatar className="h-10 w-10 mr-3">
-                    <AvatarFallback className="bg-blue-100 text-blue-600">
-                      {selectedCustomer.first_name.charAt(0)}{selectedCustomer.last_name.charAt(0)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <div className="text-sm font-medium text-gray-900">
-                      {selectedCustomer.first_name} {selectedCustomer.last_name}
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      {selectedCustomer.phone} • {selectedCustomer.email}
+              <>
+                <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg border border-blue-200">
+                  <div className="flex items-center">
+                    <Avatar className="h-10 w-10 mr-3">
+                      <AvatarFallback className="bg-blue-100 text-blue-600">
+                        {selectedCustomer.first_name.charAt(0)}{selectedCustomer.last_name.charAt(0)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <div className="text-sm font-medium text-gray-900">
+                        {selectedCustomer.first_name} {selectedCustomer.last_name}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {selectedCustomer.phone} • {selectedCustomer.email}
+                      </div>
                     </div>
                   </div>
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={clearCustomer}
+                    className="text-red-600 hover:text-red-700"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
                 </div>
-                <Button 
-                  variant="ghost" 
-                  size="sm"
-                  onClick={clearCustomer}
-                  className="text-red-600 hover:text-red-700"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
+              
+              {/* Medical Information */}
+              {isLoadingMedicalInfo ? (
+                <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <div className="flex items-center">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-600 mr-2"></div>
+                    <span className="text-sm text-red-700">กำลังโหลดข้อมูลทางการแพทย์...</span>
+                  </div>
+                </div>
+              ) : customerMedicalInfo ? (
+                <div className="mt-3 p-3 bg-red-50 border-2 border-red-300 rounded-lg">
+                  <h4 className="text-sm font-semibold text-red-800 mb-2 flex items-center">
+                    <span className="w-2 h-2 bg-red-600 rounded-full mr-2"></span>
+                    ข้อมูลทางการแพทย์
+                  </h4>
+                  
+                  <div className="space-y-2 text-xs">
+                    {/* แพ้ยาแพ้ */}
+                    {customerMedicalInfo.allergies && customerMedicalInfo.allergies.length > 0 && (
+                      <div>
+                        <span className="font-medium text-red-700">แพ้ยาแพ้:</span>
+                        <div className="text-red-600 ml-2">
+                          {customerMedicalInfo.allergies.map((allergy: string, index: number) => (
+                            <div key={index}>• {allergy}</div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* โรคประจำตัว */}
+                    {customerMedicalInfo.chronicDiseases && customerMedicalInfo.chronicDiseases.length > 0 && (
+                      <div>
+                        <span className="font-medium text-red-700">โรคประจำตัว:</span>
+                        <div className="text-red-600 ml-2">
+                          {customerMedicalInfo.chronicDiseases.map((disease: string, index: number) => (
+                            <div key={index}>• {disease}</div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* ถ้าไม่มีข้อมูลแพ้ยาและโรคประจำตัว */}
+                    {(!customerMedicalInfo.allergies || customerMedicalInfo.allergies.length === 0) &&
+                     (!customerMedicalInfo.chronicDiseases || customerMedicalInfo.chronicDiseases.length === 0) && (
+                      <div className="text-red-600 italic">
+                        ไม่มีข้อมูลแพ้ยาและโรคประจำตัว
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : null}
+              </>
             ) : (
               <div className="space-y-2">
                 <div className="flex items-center mb-2">
@@ -776,12 +988,12 @@ export default function POSPage() {
 
           <div className="space-y-2 mb-4">
             <div className="flex justify-between text-sm">
-              <span className="text-gray-500">ราคาเฉพาะสินค้า</span>
-              <span className="text-gray-700">฿{calculateTotal().toFixed(2)}</span>
+              <span className="text-gray-500">ยอดย่อย (ไม่รวม VAT)</span>
+              <span className="text-gray-700">฿{calculateCartSubtotal().toFixed(2)}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-gray-500">ส่วนลด (%)</span>
-              <span className="text-gray-500">0%</span>
+              <span className="text-gray-500">VAT</span>
+              <span className="text-gray-700">฿{calculateCartTotalVAT().toFixed(2)}</span>
             </div>
             <div className="flex justify-between font-medium text-gray-700">
               <span>ยอดรวมสุทธิ</span>
@@ -1094,11 +1306,11 @@ export default function POSPage() {
                   <div className="border-t pt-3 space-y-2">
                     <div className="flex justify-between text-sm">
                       <span className="text-black">สินค้า {completedOrder.orderItems.length} รายการ</span>
-                      <span className="text-black">฿{completedOrder.total_amount.toFixed(2)}</span>
+                      <span className="text-black">฿{(completedOrder.total_amount - (completedOrder.vat_amount || 0)).toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-black">ส่วนลด (%)</span>
-                      <span className="text-black">-</span>
+                      <span className="text-black">VAT</span>
+                      <span className="text-black">฿{(completedOrder.vat_amount || 0).toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between font-bold">
                       <span className="text-black">ยอดสุทธิ</span>

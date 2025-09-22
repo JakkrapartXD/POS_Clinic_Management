@@ -143,5 +143,156 @@ export const clinicMutations = {
     } catch (error: any) {
       throw new Error(error.message);
     }
+  },
+
+  // Triage Queue Mutations
+  createTriageTicket: async (
+    _: any,
+    { patientId, priority = 0 }: { patientId: string; priority?: number },
+    context: any
+  ) => {
+    if (!context.isAuthenticated) {
+      throw new Error("Authentication required");
+    }
+
+    // Allow nurses, doctors, admin, and staff to create triage tickets
+    if (!["nurse", "doctor", "admin", "staff"].includes(context.user.role)) {
+      throw new Error("FORBIDDEN");
+    }
+
+    try {
+      return await clinicService.createTriageTicket(patientId, priority);
+    } catch (error: any) {
+      throw new Error(error.message);
+    }
+  },
+
+  queueCall: async (
+    _: any,
+    { ticketId }: { ticketId: string },
+    context: any
+  ) => {
+    if (!context.isAuthenticated) {
+      throw new Error("Authentication required");
+    }
+
+    // Allow nurses, doctors, admin, and staff to call triage tickets
+    if (!["nurse", "doctor", "admin", "staff"].includes(context.user.role)) {
+      throw new Error("FORBIDDEN");
+    }
+
+    try {
+      return await clinicService.callTriageTicket(ticketId, context.user.id);
+    } catch (error: any) {
+      throw new Error(error.message);
+    }
+  },
+
+  queueStart: async (
+    _: any,
+    { ticketId }: { ticketId: string },
+    context: any
+  ) => {
+    if (!context.isAuthenticated) {
+      throw new Error("Authentication required");
+    }
+
+    // Allow nurses, doctors, admin, and staff to start triage service
+    if (!["nurse", "doctor", "admin", "staff"].includes(context.user.role)) {
+      throw new Error("FORBIDDEN");
+    }
+
+    try {
+      return await clinicService.startTriageTicket(ticketId, context.user.id);
+    } catch (error: any) {
+      throw new Error(error.message);
+    }
+  },
+
+  queueComplete: async (
+    _: any,
+    { ticketId }: { ticketId: string },
+    context: any
+  ) => {
+    if (!context.isAuthenticated) {
+      throw new Error("Authentication required");
+    }
+
+    // Allow nurses, doctors, admin, and staff to complete triage service
+    if (!["nurse", "doctor", "admin", "staff"].includes(context.user.role)) {
+      throw new Error("FORBIDDEN");
+    }
+
+    try {
+      return await clinicService.completeTriageTicket(ticketId, context.user.id);
+    } catch (error: any) {
+      throw new Error(error.message);
+    }
+  },
+
+  deleteAllQueueTickets: async (
+    _: any,
+    args: any,
+    context: any
+  ) => {
+    if (!context.isAuthenticated) {
+      throw new Error("Authentication required");
+    }
+
+    // Only admin can delete all queue tickets
+    if (context.user.role !== "admin") {
+      throw new Error("Access denied. Admin role required");
+    }
+
+    try {
+      // Delete all queue tickets (QueueEvents will be deleted automatically due to CASCADE)
+      const result = await context.prisma.queueTicket.deleteMany({});
+      
+      console.log(`Deleted ${result.count} queue tickets and their events`);
+      return true;
+    } catch (error: any) {
+      console.error("Error deleting all queue tickets:", error);
+      throw new Error("Failed to delete queue tickets");
+    }
+  },
+
+  deleteQueueTicketsByDate: async (
+    _: any,
+    { date }: { date: Date },
+    context: any
+  ) => {
+    if (!context.isAuthenticated) {
+      throw new Error("Authentication required");
+    }
+
+    // Only admin can delete queue tickets by date
+    if (context.user.role !== "admin") {
+      throw new Error("Access denied. Admin role required");
+    }
+
+    try {
+      // Get start and end of the specified date
+      const startOfDay = new Date(date);
+      startOfDay.setHours(0, 0, 0, 0);
+      
+      const endOfDay = new Date(date);
+      endOfDay.setHours(23, 59, 59, 999);
+
+      // Delete queue tickets created on the specified date
+      const result = await context.prisma.queueTicket.deleteMany({
+        where: {
+          created_at: {
+            gte: startOfDay,
+            lte: endOfDay
+          }
+        }
+      });
+      
+      console.log(`Deleted ${result.count} queue tickets from ${date.toDateString()}`);
+      return true;
+    } catch (error: any) {
+      console.error("Error deleting queue tickets by date:", error);
+      throw new Error("Failed to delete queue tickets by date");
+    }
   }
 };

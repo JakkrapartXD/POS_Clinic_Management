@@ -251,14 +251,14 @@ export const medicalMutations = {
     context.security.validateId(input.patientId);
     context.security.validateId(input.doctorId);
     
-    // Validate that doctorId is actually a doctor
+    // Validate that doctorId is actually a doctor or admin
     const doctor = await context.prisma.user.findUnique({
       where: { id: input.doctorId },
       select: { role: true }
     });
     
-    if (!doctor || doctor.role !== 'doctor') {
-      throw new GraphQLError('Selected user is not a doctor');
+    if (!doctor || !['doctor', 'admin'].includes(doctor.role)) {
+      throw new GraphQLError('Selected user is not a doctor or admin');
     }
     
     // Check for conflicting appointments
