@@ -134,14 +134,7 @@ export default function NotificationsPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-
-          {loading ? (
-            <div className="animate-pulse space-y-3">
-              {[...Array(5)].map((_, i) => (
-                <div key={i} className="h-16 bg-gray-200 rounded"></div>
-              ))}
-            </div>
-          ) : stockAlerts.length === 0 && appointments.length === 0 ? (
+          {stockAlerts.length === 0 && appointments.length === 0 ? (
             <EmptyState 
               icon={Bell} 
               title="ไม่มีแจ้งเตือนวันนี้" 

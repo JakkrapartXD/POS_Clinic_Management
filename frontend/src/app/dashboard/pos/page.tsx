@@ -797,52 +797,51 @@ export default function POSPage() {
                       ข้อมูลทางการแพทย์
                     </h4>
                     
-                    <div className="space-y-1 text-xs">
-                      {/* แพ้ยา */}
-                      {(() => {
-                        const drugAllergies = parseDrugAllergies(prescriptionVisitData.patientData.drug_allergies)
-                        return drugAllergies.length > 0 && (
-                          <div>
-                            <span className="font-medium text-red-700">แพ้ยา:</span>
-                            <div className="flex flex-wrap gap-1 mt-1">
-                              {drugAllergies.map((drug: string, index: number) => (
-                                <span 
-                                  key={index}
-                                  className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800"
-                                >
-                                  ⚠️ {drug}
-                                </span>
-                              ))}
+                    {(() => {
+                      // Parse drug allergies once to avoid redundant computation
+                      const drugAllergies = parseDrugAllergies(prescriptionVisitData.patientData.drug_allergies)
+                      const hasAllergies = drugAllergies.length > 0
+                      const hasChronicDiseases = prescriptionVisitData.patientData.medical_conditions && 
+                                               prescriptionVisitData.patientData.medical_conditions !== '-'
+                      
+                      return (
+                        <div className="space-y-1 text-xs">
+                          {/* แพ้ยา */}
+                          {hasAllergies && (
+                            <div>
+                              <span className="font-medium text-red-700">แพ้ยา:</span>
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {drugAllergies.map((drug: string, index: number) => (
+                                  <span 
+                                    key={index}
+                                    className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800"
+                                  >
+                                    ⚠️ {drug}
+                                  </span>
+                                ))}
+                              </div>
                             </div>
-                          </div>
-                        )
-                      })()}
-                      
-                      {/* โรคประจำตัว */}
-                      {prescriptionVisitData.patientData.medical_conditions && 
-                       prescriptionVisitData.patientData.medical_conditions !== '-' && (
-                        <div>
-                          <span className="font-medium text-red-700">โรคประจำตัว:</span>
-                          <div className="text-red-600 ml-2">
-                            {prescriptionVisitData.patientData.medical_conditions}
-                          </div>
+                          )}
+                          
+                          {/* โรคประจำตัว */}
+                          {hasChronicDiseases && (
+                            <div>
+                              <span className="font-medium text-red-700">โรคประจำตัว:</span>
+                              <div className="text-red-600 ml-2">
+                                {prescriptionVisitData.patientData.medical_conditions}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* ถ้าไม่มีข้อมูลแพ้ยาและโรคประจำตัว */}
+                          {!hasAllergies && !hasChronicDiseases && (
+                            <div className="text-red-600 italic">
+                              ไม่มีข้อมูลแพ้ยาและโรคประจำตัว
+                            </div>
+                          )}
                         </div>
-                      )}
-                      
-                      {/* ถ้าไม่มีข้อมูลแพ้ยาและโรคประจำตัว */}
-                      {(() => {
-                        const drugAllergies = parseDrugAllergies(prescriptionVisitData.patientData.drug_allergies)
-                        const hasAllergies = drugAllergies.length > 0
-                        const hasChronicDiseases = prescriptionVisitData.patientData.medical_conditions && 
-                                                 prescriptionVisitData.patientData.medical_conditions !== '-'
-                        
-                        return !hasAllergies && !hasChronicDiseases && (
-                          <div className="text-red-600 italic">
-                            ไม่มีข้อมูลแพ้ยาและโรคประจำตัว
-                          </div>
-                        )
-                      })()}
-                    </div>
+                      )
+                    })()}
                   </div>
                 )}
                 
