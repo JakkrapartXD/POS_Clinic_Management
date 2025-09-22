@@ -24,6 +24,7 @@ interface ProductDetailViewProps {
   productVariants?: any[] // Add this for grouped products
   onProductDeleted?: () => void
   onProductUpdated?: () => void
+  initialActiveTab?: string // Add this for initial tab selection
 }
 
 interface ProductData {
@@ -74,14 +75,14 @@ interface ProductData {
   updated_at: string
 }
 
-export default function ProductDetailView({ productId, onBack, onEditingChange, productVariants: initialProductVariants, onProductDeleted, onProductUpdated }: ProductDetailViewProps) {
+export default function ProductDetailView({ productId, onBack, onEditingChange, productVariants: initialProductVariants, onProductDeleted, onProductUpdated, initialActiveTab }: ProductDetailViewProps) {
   const [product, setProduct] = useState<ProductData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [stocks, setStocks] = useState<any[]>([])
   const [stocksLoading, setStocksLoading] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
-  const [activeTab, setActiveTab] = useState("general")
+  const [activeTab, setActiveTab] = useState(initialActiveTab || "general")
   const [showUnitEditDialog, setShowUnitEditDialog] = useState(false)
   const [hasMultipleVariants, setHasMultipleVariants] = useState(false)
   const [productVariants, setProductVariants] = useState<any[]>(initialProductVariants || [])

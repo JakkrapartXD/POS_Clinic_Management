@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -35,6 +36,7 @@ const formatDate = (dateString: string) => {
 
 
 export default function NotificationsPage() {
+  const router = useRouter()
   const [stockAlerts, setStockAlerts] = useState<any[]>([])
   const [appointments, setAppointments] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -81,6 +83,15 @@ export default function NotificationsPage() {
   useEffect(() => {
     fetchData()
   }, [])
+
+  // Navigation functions
+  const handleStockAlertClick = (productId: string) => {
+    router.push(`/dashboard/inventory?productId=${productId}&tab=stock`)
+  }
+
+  const handleAppointmentClick = (patientId: string) => {
+    router.push(`/dashboard/patients/${patientId}`)
+  }
 
 
   if (loading) {
@@ -140,7 +151,11 @@ export default function NotificationsPage() {
             <div className="space-y-3">
               {/* Stock Alerts */}
               {stockAlerts.map((item: any) => (
-                <div key={`stock-${item.stock_id}`} className={`border rounded-lg p-4 hover:bg-gray-50 ${getColorClasses(item.color)}`}>
+                <div 
+                  key={`stock-${item.stock_id}`} 
+                  className={`border rounded-lg p-4 hover:bg-gray-50 cursor-pointer transition-colors ${getColorClasses(item.color)}`}
+                  onClick={() => handleStockAlertClick(item.product_id)}
+                >
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
@@ -162,6 +177,9 @@ export default function NotificationsPage() {
                       <div className="text-sm font-medium text-gray-700">
                         เหลือ {item.days_left} วัน
                       </div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        คลิกเพื่อดูรายละเอียด
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -169,7 +187,11 @@ export default function NotificationsPage() {
 
               {/* Appointments */}
               {appointments.map((appointment: any) => (
-                <div key={`appointment-${appointment.appointment_id}`} className="border rounded-lg p-4 hover:bg-gray-50">
+                <div 
+                  key={`appointment-${appointment.appointment_id}`} 
+                  className="border rounded-lg p-4 hover:bg-gray-50 cursor-pointer transition-colors"
+                  onClick={() => handleAppointmentClick(appointment.patient_id)}
+                >
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
@@ -187,6 +209,9 @@ export default function NotificationsPage() {
                     <div className="text-right">
                       <div className="text-sm font-medium text-gray-700">
                         {formatDate(appointment.time)}
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        คลิกเพื่อดูรายละเอียด
                       </div>
                     </div>
                   </div>
