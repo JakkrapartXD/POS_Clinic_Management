@@ -16,6 +16,7 @@ import { useUser } from "@/hooks/use-user"
 import { API_CONFIG } from "@/config/api"
 import JsBarcode from 'jsbarcode'
 import { parseDrugAllergies } from '@/utils/patient-utils'
+import { calculateItemVAT, calculateTotalVAT, calculateSubtotal, calculateGrandTotal, createOrderItemWithVAT } from '@/utils/vat-utils'
 
 
 
@@ -281,23 +282,18 @@ export default function POSPage() {
   }
 
   // คำนวณยอดรวมก่อน VAT
-  const calculateSubtotal = () => {
-    return cartItems.reduce((total, item) => total + item.sale_price * item.quantity, 0)
+  const calculateCartSubtotal = () => {
+    return calculateSubtotal(cartItems)
   }
 
   // คำนวณ VAT รวม
-  const calculateTotalVAT = () => {
-    return cartItems.reduce((totalVat, item) => {
-      const itemSubtotal = item.sale_price * item.quantity
-      const vatPercent = item.vat_percent || 0
-      const itemVat = (itemSubtotal * vatPercent) / 100
-      return totalVat + itemVat
-    }, 0)
+  const calculateCartTotalVAT = () => {
+    return calculateTotalVAT(cartItems)
   }
 
   // คำนวณยอดรวมสุทธิ (รวม VAT)
   const calculateTotal = () => {
-    return calculateSubtotal() + calculateTotalVAT()
+    return calculateGrandTotal(cartItems)
   }
 
   const calculateChange = () => {
@@ -432,26 +428,13 @@ export default function POSPage() {
       }, 'POS')
 
       // สร้าง Order Items พร้อม VAT ของแต่ละรายการ
-      const orderItems = cartItems.map(item => {
-        const itemSubtotal = item.sale_price * item.quantity
-        const vatPercent = item.vat_percent || 0
-        const itemVat = (itemSubtotal * vatPercent) / 100
-        
-        return {
-          productId: item.id,
-          quantity: item.quantity,
-          unit_price: item.sale_price,
-          total_price: itemSubtotal + itemVat,
-          vat_percent: vatPercent,
-          vat_amount: itemVat
-        }
-      })
+      const orderItems = cartItems.map(item => createOrderItemWithVAT(item))
 
       // สร้าง Order
       const orderInput = {
         status: "completed",
         total_amount: calculateTotal(),
-        vat_amount: calculateTotalVAT(),
+        vat_amount: calculateCartTotalVAT(),
         is_walkin: !selectedCustomer, // ถ้ามีลูกค้าเลือกแล้วไม่ใช่ walk-in
         patientId: selectedCustomer?.id || null, // เพิ่ม patientId
         orderItems: orderItems
@@ -1006,11 +989,11 @@ export default function POSPage() {
           <div className="space-y-2 mb-4">
             <div className="flex justify-between text-sm">
               <span className="text-gray-500">ยอดย่อย (ไม่รวม VAT)</span>
-              <span className="text-gray-700">฿{calculateSubtotal().toFixed(2)}</span>
+              <span className="text-gray-700">฿{calculateCartSubtotal().toFixed(2)}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-500">VAT</span>
-              <span className="text-gray-700">฿{calculateTotalVAT().toFixed(2)}</span>
+              <span className="text-gray-700">฿{calculateCartTotalVAT().toFixed(2)}</span>
             </div>
             <div className="flex justify-between font-medium text-gray-700">
               <span>ยอดรวมสุทธิ</span>
