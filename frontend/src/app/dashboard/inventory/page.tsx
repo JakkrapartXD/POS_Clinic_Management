@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useMemo, useEffect, useCallback, memo } from "react"
+import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import AddProductForm from "@/components/forms/AddProductForm"
 import ProductListSidebar from "@/components/modules/inventory/product-list-sidebar"
@@ -175,6 +176,7 @@ const downloadCSV = (csvContent: string, filename: string) => {
 
 function InventoryPage() {
   const { handleAuthError } = useAuth()
+  const searchParams = useSearchParams()
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedLetter, setSelectedLetter] = useState<string>("")
   const [alphabetMode, setAlphabetMode] = useState<AlphabetMode>('english')
@@ -270,6 +272,24 @@ function InventoryPage() {
       loadProducts()
     }
   }, []) // Empty dependency array for initial load only
+
+  // Handle URL parameters for direct navigation to product detail with stock tab
+  useEffect(() => {
+    const productId = searchParams.get('productId')
+    const tab = searchParams.get('tab')
+    
+    if (productId && products.length > 0) {
+      // Check if the product exists in our products list
+      const productExists = products.some(p => p.id === productId)
+      if (productExists) {
+        setSelectedProductId(productId)
+        setViewMode('product-detail')
+        
+        // If tab is 'stock', we'll need to pass this to ProductDetailView
+        // The ProductDetailView component will handle the tab selection
+      }
+    }
+  }, [searchParams, products])
 
   // Transform products for display - group by product name and combine units
   // Memoized for better performance
@@ -750,6 +770,7 @@ function InventoryPage() {
               })()}
               onProductDeleted={handleProductDeleted}
               onProductUpdated={handleProductUpdated}
+              initialActiveTab={searchParams.get('tab') === 'stock' ? 'stock' : 'general'}
             />
           )}
 

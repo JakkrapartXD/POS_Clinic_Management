@@ -1,55 +1,226 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Card, CardContent } from "@/components/ui/card"
-import { Bell, Search } from "lucide-react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Bell, Package, Calendar } from "lucide-react"
 import EmptyState from "@/components/ui/empty-state"
+import { GraphQLAPI } from "@/clients/graphql"
+
+// Color mapping for stock alerts
+const getColorClasses = (color: string) => {
+  switch (color) {
+    case "yellow":
+      return "bg-yellow-100 text-yellow-800 border-yellow-200"
+    case "orange":
+      return "bg-orange-100 text-orange-800 border-orange-200"
+    case "red":
+      return "bg-red-100 text-red-800 border-red-200"
+    case "black":
+      return "bg-gray-800 text-white border-gray-800"
+    default:
+      return "bg-gray-100 text-gray-800 border-gray-200"
+  }
+}
+
+// Format date for display
+const formatDate = (dateString: string) => {
+  return new Date(dateString).toLocaleDateString('th-TH', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  })
+}
+
 
 export default function NotificationsPage() {
-  const [searchQuery, setSearchQuery] = useState("")
-  const [notifications] = useState<any[]>([]) // Empty for now
+  const router = useRouter()
+  const [stockAlerts, setStockAlerts] = useState<any[]>([])
+  const [appointments, setAppointments] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  
+  // Get today's date in Thai format
+  const today = new Date()
+  const todayString = today.toLocaleDateString('th-TH', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    weekday: 'long'
+  })
+
+  // Fetch data function
+  const fetchData = async () => {
+    try {
+      setLoading(true)
+      
+      // Fetch stock alerts using GraphQL API
+      const stockData = await GraphQLAPI.getStockExpiryAlerts({
+        skip: 0,
+        take: 100
+      })
+      
+      // Fetch appointments using GraphQL API
+      const appointmentData = await GraphQLAPI.getTodaysAppointments({
+        date: today.toISOString(),
+        skip: 0,
+        take: 100
+      })
+      
+      setStockAlerts(stockData.stockExpiryAlerts?.items || [])
+      setAppointments(appointmentData.todaysAppointments?.items || [])
+    } catch (error) {
+      console.error('Error fetching notifications data:', error)
+      setStockAlerts([])
+      setAppointments([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Fetch data on component mount
+  useEffect(() => {
+    fetchData()
+  }, [])
+
+  // Navigation functions
+  const handleStockAlertClick = (productId: string) => {
+    router.push(`/dashboard/inventory?productId=${productId}&tab=stock`)
+  }
+
+  const handleAppointmentClick = (patientId: string) => {
+    router.push(`/dashboard/patients/${patientId}`)
+  }
+
+
+  if (loading) {
+    return (
+      <div className="p-6">
+        <div className="animate-pulse">
+          <div className="h-8 bg-gray-200 rounded w-1/4 mb-6"></div>
+          <div className="h-10 bg-gray-200 rounded mb-6"></div>
+          <div className="space-y-4">
+            <div className="h-32 bg-gray-200 rounded"></div>
+            <div className="h-32 bg-gray-200 rounded"></div>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-xl font-semibold text-gray-500">รายการแจ้งเตือน</h1>
-        <Button variant="outline" className="text-teal-500 bg-white hover:bg-purple-50">
-          ตั้งค่าแจ้งเตือน
+        <div>
+          <h1 className="text-xl font-semibold text-gray-500">รายการแจ้งเตือน</h1>
+          <p className="text-sm text-gray-400 mt-1">{todayString}</p>
+        </div>
+        <Button 
+          variant="outline" 
+          className="text-teal-500 bg-white hover:bg-purple-50"
+          onClick={fetchData}
+        >
+          รีเฟรช
         </Button>
       </div>
 
-      <div className="relative mb-6">
-        <Input
-          placeholder="ค้นหารายการแจ้งเตือน..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-10 bg-white text-gray-700"
-        />
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-      </div>
+      {/* Combined Notifications */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Bell className="h-5 w-5 text-blue-500" />
+            แจ้งเตือนวันนี้ ({stockAlerts.length + appointments.length})
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
 
-      {notifications.length === 0 ? (
-        <EmptyState icon={Bell} title="ยังไม่พบรายการแจ้งเตือน" description="เมื่อมีการแจ้งเตือนจากระบบ จะแสดงรายการที่นี่" />
-      ) : (
-        <div className="space-y-4">
-          {notifications.map((notification) => (
-            <Card key={notification.id} className="bg-white shadow-sm">
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <h3 className="font-medium">{notification.title}</h3>
-                    <p className="text-gray-500 text-sm mt-1">{notification.message}</p>
-                    <p className="text-xs text-gray-400 mt-2">{notification.timestamp}</p>
+          {loading ? (
+            <div className="animate-pulse space-y-3">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="h-16 bg-gray-200 rounded"></div>
+              ))}
+            </div>
+          ) : stockAlerts.length === 0 && appointments.length === 0 ? (
+            <EmptyState 
+              icon={Bell} 
+              title="ไม่มีแจ้งเตือนวันนี้" 
+              description="ไม่มีสินค้าใกล้หมดอายุหรือนัดหมายในวันนี้" 
+            />
+          ) : (
+            <div className="space-y-3">
+              {/* Stock Alerts */}
+              {stockAlerts.map((item: any) => (
+                <div 
+                  key={`stock-${item.stock_id}`} 
+                  className={`border rounded-lg p-4 hover:bg-gray-50 cursor-pointer transition-colors ${getColorClasses(item.color)}`}
+                  onClick={() => handleStockAlertClick(item.product_id)}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Package className="h-4 w-4 text-orange-500" />
+                        <h3 className="font-medium text-gray-900">{item.product_name}</h3>
+                        <Badge className={getColorClasses(item.color)}>
+                          {item.color === "yellow" && "เตือน"}
+                          {item.color === "orange" && "ใกล้หมดอายุ"}
+                          {item.color === "red" && "หมดอายุเร็ว"}
+                          {item.color === "black" && "หมดอายุแล้ว"}
+                        </Badge>
+                      </div>
+                      <div className="text-sm text-gray-600 space-y-1">
+                        <p>SKU: {item.sku || "ไม่ระบุ"} | จำนวน: {item.quantity} {item.unit || "ชิ้น"}</p>
+                        <p>หมดอายุ: {formatDate(item.expiration_date)} ({item.days_left} วัน)</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-medium text-gray-700">
+                        เหลือ {item.days_left} วัน
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        คลิกเพื่อดูรายละเอียด
+                      </div>
+                    </div>
                   </div>
-                  <div className={`w-3 h-3 rounded-full ${notification.read ? "bg-gray-300" : "bg-teal-500"}`}></div>
                 </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+              ))}
+
+              {/* Appointments */}
+              {appointments.map((appointment: any) => (
+                <div 
+                  key={`appointment-${appointment.appointment_id}`} 
+                  className="border rounded-lg p-4 hover:bg-gray-50 cursor-pointer transition-colors"
+                  onClick={() => handleAppointmentClick(appointment.patient_id)}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Calendar className="h-4 w-4 text-blue-500" />
+                        <h3 className="font-medium text-gray-900">{appointment.patient_fullname}</h3>
+                        <Badge variant={appointment.status === "scheduled" ? "default" : "secondary"}>
+                          {appointment.status === "scheduled" ? "นัดแล้ว" : appointment.status}
+                        </Badge>
+                      </div>
+                      <div className="text-sm text-gray-600 space-y-1">
+                        <p>แพทย์: {appointment.doctor_name || "ไม่ระบุ"}</p>
+                        {appointment.reason && <p>เหตุผล: {appointment.reason}</p>}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-medium text-gray-700">
+                        {formatDate(appointment.time)}
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        คลิกเพื่อดูรายละเอียด
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }

@@ -146,6 +146,7 @@ model Order {
   order_date   DateTime    @default(now())
   status       String?     @default("completed")
   total_amount Float?
+  vat_amount   Float       @default(0)
   isDelete     Boolean     @default(false)
   created_at   DateTime    @default(now())
   updated_at   DateTime    @updatedAt
@@ -165,6 +166,8 @@ model OrderItem {
   quantity     Int
   unit_price   Float
   total_price  Float
+  vat_percent  Float   @default(0)
+  vat_amount   Float   @default(0)
   product_name String?
   product_unit String?
   order        Order   @relation(fields: [orderId], references: [id])

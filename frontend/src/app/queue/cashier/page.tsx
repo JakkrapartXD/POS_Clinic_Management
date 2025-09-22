@@ -157,22 +157,32 @@ export default function CashierQueuePage() {
     }
   };
 
-  const openPOS = (ticket: CashierTicket) => {
-    // Navigate to POS page with visit data
-    const visitData = {
-      visitId: ticket.visit?.id,
-      patientId: ticket.patientId,
-      patientName: `${ticket.patient?.first_name} ${ticket.patient?.last_name}`,
-      patientPhone: ticket.patient?.phone,
-      patientEmail: ticket.patient?.email,
-      visitData: ticket.visit
-    };
-    
-    // Store visit data in sessionStorage for POS page to use
-    sessionStorage.setItem('prescriptionVisitData', JSON.stringify(visitData));
-    
-    // Navigate to POS page
-    router.push('/dashboard/pos');
+  const openPOS = async (ticket: CashierTicket) => {
+    try {
+      // Fetch patient data to get medical information
+      const patientResult = await GraphQLAPI.getPatient(ticket.patientId);
+      const patientData = patientResult.patient;
+      
+      // Navigate to POS page with visit data
+      const visitData = {
+        visitId: ticket.visit?.id,
+        patientId: ticket.patientId,
+        patientName: `${ticket.patient?.first_name} ${ticket.patient?.last_name}`,
+        patientPhone: ticket.patient?.phone,
+        patientEmail: ticket.patient?.email,
+        visitData: ticket.visit,
+        patientData: patientData // Add patient data with medical information
+      };
+      
+      // Store visit data in sessionStorage for POS page to use
+      sessionStorage.setItem('prescriptionVisitData', JSON.stringify(visitData));
+      
+      // Navigate to POS page
+      router.push('/dashboard/pos');
+    } catch (error: any) {
+      console.error('Error fetching patient data:', error);
+      toast.error('ไม่สามารถโหลดข้อมูลผู้ป่วยได้');
+    }
   };
 
 

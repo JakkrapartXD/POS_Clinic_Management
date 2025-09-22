@@ -19,6 +19,7 @@
     "@types/bcrypt": "^5.0.2",
     "@types/jsonwebtoken": "^9.0.9",
     "bcrypt": "^6.0.0",
+    "date-fns": "^4.1.0",
     "date-fns-tz": "^3.2.0",
     "elysia": "latest",
     "googleapis": "^159.0.0",

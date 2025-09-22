@@ -5,6 +5,7 @@ import { medicalMutations } from './medicalMutations';
 import { productMutations } from './productMutations';
 import { clinicQueries } from './clinicQueries';
 import { clinicMutations } from './clinicMutations';
+import { notificationQueries } from './notificationQueries';
 import { customScalars } from '../security';
 
 // Relationship resolvers for nested fields
@@ -688,7 +689,8 @@ export const resolvers = {
   Query: {
     ...queries,
     ...medicalQueries,
-    ...clinicQueries
+    ...clinicQueries,
+    ...notificationQueries
   },
   
   Mutation: {
