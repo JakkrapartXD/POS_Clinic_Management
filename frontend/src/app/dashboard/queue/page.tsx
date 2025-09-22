@@ -30,6 +30,7 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { GraphQLAPI } from '@/clients/graphql';
 import PageGuard from '@/components/guards/page-guard';
+import { QUEUE_TICKET_STATUS, QUEUE_TICKET_STATION } from '@/constants';
 
 interface QueueTicket {
   id: string;
@@ -75,7 +76,7 @@ interface QueueTicket {
 
 const stations = [
   { value: 'triage', label: 'Triage', color: 'bg-yellow-100 text-yellow-800' },
-  { value: 'doctor', label: 'Doctor', color: 'bg-teal-100 text-teal-800' },
+  { value: QUEUE_TICKET_STATION.DOCTOR, label: 'Doctor', color: 'bg-teal-100 text-teal-800' },
   { value: 'cashier', label: 'Cashier', color: 'bg-orange-100 text-orange-800' }
 ];
 
@@ -326,7 +327,7 @@ export default function QueueManagementPage() {
               <>
                 <Button
                   size="sm"
-                  onClick={() => updateQueueStatus(ticket.id, 'done')}
+                  onClick={() => updateQueueStatus(ticket.id, QUEUE_TICKET_STATUS.DONE)}
                   disabled={isUpdating === ticket.id}
                   className="bg-green-600 hover:bg-green-700"
                 >
@@ -348,7 +349,7 @@ export default function QueueManagementPage() {
               <Button
                 size="sm"
                 variant="destructive"
-                onClick={() => updateQueueStatus(ticket.id, 'cancelled')}
+                onClick={() => updateQueueStatus(ticket.id, QUEUE_TICKET_STATUS.CANCELLED)}
                 disabled={isUpdating === ticket.id}
               >
                 <XCircle className="w-3 h-3 mr-1" />
@@ -356,7 +357,7 @@ export default function QueueManagementPage() {
               </Button>
             )}
             
-            {ticket.visit && ticket.status !== 'done' && (
+            {ticket.visit && ticket.status !== QUEUE_TICKET_STATUS.DONE && (
               <Button
                 size="sm"
                 variant="ghost"

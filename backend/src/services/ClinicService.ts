@@ -1,6 +1,6 @@
 import { PrismaClient, VisitStatus, QueueStation, QueueStatus } from "@prisma/client";
 import { fromZonedTime, toZonedTime } from "date-fns-tz";
-import { QUEUE_TICKET_STATUS, QUEUE_TICKET_STATION, VISIT_STATUS, MESSAGES, ERROR_MESSAGES } from '../constants';
+import { QUEUE_TICKET_STATUS, QUEUE_TICKET_STATION, VISIT_STATUS, MESSAGES, ERROR_MESSAGES, USER_ROLES } from '../constants';
 
 export interface CreateVisitInput {
   patientId: string;
@@ -469,9 +469,9 @@ export class ClinicService {
       case 'in_service':
         updateData.started_at = new Date();
         break;
-      case 'done':
-      case 'skipped':
-      case 'cancelled':
+      case QUEUE_TICKET_STATUS.DONE:
+      case QUEUE_TICKET_STATUS.SKIPPED:
+      case QUEUE_TICKET_STATUS.CANCELLED:
         updateData.done_at = new Date();
         break;
     }

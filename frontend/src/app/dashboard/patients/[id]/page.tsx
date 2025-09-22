@@ -13,6 +13,7 @@ import { API_CONFIG } from "@/config/api"
 import { GraphQLAPI } from '@/clients/graphql';
 import PageGuard from '@/components/guards/page-guard';
 import { parseDrugAllergies } from '@/utils/patient-utils';
+import { APPOINTMENT_STATUS } from '@/constants';
 
 interface Patient {
   id: string;
@@ -229,7 +230,7 @@ export default function PatientDetailPage() {
       
       // Extract appointments from visits and filter out cancelled appointments
       const appointments = visits
-        .filter((visit: any) => visit.appointment && visit.appointment.status !== 'cancelled')
+        .filter((visit: any) => visit.appointment && visit.appointment.status !== APPOINTMENT_STATUS.CANCELLED)
         .map((visit: any) => ({
           ...visit.appointment,
           visitId: visit.id,
@@ -259,7 +260,7 @@ export default function PatientDetailPage() {
       
       // Extract appointments from visits and filter out cancelled appointments
       const appointments = visits
-        .filter((visit: any) => visit.appointment && visit.appointment.status !== 'cancelled')
+        .filter((visit: any) => visit.appointment && visit.appointment.status !== APPOINTMENT_STATUS.CANCELLED)
         .map((visit: any) => ({
           ...visit.appointment,
           visitId: visit.id,
@@ -301,7 +302,7 @@ export default function PatientDetailPage() {
       
       // Update appointment status to "cancelled" (soft delete)
       await GraphQLAPI.updateAppointment(appointmentToDelete.id, { 
-        status: 'cancelled' 
+        status: APPOINTMENT_STATUS.CANCELLED 
       });
       toast.success('ลบนัดหมายสำเร็จ');
       

@@ -33,6 +33,7 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { GraphQLAPI } from '@/clients/graphql';
 import PageGuard from '@/components/guards/page-guard';
+import { QUEUE_TICKET_STATUS, QUEUE_TICKET_STATION } from '@/constants';
 
 interface DoctorTicket {
   id: string;
@@ -124,7 +125,7 @@ export default function DoctorQueuePage() {
       setIsLoading(true);
       
       const result = await GraphQLAPI.getQueueTickets({
-        station: 'doctor',
+        station: QUEUE_TICKET_STATION.DOCTOR,
         status: selectedStatus === 'all' ? undefined : selectedStatus.toUpperCase(),
         pagination: { take: 100 }
       });
@@ -175,7 +176,7 @@ export default function DoctorQueuePage() {
     try {
       setIsUpdating(ticketId);
       
-      await GraphQLAPI.updateQueueStatus(ticketId, 'done');
+      await GraphQLAPI.updateQueueStatus(ticketId, QUEUE_TICKET_STATUS.DONE);
       toast.success('Doctor consultation completed');
       fetchDoctorQueue(); // Refresh data
 

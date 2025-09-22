@@ -33,6 +33,7 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { GraphQLAPI } from '@/clients/graphql';
 import PageGuard from '@/components/guards/page-guard';
+import { QUEUE_TICKET_STATUS, QUEUE_TICKET_STATION } from '@/constants';
 
 interface TriageTicket {
   id: string;
@@ -323,7 +324,7 @@ export default function TriageQueuePage() {
       
       // Check if doctor queue ticket already exists
       const hasDoctorQueueTicket = existingVitals?.queueTickets?.some(
-        (ticket: any) => ticket.station === 'doctor' && ticket.status !== 'done' && ticket.status !== 'cancelled'
+        (ticket: any) => ticket.station === QUEUE_TICKET_STATION.DOCTOR && ticket.status !== QUEUE_TICKET_STATUS.DONE && ticket.status !== QUEUE_TICKET_STATUS.CANCELLED
       );
       
       if (!hasDoctorQueueTicket) {
@@ -331,7 +332,7 @@ export default function TriageQueuePage() {
         try {
           await GraphQLAPI.createQueueTicket({
             visitId: selectedTicket.visit.id,
-            station: 'doctor'
+            station: QUEUE_TICKET_STATION.DOCTOR
           });
           toast.success('Patient sent to doctor queue for SOAP assessment');
         } catch (error: any) {

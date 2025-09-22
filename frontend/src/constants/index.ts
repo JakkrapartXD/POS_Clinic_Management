@@ -1,55 +1,63 @@
-export const APP_CONSTANTS = {
-  APP_NAME: 'SN Clinic',
-  APP_DESCRIPTION: 'คลินิกบริหารยาผู้ป่วยรักษายา',
-  COPYRIGHT: '© 2024 SN Clinic. All rights reserved.',
-  
-  // Cookie names
-  COOKIES: {
-    AUTH_TOKEN: 'next-auth.jwt-token',
-    THEME: 'theme',
-  },
-  
-  // Local storage keys
-  STORAGE_KEYS: {
-    USER_PREFERENCES: 'userPreferences',
-    CART: 'posCart',
-  },
-  
-  // Routes
-  ROUTES: {
-    HOME: '/',
-    LOGIN: '/login',
-    DASHBOARD: '/dashboard',
-    INVENTORY: '/dashboard/inventory',
-    POS: '/dashboard/pos',
-    DOCUMENTS: '/dashboard/documents',
-    SETTINGS: '/dashboard/settings',
-  },
-  
-  // Pagination
-  PAGINATION: {
-    DEFAULT_PAGE_SIZE: 10,
-    MAX_PAGE_SIZE: 100,
-  },
-  
-  // File upload
-  FILE_UPLOAD: {
-    MAX_SIZE: 10 * 1024 * 1024, // 10MB
-    ACCEPTED_TYPES: ['image/jpeg', 'image/png', 'application/pdf'],
-  },
-};
+/**
+ * Frontend constants for better maintainability and consistency
+ */
 
-export const THEME_MODES = {
-  LIGHT: 'light',
-  DARK: 'dark',
-  SYSTEM: 'system',
+// Queue Ticket Statuses
+export const QUEUE_TICKET_STATUS = {
+  WAITING: 'waiting',
+  CALLED: 'called',
+  IN_SERVICE: 'in_service',
+  DONE: 'done',
+  CANCELLED: 'cancelled',
+  SKIPPED: 'skipped'
 } as const;
 
+// Queue Ticket Stations
+export const QUEUE_TICKET_STATION = {
+  TRIAGE: 'triage',
+  DOCTOR: 'doctor',
+  PHARMACY: 'pharmacy',
+  CASHIER: 'cashier'
+} as const;
+
+// Visit Statuses
+export const VISIT_STATUS = {
+  OPEN: 'open',
+  TRIAGE: 'triage',
+  DOCTOR: 'doctor',
+  PHARMACY: 'pharmacy',
+  CASHIER: 'cashier',
+  DONE: 'done',
+  CANCELLED: 'cancelled'
+} as const;
+
+// User Roles
 export const USER_ROLES = {
   ADMIN: 'admin',
-  PHARMACIST: 'pharmacist',
+  DOCTOR: 'doctor',
+  STAFF: 'staff',
   CASHIER: 'cashier',
+  PHARMACIST: 'pharmacist',
+  NURSE: 'nurse'
 } as const;
 
-export type ThemeMode = typeof THEME_MODES[keyof typeof THEME_MODES];
-export type UserRole = typeof USER_ROLES[keyof typeof USER_ROLES]; 
+// Appointment Statuses
+export const APPOINTMENT_STATUS = {
+  SCHEDULED: 'scheduled',
+  VISITED: 'visited',
+  CANCELLED: 'cancelled'
+} as const;
+
+// App Constants
+export const APP_CONSTANTS = {
+  COOKIES: {
+    AUTH_TOKEN: 'auth-token'
+  }
+} as const;
+
+// Type definitions for better type safety
+export type QueueTicketStatus = typeof QUEUE_TICKET_STATUS[keyof typeof QUEUE_TICKET_STATUS];
+export type QueueTicketStation = typeof QUEUE_TICKET_STATION[keyof typeof QUEUE_TICKET_STATION];
+export type VisitStatus = typeof VISIT_STATUS[keyof typeof VISIT_STATUS];
+export type UserRole = typeof USER_ROLES[keyof typeof USER_ROLES];
+export type AppointmentStatus = typeof APPOINTMENT_STATUS[keyof typeof APPOINTMENT_STATUS];
