@@ -145,8 +145,15 @@ export default function DoctorQueuePage() {
       setIsUpdating(ticketId);
       
       await GraphQLAPI.updateQueueStatus(ticketId, 'called');
+      
+      // Update state immediately
+      setDoctorTickets(prev => prev.map(ticket => 
+        ticket.id === ticketId 
+          ? { ...ticket, status: 'called', called_at: new Date().toISOString() }
+          : ticket
+      ));
+      
       toast.success('เรียกผู้ป่วยแล้ว');
-      fetchDoctorQueue(); // Refresh data
 
     } catch (error: any) {
       console.error('Error calling ticket:', error);
@@ -161,8 +168,15 @@ export default function DoctorQueuePage() {
       setIsUpdating(ticketId);
       
       await GraphQLAPI.updateQueueStatus(ticketId, 'in_service');
+      
+      // Update state immediately
+      setDoctorTickets(prev => prev.map(ticket => 
+        ticket.id === ticketId 
+          ? { ...ticket, status: 'in_service', started_at: new Date().toISOString() }
+          : ticket
+      ));
+      
       toast.success('เริ่มการตรวจแพทย์แล้ว');
-      fetchDoctorQueue(); // Refresh data
 
     } catch (error: any) {
       console.error('Error starting ticket:', error);
@@ -177,8 +191,15 @@ export default function DoctorQueuePage() {
       setIsUpdating(ticketId);
       
       await GraphQLAPI.updateQueueStatus(ticketId, QUEUE_TICKET_STATUS.DONE);
+      
+      // Update state immediately
+      setDoctorTickets(prev => prev.map(ticket => 
+        ticket.id === ticketId 
+          ? { ...ticket, status: 'done', done_at: new Date().toISOString() }
+          : ticket
+      ));
+      
       toast.success('การตรวจแพทย์เสร็จสิ้น');
-      fetchDoctorQueue(); // Refresh data
 
     } catch (error: any) {
       console.error('Error completing ticket:', error);
@@ -353,7 +374,24 @@ export default function DoctorQueuePage() {
         }
       }
       
-      // Close modal and refresh data
+      // Update the selected ticket with consultation data
+      if (selectedTicket) {
+        setDoctorTickets(prev => prev.map(ticket => 
+          ticket.id === selectedTicket.id 
+            ? { 
+                ...ticket, 
+                visit: ticket.visit ? {
+                  ...ticket.visit,
+                  chief_complaint: consultationForm.chief_complaint,
+                  diagnosis: consultationForm.diagnosis,
+                  notes: consultationForm.notes
+                } : undefined
+              }
+            : ticket
+        ));
+      }
+      
+      // Close modal
       setIsConsultationModalOpen(false);
       setSelectedTicket(null);
       setConsultationForm({
@@ -363,7 +401,6 @@ export default function DoctorQueuePage() {
         next_appointment_date: '',
         next_appointment_reason: ''
       });
-      fetchDoctorQueue();
 
     } catch (error: any) {
       console.error('Error saving consultation:', error);

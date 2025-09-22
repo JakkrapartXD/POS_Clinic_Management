@@ -57,6 +57,18 @@ interface TriageTicket {
     id: string;
     status: string;
     chief_complaint?: string;
+    vitals?: {
+      visitId: string;
+      heightCm?: number;
+      weightKg?: number;
+      tempC?: number;
+      sbp?: number;
+      dbp?: number;
+      hr?: number;
+      rr?: number;
+      spo2?: number;
+      bmi?: number;
+    };
   };
   events: Array<{
     id: string;
@@ -168,9 +180,18 @@ export default function TriageQueuePage() {
     try {
       setIsUpdating('creating');
       
-      await GraphQLAPI.createTriageTicket(patientId, priority);
+      const result = await GraphQLAPI.createTriageTicket(patientId, priority);
+      
+      // If we get the created ticket back, add it to state immediately
+      if (result && result.createTriageTicket) {
+        const newTicket = result.createTriageTicket;
+        setTriageTickets(prev => [newTicket, ...prev]);
+      } else {
+        // Fallback to refresh if we don't get the ticket back
+        fetchTriageQueue();
+      }
+      
       toast.success('สร้างตั๋วคัดกรองสำเร็จ');
-      fetchTriageQueue(); // Refresh data
       setIsCreateModalOpen(false);
       setPatientSearchQuery('');
       setSearchResults([]);
@@ -192,8 +213,15 @@ export default function TriageQueuePage() {
       setIsUpdating(ticketId);
       
       await GraphQLAPI.queueCall(ticketId);
+      
+      // Update state immediately
+      setTriageTickets(prev => prev.map(ticket => 
+        ticket.id === ticketId 
+          ? { ...ticket, status: 'called', called_at: new Date().toISOString() }
+          : ticket
+      ));
+      
       toast.success('เรียกผู้ป่วยแล้ว');
-      fetchTriageQueue(); // Refresh data
 
     } catch (error: any) {
       console.error('Error calling ticket:', error);
@@ -208,8 +236,15 @@ export default function TriageQueuePage() {
       setIsUpdating(ticketId);
       
       await GraphQLAPI.queueStart(ticketId);
+      
+      // Update state immediately
+      setTriageTickets(prev => prev.map(ticket => 
+        ticket.id === ticketId 
+          ? { ...ticket, status: 'in_service', started_at: new Date().toISOString() }
+          : ticket
+      ));
+      
       toast.success('เริ่มบริการคัดกรองแล้ว');
-      fetchTriageQueue(); // Refresh data
 
     } catch (error: any) {
       console.error('Error starting ticket:', error);
@@ -224,8 +259,15 @@ export default function TriageQueuePage() {
       setIsUpdating(ticketId);
       
       await GraphQLAPI.queueComplete(ticketId);
+      
+      // Update state immediately
+      setTriageTickets(prev => prev.map(ticket => 
+        ticket.id === ticketId 
+          ? { ...ticket, status: 'done', done_at: new Date().toISOString() }
+          : ticket
+      ));
+      
       toast.success('บริการคัดกรองเสร็จสิ้น');
-      fetchTriageQueue(); // Refresh data
 
     } catch (error: any) {
       console.error('Error completing ticket:', error);
@@ -347,10 +389,27 @@ export default function TriageQueuePage() {
         toast.success('อัปเดตสัญญาณชีพสำเร็จ! ผู้ป่วยอยู่ในคิวหมอแล้ว');
       }
       
-      // Close modal and refresh data
+      // Update the selected ticket with vitals data
+      if (selectedTicket) {
+        setTriageTickets(prev => prev.map(ticket => 
+          ticket.id === selectedTicket.id 
+            ? { 
+                ...ticket, 
+                visit: ticket.visit ? {
+                  ...ticket.visit,
+                  vitals: {
+                    ...(ticket.visit.vitals || {}),
+                    ...vitalsData
+                  }
+                } : undefined
+              }
+            : ticket
+        ));
+      }
+      
+      // Close modal
       setIsVitalsModalOpen(false);
       setSelectedTicket(null);
-      fetchTriageQueue();
 
     } catch (error: any) {
       console.error('Error saving vitals:', error);

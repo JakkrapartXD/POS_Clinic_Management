@@ -22,7 +22,8 @@ import {
   Crown,
   Stethoscope,
   Calculator,
-  Package
+  Package,
+  Heart
 } from "lucide-react"
 import PageGuard from "@/components/guards/page-guard"
 import { GraphQLAPI } from "@/clients/graphql"
@@ -64,7 +65,8 @@ const roleLabels = {
   doctor: "แพทย์",
   cashier: "แคชเชียร์",
   pharmacist: "เภสัชกร",
-  staff: "พนักงาน"
+  staff: "พนักงาน",
+  nurse: "พยาบาล"
 }
 
 const roleIcons = {
@@ -72,7 +74,8 @@ const roleIcons = {
   doctor: Stethoscope,
   cashier: Calculator,
   pharmacist: Package,
-  staff: Users
+  staff: Users,
+  nurse: Heart
 }
 
 const roleColors = {
@@ -80,7 +83,8 @@ const roleColors = {
   doctor: "text-blue-600", 
   cashier: "text-green-600",
   pharmacist: "text-teal-600",
-  staff: "text-gray-600"
+  staff: "text-gray-600",
+  nurse: "text-pink-600"
 }
 
 
@@ -341,6 +345,7 @@ export default function UserManagementPage() {
                       <SelectItem value="cashier">แคชเชียร์</SelectItem>
                       <SelectItem value="pharmacist">เภสัชกร</SelectItem>
                       <SelectItem value="staff">พนักงาน</SelectItem>
+                      <SelectItem value="nurse">พยาบาล</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -608,6 +613,7 @@ export default function UserManagementPage() {
                     <SelectItem value="cashier">แคชเชียร์</SelectItem>
                     <SelectItem value="pharmacist">เภสัชกร</SelectItem>
                     <SelectItem value="staff">พนักงาน</SelectItem>
+                    <SelectItem value="nurse">พยาบาล</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

@@ -114,8 +114,15 @@ export default function CashierQueuePage() {
       setIsUpdating(ticketId);
       
       await GraphQLAPI.updateQueueStatus(ticketId, 'called');
+      
+      // Update state immediately
+      setCashierTickets(prev => prev.map(ticket => 
+        ticket.id === ticketId 
+          ? { ...ticket, status: 'called', called_at: new Date().toISOString() }
+          : ticket
+      ));
+      
       toast.success('เรียกผู้ป่วยแล้ว');
-      fetchCashierQueue(); // Refresh data
 
     } catch (error: any) {
       console.error('Error calling ticket:', error);
@@ -130,8 +137,15 @@ export default function CashierQueuePage() {
       setIsUpdating(ticketId);
       
       await GraphQLAPI.updateQueueStatus(ticketId, 'in_service');
+      
+      // Update state immediately
+      setCashierTickets(prev => prev.map(ticket => 
+        ticket.id === ticketId 
+          ? { ...ticket, status: 'in_service', started_at: new Date().toISOString() }
+          : ticket
+      ));
+      
       toast.success('เริ่มบริการแคชเชียร์แล้ว');
-      fetchCashierQueue(); // Refresh data
 
     } catch (error: any) {
       console.error('Error starting ticket:', error);
@@ -146,8 +160,15 @@ export default function CashierQueuePage() {
       setIsUpdating(ticketId);
       
       await GraphQLAPI.updateQueueStatus(ticketId, 'done');
+      
+      // Update state immediately
+      setCashierTickets(prev => prev.map(ticket => 
+        ticket.id === ticketId 
+          ? { ...ticket, status: 'done', done_at: new Date().toISOString() }
+          : ticket
+      ));
+      
       toast.success('บริการแคชเชียร์เสร็จสิ้น');
-      fetchCashierQueue(); // Refresh data
 
     } catch (error: any) {
       console.error('Error completing ticket:', error);

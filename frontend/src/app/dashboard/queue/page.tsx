@@ -174,8 +174,27 @@ export default function QueueManagementPage() {
       setIsUpdating(ticketId);
       
       await GraphQLAPI.updateQueueStatus(ticketId, newStatus, note);
+      
+      // Update state immediately
+      setQueueTickets(prev => prev.map(ticket => {
+        if (ticket.id === ticketId) {
+          const updatedTicket = { ...ticket, status: newStatus };
+          
+          // Update timestamps based on status
+          if (newStatus === 'called') {
+            updatedTicket.called_at = new Date().toISOString();
+          } else if (newStatus === 'in_service') {
+            updatedTicket.started_at = new Date().toISOString();
+          } else if (newStatus === 'done') {
+            updatedTicket.done_at = new Date().toISOString();
+          }
+          
+          return updatedTicket;
+        }
+        return ticket;
+      }));
+      
       toast.success(`อัปเดตสถานะคิวเป็น ${newStatus} แล้ว`);
-      fetchQueueData(); // Refresh data
 
     } catch (error: any) {
       console.error('Error updating queue status:', error);
