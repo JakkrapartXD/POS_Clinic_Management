@@ -812,11 +812,8 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
         vat_percent: parseInt(productData.vat_percent) || 0,
         // Now backend expects integer (days) which matches our form data
         expiration_warning_date: parseInt(productData.expiration_warning_days) || 90,
-        // Don't include sale_price, stock_quantity, cost, reorder_point to preserve existing values
-        unit: productData.unit || '',
-        pack_size: productData.pack_size || '',
-        shelf_code: productData.shelf_code || '',
-        shelf_row: productData.shelf_row || '',
+        // Don't include unit-specific fields to preserve existing values
+        // unit, pack_size, sku, barcode, cost, sale_price, reorder_point, volume, volume_unit, shelf_code, shelf_row, stock_quantity
         // symptom_category should be JSON string if array is not empty, null if empty
         symptom_category: Array.isArray(productData.symptom_category) && productData.symptom_category.length > 0 
           ? JSON.stringify(productData.symptom_category) 
