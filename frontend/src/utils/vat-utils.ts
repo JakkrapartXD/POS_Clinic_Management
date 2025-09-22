@@ -24,14 +24,14 @@ export function calculateItemVAT(input: VATCalculationInput): VATCalculationResu
   const { sale_price, quantity, vat_percent = 0 } = input;
   
   const subtotal = sale_price * quantity;
-  const vatAmount = (subtotal * vat_percent) / 100;
+  const vatAmount = Math.floor((subtotal * vat_percent) / 100); // ปัดลงเป็นจำนวนเต็ม
   const total = subtotal + vatAmount;
   
   return {
     subtotal,
     vatAmount,
     total,
-    vatPercent
+    vatPercent: vat_percent
   };
 }
 

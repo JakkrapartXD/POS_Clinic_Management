@@ -33,8 +33,9 @@ export const medicalMutations = {
           patientId: input.patientId,
           status: input.status || 'completed',
           total_amount: input.total_amount,
+          vat_amount: input.vat_amount || 0,
           is_walkin: input.is_walkin || false
-        }
+        } as any
       });
       
       // Create order items and update stock
@@ -52,9 +53,11 @@ export const medicalMutations = {
             quantity: item.quantity,
             unit_price: item.unit_price,
             total_price: item.total_price,
+            vat_percent: item.vat_percent || 0,
+            vat_amount: item.vat_amount || 0,
             product_name: product?.product_name || null,
             product_unit: product?.unit || null
-          }
+          } as any
         });
         
         // Update product stock

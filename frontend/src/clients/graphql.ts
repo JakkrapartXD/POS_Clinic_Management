@@ -1286,6 +1286,50 @@ export const GraphQLQueries = {
       }
     }
   `,
+
+  // Notification Queries
+  STOCK_EXPIRY_ALERTS: `
+    query StockExpiryAlerts($skip: Int, $take: Int, $search: String) {
+      stockExpiryAlerts(skip: $skip, take: $take, search: $search) {
+        total
+        items {
+          stock_id
+          product_id
+          product_name
+          sku
+          unit
+          quantity
+          expiration_date
+          days_left
+          warn_days
+          percent_remaining
+          color
+          shelf_code
+          shelf_row
+          barcode
+          category
+        }
+      }
+    }
+  `,
+
+  TODAYS_APPOINTMENTS: `
+    query TodaysAppointments($date: DateTime, $skip: Int, $take: Int, $status: String) {
+      todaysAppointments(date: $date, skip: $skip, take: $take, status: $status) {
+        total
+        items {
+          appointment_id
+          time
+          status
+          reason
+          patient_id
+          patient_fullname
+          doctor_id
+          doctor_name
+        }
+      }
+    }
+  `,
 };
 
 export const GraphQLMutations = {
@@ -2452,4 +2496,20 @@ export const GraphQLAPI = {
     graphqlClient.query(GraphQLQueries.GET_PATIENT_VITALS, {
       variables: { patientId }
     }),
+
+  // Notification Operations
+  getStockExpiryAlerts: (variables?: { 
+    skip?: number; 
+    take?: number; 
+    search?: string 
+  }): Promise<{ stockExpiryAlerts: { total: number; items: any[] } }> =>
+    graphqlClient.query(GraphQLQueries.STOCK_EXPIRY_ALERTS, { variables }),
+
+  getTodaysAppointments: (variables?: { 
+    date?: string; 
+    skip?: number; 
+    take?: number; 
+    status?: string 
+  }): Promise<{ todaysAppointments: { total: number; items: any[] } }> =>
+    graphqlClient.query(GraphQLQueries.TODAYS_APPOINTMENTS, { variables }),
 }; 

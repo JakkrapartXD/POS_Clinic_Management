@@ -325,6 +325,7 @@ export const typeDefs = /* GraphQL */ `
     order_date: DateTime!
     status: String
     total_amount: Float
+    vat_amount: Float!
     created_at: DateTime!
     updated_at: DateTime!
     orderItems: [OrderItem!]!
@@ -341,6 +342,8 @@ export const typeDefs = /* GraphQL */ `
     quantity: Int!
     unit_price: Float!
     total_price: Float!
+    vat_percent: Float!
+    vat_amount: Float!
     product_name: String
     product_unit: String
   }
@@ -349,6 +352,7 @@ export const typeDefs = /* GraphQL */ `
     patientId: String
     status: String = "completed"
     total_amount: Float
+    vat_amount: Float = 0
     is_walkin: Boolean = false
     orderItems: [CreateOrderItemInput!]!
   }
@@ -358,6 +362,8 @@ export const typeDefs = /* GraphQL */ `
     quantity: Int!
     unit_price: Float!
     total_price: Float!
+    vat_percent: Float = 0
+    vat_amount: Float = 0
   }
 
   input UpdateOrderInput {
@@ -794,6 +800,11 @@ export const typeDefs = /* GraphQL */ `
     
     dailyReports(date_from: DateTime, date_to: DateTime): [DailyReport!]!
     salesReports(date_from: DateTime, date_to: DateTime, productId: String): [SalesReport!]!
+
+    # Notifications Queries
+    stockExpiryAlerts(skip: Int = 0, take: Int = 100, search: String): StockExpiryPage!
+    todaysAppointments(date: DateTime, skip: Int = 0, take: Int = 100, status: String): AppointmentsPage!
+    notificationsOverview(date: DateTime): NotificationsOverview!
   }
 
   # Mutations
@@ -1052,5 +1063,50 @@ export const typeDefs = /* GraphQL */ `
   type TriageQueuePage {
     tickets: [QueueTicket!]!
     total: Int!
+  }
+
+  # Notifications Types
+  type StockExpiryPage {
+    items: [StockExpiryItem!]!
+    total: Int!
+  }
+
+  type StockExpiryItem {
+    stock_id: ID!
+    product_id: ID!
+    product_name: String!
+    sku: String
+    unit: String
+    quantity: Int!
+    expiration_date: DateTime!
+    days_left: Int!
+    warn_days: Int!
+    percent_remaining: Float!
+    color: String!    # "yellow" | "orange" | "red" | "black"
+    shelf_code: String
+    shelf_row: String
+    barcode: String
+    category: String
+  }
+
+  type AppointmentsPage {
+    items: [TodayAppointment!]!
+    total: Int!
+  }
+
+  type TodayAppointment {
+    appointment_id: ID!
+    time: DateTime!
+    status: String
+    reason: String
+    patient_id: ID!
+    patient_fullname: String!
+    doctor_id: ID
+    doctor_name: String
+  }
+
+  type NotificationsOverview {
+    stocks: StockExpiryPage!
+    appointments: AppointmentsPage!
   }
 `; 

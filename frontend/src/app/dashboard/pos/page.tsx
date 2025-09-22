@@ -513,6 +513,7 @@ export default function POSPage() {
         id: orderId,
         receiptNumber: receiptNumber,
         total_amount: calculateTotal(),
+        vat_amount: calculateCartTotalVAT(),
         payment_amount: getTotalPaymentAmount(),
         change: change,
         payment_method: paymentMethod,
@@ -787,6 +788,64 @@ export default function POSPage() {
                 <p><strong>ผู้ป่วย:</strong> {prescriptionVisitData.patientName}</p>
                 <p><strong>อาการ:</strong> {prescriptionVisitData.visitData?.chief_complaint || '-'}</p>
                 <p><strong>การวินิจฉัย:</strong> {prescriptionVisitData.visitData?.diagnosis || '-'}</p>
+                
+                {/* Medical Information from Patient Data */}
+                {prescriptionVisitData.patientData && (
+                  <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded">
+                    <h4 className="text-xs font-semibold text-red-800 mb-2 flex items-center">
+                      <span className="w-1.5 h-1.5 bg-red-600 rounded-full mr-1.5"></span>
+                      ข้อมูลทางการแพทย์
+                    </h4>
+                    
+                    <div className="space-y-1 text-xs">
+                      {/* แพ้ยา */}
+                      {(() => {
+                        const drugAllergies = parseDrugAllergies(prescriptionVisitData.patientData.drug_allergies)
+                        return drugAllergies.length > 0 && (
+                          <div>
+                            <span className="font-medium text-red-700">แพ้ยา:</span>
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {drugAllergies.map((drug: string, index: number) => (
+                                <span 
+                                  key={index}
+                                  className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800"
+                                >
+                                  ⚠️ {drug}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )
+                      })()}
+                      
+                      {/* โรคประจำตัว */}
+                      {prescriptionVisitData.patientData.medical_conditions && 
+                       prescriptionVisitData.patientData.medical_conditions !== '-' && (
+                        <div>
+                          <span className="font-medium text-red-700">โรคประจำตัว:</span>
+                          <div className="text-red-600 ml-2">
+                            {prescriptionVisitData.patientData.medical_conditions}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* ถ้าไม่มีข้อมูลแพ้ยาและโรคประจำตัว */}
+                      {(() => {
+                        const drugAllergies = parseDrugAllergies(prescriptionVisitData.patientData.drug_allergies)
+                        const hasAllergies = drugAllergies.length > 0
+                        const hasChronicDiseases = prescriptionVisitData.patientData.medical_conditions && 
+                                                 prescriptionVisitData.patientData.medical_conditions !== '-'
+                        
+                        return !hasAllergies && !hasChronicDiseases && (
+                          <div className="text-red-600 italic">
+                            ไม่มีข้อมูลแพ้ยาและโรคประจำตัว
+                          </div>
+                        )
+                      })()}
+                    </div>
+                  </div>
+                )}
+                
                 {prescriptionVisitData.visitData?.notes && (
                   <div className="mt-2">
                     <p><strong>แผนการรักษา:</strong></p>
