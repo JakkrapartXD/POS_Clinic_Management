@@ -75,18 +75,18 @@ interface QueueTicket {
 }
 
 const stations = [
-  { value: 'triage', label: 'Triage', color: 'bg-yellow-100 text-yellow-800' },
-  { value: QUEUE_TICKET_STATION.DOCTOR, label: 'Doctor', color: 'bg-teal-100 text-teal-800' },
-  { value: 'cashier', label: 'Cashier', color: 'bg-orange-100 text-orange-800' }
+  { value: 'triage', label: 'คัดกรอง', color: 'bg-yellow-100 text-yellow-800' },
+  { value: QUEUE_TICKET_STATION.DOCTOR, label: 'หมอ', color: 'bg-teal-100 text-teal-800' },
+  { value: 'cashier', label: 'แคชเชียร์', color: 'bg-orange-100 text-orange-800' }
 ];
 
 const statusConfig = {
-  waiting: { label: 'Waiting', color: 'bg-blue-100 text-blue-800', icon: Clock },
-  called: { label: 'Called', color: 'bg-yellow-100 text-yellow-800', icon: Phone },
-  in_service: { label: 'In Service', color: 'bg-teal-100 text-teal-800', icon: Activity },
-  done: { label: 'Done', color: 'bg-green-100 text-green-800', icon: CheckCircle },
-  skipped: { label: 'Skipped', color: 'bg-gray-100 text-gray-800', icon: SkipForward },
-  cancelled: { label: 'Cancelled', color: 'bg-red-100 text-red-800', icon: XCircle }
+  waiting: { label: 'รอเรียก', color: 'bg-blue-100 text-blue-800', icon: Clock },
+  called: { label: 'เรียกแล้ว', color: 'bg-yellow-100 text-yellow-800', icon: Phone },
+  in_service: { label: 'กำลังบริการ', color: 'bg-teal-100 text-teal-800', icon: Activity },
+  done: { label: 'เสร็จสิ้น', color: 'bg-green-100 text-green-800', icon: CheckCircle },
+  skipped: { label: 'ข้าม', color: 'bg-gray-100 text-gray-800', icon: SkipForward },
+  cancelled: { label: 'ยกเลิก', color: 'bg-red-100 text-red-800', icon: XCircle }
 };
 
 export default function QueueManagementPage() {
@@ -132,7 +132,7 @@ export default function QueueManagementPage() {
 
     } catch (error: any) {
       console.error('Error fetching queue data:', error);
-      toast.error(error.message || 'Failed to load queue data');
+      toast.error(error.message || 'ไม่สามารถโหลดข้อมูลคิวได้');
     } finally {
       setIsLoading(false);
     }
@@ -174,12 +174,12 @@ export default function QueueManagementPage() {
       setIsUpdating(ticketId);
       
       await GraphQLAPI.updateQueueStatus(ticketId, newStatus, note);
-      toast.success(`Queue status updated to ${newStatus}`);
+      toast.success(`อัปเดตสถานะคิวเป็น ${newStatus} แล้ว`);
       fetchQueueData(); // Refresh data
 
     } catch (error: any) {
       console.error('Error updating queue status:', error);
-      toast.error(error.message || 'Failed to update queue status');
+      toast.error(error.message || 'ไม่สามารถอัปเดตสถานะคิวได้');
     } finally {
       setIsUpdating(null);
     }
@@ -247,7 +247,7 @@ export default function QueueManagementPage() {
                 {statusInfo.label}
               </Badge>
               {ticket.priority > 0 && (
-                <Badge variant="destructive">Priority</Badge>
+                <Badge variant="destructive">ด่วน</Badge>
               )}
             </div>
             <span className="text-xs text-gray-500">
@@ -267,12 +267,12 @@ export default function QueueManagementPage() {
             )}
             {ticket.visit?.chief_complaint && (
               <p className="text-sm text-gray-600 mt-1">
-                <strong>Chief Complaint:</strong> {ticket.visit.chief_complaint}
+                <strong>อาการสำคัญ:</strong> {ticket.visit.chief_complaint}
               </p>
             )}
             {ticket.station === 'triage' && !ticket.visit && (
               <p className="text-sm text-blue-600 mt-1">
-                <strong>Triage Queue</strong>
+                <strong>คิวคัดกรอง</strong>
               </p>
             )}
           </div>
@@ -287,7 +287,7 @@ export default function QueueManagementPage() {
                   className="bg-yellow-600 hover:bg-yellow-700"
                 >
                   <Phone className="w-3 h-3 mr-1" />
-                  Call
+เรียก
                 </Button>
                 <Button
                   size="sm"
@@ -296,7 +296,7 @@ export default function QueueManagementPage() {
                   disabled={isUpdating === ticket.id}
                 >
                   <SkipForward className="w-3 h-3 mr-1" />
-                  Skip
+ข้าม
                 </Button>
               </>
             )}
@@ -310,7 +310,7 @@ export default function QueueManagementPage() {
                   className="bg-teal-600 hover:bg-teal-700"
                 >
                   <Play className="w-3 h-3 mr-1" />
-                  Start Service
+เริ่มบริการ
                 </Button>
                 <Button
                   size="sm"
@@ -318,7 +318,7 @@ export default function QueueManagementPage() {
                   onClick={() => updateQueueStatus(ticket.id, 'waiting')}
                   disabled={isUpdating === ticket.id}
                 >
-                  Back to Queue
+กลับคิว
                 </Button>
               </>
             )}
@@ -332,7 +332,7 @@ export default function QueueManagementPage() {
                   className="bg-green-600 hover:bg-green-700"
                 >
                   <CheckCircle className="w-3 h-3 mr-1" />
-                  Complete
+เสร็จสิ้น
                 </Button>
                 <Button
                   size="sm"
@@ -340,7 +340,7 @@ export default function QueueManagementPage() {
                   onClick={() => updateQueueStatus(ticket.id, 'called')}
                   disabled={isUpdating === ticket.id}
                 >
-                  Back to Called
+กลับเรียก
                 </Button>
               </>
             )}
@@ -353,7 +353,7 @@ export default function QueueManagementPage() {
                 disabled={isUpdating === ticket.id}
               >
                 <XCircle className="w-3 h-3 mr-1" />
-                Cancel
+ยกเลิก
               </Button>
             )}
             
@@ -364,7 +364,7 @@ export default function QueueManagementPage() {
                 onClick={() => openVitalsModal(ticket)}
               >
                 <Eye className="w-3 h-3 mr-1" />
-                View Vitals
+ดูสัญญาณชีพ
               </Button>
             )}
           </div>
@@ -372,13 +372,13 @@ export default function QueueManagementPage() {
           {/* Timestamps */}
           <div className="mt-3 pt-2 border-t text-xs text-gray-500 space-y-1">
             {ticket.called_at && (
-              <div>Called: {format(new Date(ticket.called_at), 'HH:mm:ss')}</div>
+              <div>เรียก: {format(new Date(ticket.called_at), 'HH:mm:ss')}</div>
             )}
             {ticket.started_at && (
-              <div>Started: {format(new Date(ticket.started_at), 'HH:mm:ss')}</div>
+              <div>เริ่ม: {format(new Date(ticket.started_at), 'HH:mm:ss')}</div>
             )}
             {ticket.done_at && (
-              <div>Completed: {format(new Date(ticket.done_at), 'HH:mm:ss')}</div>
+              <div>เสร็จ: {format(new Date(ticket.done_at), 'HH:mm:ss')}</div>
             )}
           </div>
         </CardContent>
@@ -406,14 +406,14 @@ export default function QueueManagementPage() {
       <div className="container mx-auto p-6">
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">Queue Management</h1>
+        <h1 className="text-3xl font-bold text-gray-900">จัดการคิว</h1>
         <div className="flex gap-2">
           <Select value={selectedStation} onValueChange={setSelectedStation}>
             <SelectTrigger className="w-40">
-              <SelectValue placeholder="All Stations" />
+              <SelectValue placeholder="ทุกสถานี" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Stations</SelectItem>
+              <SelectItem value="all">ทุกสถานี</SelectItem>
               {stations.map((station) => (
                 <SelectItem key={station.value} value={station.value}>
                   {station.label}
@@ -424,10 +424,10 @@ export default function QueueManagementPage() {
           
           <Select value={selectedStatus} onValueChange={setSelectedStatus}>
             <SelectTrigger className="w-40">
-              <SelectValue placeholder="All Status" />
+              <SelectValue placeholder="ทุกสถานะ" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="all">ทุกสถานะ</SelectItem>
               {Object.entries(statusConfig).map(([status, config]) => (
                 <SelectItem key={status} value={status}>
                   {config.label}
@@ -438,7 +438,7 @@ export default function QueueManagementPage() {
           
           <Button onClick={fetchQueueData} variant="outline">
             <RefreshCw className="w-4 h-4 mr-2" />
-            Refresh
+รีเฟรช
           </Button>
           
           <Button 
@@ -465,7 +465,7 @@ export default function QueueManagementPage() {
       {/* Station Tabs */}
       <Tabs defaultValue="all" className="space-y-6">
         <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="all">All Stations</TabsTrigger>
+          <TabsTrigger value="all">ทุกสถานี</TabsTrigger>
           {stations.map((station) => (
             <TabsTrigger key={station.value} value={station.value}>
               {station.label}
@@ -491,15 +491,15 @@ export default function QueueManagementPage() {
                   <CardContent className="pt-0">
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between">
-                        <span>Waiting:</span>
+                        <span>รอเรียก:</span>
                         <Badge variant="outline">{counts.waiting}</Badge>
                       </div>
                       <div className="flex justify-between">
-                        <span>In Service:</span>
+                        <span>กำลังบริการ:</span>
                         <Badge variant="outline">{counts.in_service}</Badge>
                       </div>
                       <div className="flex justify-between">
-                        <span>Done Today:</span>
+                        <span>เสร็จวันนี้:</span>
                         <Badge variant="outline">{counts.done}</Badge>
                       </div>
                     </div>
@@ -528,7 +528,7 @@ export default function QueueManagementPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Users className="w-5 h-5" />
-                  {station.label} Station
+                  สถานี{station.label}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -540,19 +540,19 @@ export default function QueueManagementPage() {
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                       <div className="text-center">
                         <div className="text-2xl font-bold text-blue-600">{counts.waiting}</div>
-                        <div className="text-sm text-gray-600">Waiting</div>
+                        <div className="text-sm text-gray-600">รอเรียก</div>
                       </div>
                       <div className="text-center">
                         <div className="text-2xl font-bold text-yellow-600">{counts.called}</div>
-                        <div className="text-sm text-gray-600">Called</div>
+                        <div className="text-sm text-gray-600">เรียกแล้ว</div>
                       </div>
                       <div className="text-center">
                         <div className="text-2xl font-bold text-teal-600">{counts.in_service}</div>
-                        <div className="text-sm text-gray-600">In Service</div>
+                        <div className="text-sm text-gray-600">กำลังบริการ</div>
                       </div>
                       <div className="text-center">
                         <div className="text-2xl font-bold text-green-600">{counts.done}</div>
-                        <div className="text-sm text-gray-600">Completed</div>
+                        <div className="text-sm text-gray-600">เสร็จสิ้น</div>
                       </div>
                     </div>
                   );
@@ -579,7 +579,7 @@ export default function QueueManagementPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Stethoscope className="w-5 h-5" />
-              Patient Vitals - {selectedTicket?.visit?.patient?.first_name} {selectedTicket?.visit?.patient?.last_name}
+สัญญาณชีพผู้ป่วย - {selectedTicket?.visit?.patient?.first_name} {selectedTicket?.visit?.patient?.last_name}
             </DialogTitle>
           </DialogHeader>
           
@@ -587,12 +587,12 @@ export default function QueueManagementPage() {
             <div className="space-y-4">
               {/* Current Vitals */}
               <div>
-                <h3 className="text-lg font-semibold mb-3 text-blue-600">Current Vitals</h3>
+                <h3 className="text-lg font-semibold mb-3 text-blue-600">สัญญาณชีพปัจจุบัน</h3>
                 <div className="grid grid-cols-2 gap-4">
                 <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg">
                   <Ruler className="w-5 h-5 text-blue-600" />
                   <div>
-                    <p className="text-sm text-gray-600">Height</p>
+                    <p className="text-sm text-gray-600">ส่วนสูง</p>
                     <p className="font-semibold">{selectedTicket.visit.vitals.heightCm || 'N/A'} cm</p>
                   </div>
                 </div>
@@ -600,7 +600,7 @@ export default function QueueManagementPage() {
                 <div className="flex items-center gap-2 p-3 bg-green-50 rounded-lg">
                   <Weight className="w-5 h-5 text-green-600" />
                   <div>
-                    <p className="text-sm text-gray-600">Weight</p>
+                    <p className="text-sm text-gray-600">น้ำหนัก</p>
                     <p className="font-semibold">{selectedTicket.visit.vitals.weightKg || 'N/A'} kg</p>
                   </div>
                 </div>
@@ -608,7 +608,7 @@ export default function QueueManagementPage() {
                 <div className="flex items-center gap-2 p-3 bg-orange-50 rounded-lg">
                   <Thermometer className="w-5 h-5 text-orange-600" />
                   <div>
-                    <p className="text-sm text-gray-600">Temperature</p>
+                    <p className="text-sm text-gray-600">อุณหภูมิ</p>
                     <p className="font-semibold">{selectedTicket.visit.vitals.tempC || 'N/A'} °C</p>
                   </div>
                 </div>
@@ -616,7 +616,7 @@ export default function QueueManagementPage() {
                 <div className="flex items-center gap-2 p-3 bg-red-50 rounded-lg">
                   <Heart className="w-5 h-5 text-red-600" />
                   <div>
-                    <p className="text-sm text-gray-600">Heart Rate</p>
+                    <p className="text-sm text-gray-600">อัตราการเต้นของหัวใจ</p>
                     <p className="font-semibold">{selectedTicket.visit.vitals.hr || 'N/A'} bpm</p>
                   </div>
                 </div>
@@ -624,7 +624,7 @@ export default function QueueManagementPage() {
                 <div className="flex items-center gap-2 p-3 bg-purple-50 rounded-lg">
                   <Activity className="w-5 h-5 text-purple-600" />
                   <div>
-                    <p className="text-sm text-gray-600">Blood Pressure</p>
+                    <p className="text-sm text-gray-600">ความดันโลหิต</p>
                     <p className="font-semibold">
                       {selectedTicket.visit.vitals.sbp && selectedTicket.visit.vitals.dbp 
                         ? `${selectedTicket.visit.vitals.sbp}/${selectedTicket.visit.vitals.dbp} mmHg`
@@ -655,11 +655,11 @@ export default function QueueManagementPage() {
               {isLoadingVitals ? (
                 <div className="text-center py-4">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                  <p className="text-sm text-gray-500 mt-2">Loading previous vitals...</p>
+                  <p className="text-sm text-gray-500 mt-2">กำลังโหลดสัญญาณชีพเก่า...</p>
                 </div>
               ) : previousVitals.length > 0 ? (
                 <div>
-                  <h3 className="text-lg font-semibold mb-3 text-gray-600">Previous Vitals</h3>
+                  <h3 className="text-lg font-semibold mb-3 text-gray-600">สัญญาณชีพเก่า</h3>
                   <div className="space-y-3 max-h-60 overflow-y-auto">
                     {previousVitals.map((vital, index) => (
                       <div key={vital.id} className="border rounded-lg p-3 bg-gray-50">
@@ -673,25 +673,25 @@ export default function QueueManagementPage() {
                         </div>
                         {vital.visit?.chief_complaint && (
                           <div className="text-xs text-gray-600 mb-2">
-                            Chief Complaint: {vital.visit.chief_complaint}
+                            อาการสำคัญ: {vital.visit.chief_complaint}
                           </div>
                         )}
                         <div className="grid grid-cols-3 gap-2 text-xs">
                           {vital.heightCm && (
                             <div className="text-center">
-                              <div className="text-gray-500">Height</div>
+                              <div className="text-gray-500">ส่วนสูง</div>
                               <div className="font-medium">{vital.heightCm} cm</div>
                             </div>
                           )}
                           {vital.weightKg && (
                             <div className="text-center">
-                              <div className="text-gray-500">Weight</div>
+                              <div className="text-gray-500">น้ำหนัก</div>
                               <div className="font-medium">{vital.weightKg} kg</div>
                             </div>
                           )}
                           {vital.tempC && (
                             <div className="text-center">
-                              <div className="text-gray-500">Temp</div>
+                              <div className="text-gray-500">อุณหภูมิ</div>
                               <div className="font-medium">{vital.tempC} °C</div>
                             </div>
                           )}
@@ -720,7 +720,7 @@ export default function QueueManagementPage() {
                 </div>
               ) : (
                 <div className="text-center py-4">
-                  <p className="text-sm text-gray-500">No previous vitals found</p>
+                  <p className="text-sm text-gray-500">ไม่พบสัญญาณชีพเก่า</p>
                 </div>
               )}
               
@@ -730,7 +730,7 @@ export default function QueueManagementPage() {
                   onClick={() => setIsVitalsModalOpen(false)}
                   className="flex-1"
                 >
-                  Close
+ปิด
                 </Button>
               </div>
             </div>
@@ -741,18 +741,18 @@ export default function QueueManagementPage() {
               {/* No Current Vitals */}
               <div className="text-center py-4">
                 <Stethoscope className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-500">No current vitals recorded</p>
+                <p className="text-gray-500">ยังไม่มีข้อมูลสัญญาณชีพปัจจุบัน</p>
               </div>
               
               {/* Previous Vitals */}
               {isLoadingVitals ? (
                 <div className="text-center py-4">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                  <p className="text-sm text-gray-500 mt-2">Loading previous vitals...</p>
+                  <p className="text-sm text-gray-500 mt-2">กำลังโหลดสัญญาณชีพเก่า...</p>
                 </div>
               ) : previousVitals.length > 0 ? (
                 <div>
-                  <h3 className="text-lg font-semibold mb-3 text-gray-600">Previous Vitals</h3>
+                  <h3 className="text-lg font-semibold mb-3 text-gray-600">สัญญาณชีพเก่า</h3>
                   <div className="space-y-3 max-h-60 overflow-y-auto">
                     {previousVitals.map((vital, index) => (
                       <div key={vital.id} className="border rounded-lg p-3 bg-gray-50">
@@ -766,25 +766,25 @@ export default function QueueManagementPage() {
                         </div>
                         {vital.visit?.chief_complaint && (
                           <div className="text-xs text-gray-600 mb-2">
-                            Chief Complaint: {vital.visit.chief_complaint}
+                            อาการสำคัญ: {vital.visit.chief_complaint}
                           </div>
                         )}
                         <div className="grid grid-cols-3 gap-2 text-xs">
                           {vital.heightCm && (
                             <div className="text-center">
-                              <div className="text-gray-500">Height</div>
+                              <div className="text-gray-500">ส่วนสูง</div>
                               <div className="font-medium">{vital.heightCm} cm</div>
                             </div>
                           )}
                           {vital.weightKg && (
                             <div className="text-center">
-                              <div className="text-gray-500">Weight</div>
+                              <div className="text-gray-500">น้ำหนัก</div>
                               <div className="font-medium">{vital.weightKg} kg</div>
                             </div>
                           )}
                           {vital.tempC && (
                             <div className="text-center">
-                              <div className="text-gray-500">Temp</div>
+                              <div className="text-gray-500">อุณหภูมิ</div>
                               <div className="font-medium">{vital.tempC} °C</div>
                             </div>
                           )}
@@ -813,7 +813,7 @@ export default function QueueManagementPage() {
                 </div>
               ) : (
                 <div className="text-center py-4">
-                  <p className="text-sm text-gray-500">No previous vitals found</p>
+                  <p className="text-sm text-gray-500">ไม่พบสัญญาณชีพเก่า</p>
                 </div>
               )}
               
@@ -823,7 +823,7 @@ export default function QueueManagementPage() {
                   onClick={() => setIsVitalsModalOpen(false)}
                   className="flex-1"
                 >
-                  Close
+ปิด
                 </Button>
               </div>
             </div>

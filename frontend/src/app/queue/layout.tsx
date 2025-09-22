@@ -10,8 +10,8 @@ import { ErrorBoundary } from "@/components/error-boundary"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "SN Clinic | คิวคัดกรอง",
-  description: "Triage Queue Management System",
+  title: "SN Clinic | ระบบจัดการคิว",
+  description: "ระบบจัดการคิวผู้ป่วย",
   generator: 'v0.dev'
 }
 

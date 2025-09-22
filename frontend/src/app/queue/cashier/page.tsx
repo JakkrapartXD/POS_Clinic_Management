@@ -67,11 +67,11 @@ interface CashierTicket {
 
 
 const statusConfig = {
-  waiting: { label: 'Waiting', color: 'bg-blue-100 text-blue-800', icon: Clock },
-  called: { label: 'Called', color: 'bg-yellow-100 text-yellow-800', icon: Phone },
-  in_service: { label: 'In Service', color: 'bg-teal-100 text-teal-800', icon: Activity },
-  done: { label: 'Done', color: 'bg-green-100 text-green-800', icon: CheckCircle },
-  cancelled: { label: 'Cancelled', color: 'bg-red-100 text-red-800', icon: CheckCircle },
+  waiting: { label: 'รอเรียก', color: 'bg-blue-100 text-blue-800', icon: Clock },
+  called: { label: 'เรียกแล้ว', color: 'bg-yellow-100 text-yellow-800', icon: Phone },
+  in_service: { label: 'กำลังบริการ', color: 'bg-teal-100 text-teal-800', icon: Activity },
+  done: { label: 'เสร็จสิ้น', color: 'bg-green-100 text-green-800', icon: CheckCircle },
+  cancelled: { label: 'ยกเลิก', color: 'bg-red-100 text-red-800', icon: CheckCircle },
 };
 
 export default function CashierQueuePage() {
@@ -103,7 +103,7 @@ export default function CashierQueuePage() {
 
     } catch (error: any) {
       console.error('Error fetching cashier queue:', error);
-      toast.error(error.message || 'Failed to load cashier queue');
+      toast.error(error.message || 'ไม่สามารถโหลดคิวแคชเชียร์ได้');
     } finally {
       setIsLoading(false);
     }
@@ -114,12 +114,12 @@ export default function CashierQueuePage() {
       setIsUpdating(ticketId);
       
       await GraphQLAPI.updateQueueStatus(ticketId, 'called');
-      toast.success('Patient called');
+      toast.success('เรียกผู้ป่วยแล้ว');
       fetchCashierQueue(); // Refresh data
 
     } catch (error: any) {
       console.error('Error calling ticket:', error);
-      toast.error(error.message || 'Failed to call patient');
+      toast.error(error.message || 'ไม่สามารถเรียกผู้ป่วยได้');
     } finally {
       setIsUpdating(null);
     }
@@ -130,12 +130,12 @@ export default function CashierQueuePage() {
       setIsUpdating(ticketId);
       
       await GraphQLAPI.updateQueueStatus(ticketId, 'in_service');
-      toast.success('Cashier service started');
+      toast.success('เริ่มบริการแคชเชียร์แล้ว');
       fetchCashierQueue(); // Refresh data
 
     } catch (error: any) {
       console.error('Error starting ticket:', error);
-      toast.error(error.message || 'Failed to start cashier service');
+      toast.error(error.message || 'ไม่สามารถเริ่มบริการแคชเชียร์ได้');
     } finally {
       setIsUpdating(null);
     }
@@ -146,12 +146,12 @@ export default function CashierQueuePage() {
       setIsUpdating(ticketId);
       
       await GraphQLAPI.updateQueueStatus(ticketId, 'done');
-      toast.success('Cashier service completed');
+      toast.success('บริการแคชเชียร์เสร็จสิ้น');
       fetchCashierQueue(); // Refresh data
 
     } catch (error: any) {
       console.error('Error completing ticket:', error);
-      toast.error(error.message || 'Failed to complete cashier service');
+      toast.error(error.message || 'ไม่สามารถเสร็จสิ้นบริการแคชเชียร์ได้');
     } finally {
       setIsUpdating(null);
     }
@@ -260,7 +260,7 @@ export default function CashierQueuePage() {
             )}
             {ticket.visit?.diagnosis && (
               <p className="text-sm text-gray-600 mt-1">
-                <strong>Diagnosis:</strong> {ticket.visit.diagnosis}
+                <strong>การวินิจฉัย:</strong> {ticket.visit.diagnosis}
               </p>
             )}
           </div>
@@ -274,7 +274,7 @@ export default function CashierQueuePage() {
                 className="bg-yellow-600 hover:bg-yellow-700"
               >
                 <Phone className="w-3 h-3 mr-1" />
-                Call
+เรียก
               </Button>
             )}
             
@@ -286,7 +286,7 @@ export default function CashierQueuePage() {
                 className="bg-teal-600 hover:bg-teal-700"
               >
                 <Play className="w-3 h-3 mr-1" />
-                Start Service
+เริ่มบริการ
               </Button>
             )}
             
@@ -300,7 +300,7 @@ export default function CashierQueuePage() {
                     className="border-green-600 text-green-600 hover:bg-green-50"
                   >
                     <ShoppingCart className="w-3 h-3 mr-1" />
-                    Open POS
+เปิด POS
                   </Button>
                 )}
                 <Button
@@ -310,7 +310,7 @@ export default function CashierQueuePage() {
                   className="bg-green-600 hover:bg-green-700"
                 >
                   <CheckCircle className="w-3 h-3 mr-1" />
-                  Complete
+เสร็จสิ้น
                 </Button>
               </>
             )}
@@ -344,8 +344,8 @@ export default function CashierQueuePage() {
         {/* Header */}
         <div className="flex justify-between items-center mb-6">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Cashier Queue</h1>
-            <p className="text-gray-600 mt-1">Manage cashier service queue</p>
+            <h1 className="text-3xl font-bold text-gray-900">คิวแคชเชียร์</h1>
+            <p className="text-gray-600 mt-1">จัดการคิวบริการแคชเชียร์</p>
           </div>
           
           <div className="flex gap-2">
@@ -355,7 +355,7 @@ export default function CashierQueuePage() {
               disabled={isLoading}
             >
               <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-              Refresh
+รีเฟรช
             </Button>
           </div>
         </div>
@@ -365,7 +365,7 @@ export default function CashierQueuePage() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
             <Input
-              placeholder="Search by patient name, phone, or ID..."
+              placeholder="ค้นหาตามชื่อ เบอร์โทร หรือ ID ผู้ป่วย..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10"
@@ -379,7 +379,7 @@ export default function CashierQueuePage() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Waiting</p>
+                  <p className="text-sm font-medium text-gray-600">รอเรียก</p>
                   <p className="text-2xl font-bold text-blue-600">{counts.waiting}</p>
                 </div>
                 <Clock className="h-8 w-8 text-blue-600" />
@@ -391,7 +391,7 @@ export default function CashierQueuePage() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Called</p>
+                  <p className="text-sm font-medium text-gray-600">เรียกแล้ว</p>
                   <p className="text-2xl font-bold text-yellow-600">{counts.called}</p>
                 </div>
                 <Phone className="h-8 w-8 text-yellow-600" />
@@ -403,7 +403,7 @@ export default function CashierQueuePage() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">In Service</p>
+                  <p className="text-sm font-medium text-gray-600">กำลังบริการ</p>
                   <p className="text-2xl font-bold text-teal-600">{counts.in_service}</p>
                 </div>
                 <Activity className="h-8 w-8 text-teal-600" />
@@ -415,7 +415,7 @@ export default function CashierQueuePage() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Completed</p>
+                  <p className="text-sm font-medium text-gray-600">เสร็จสิ้น</p>
                   <p className="text-2xl font-bold text-green-600">{counts.done}</p>
                 </div>
                 <CheckCircle className="h-8 w-8 text-green-600" />
@@ -427,7 +427,7 @@ export default function CashierQueuePage() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Cancelled</p>
+                  <p className="text-sm font-medium text-gray-600">ยกเลิก</p>
                   <p className="text-2xl font-bold text-red-600">{counts.cancelled}</p>
                 </div>
                 <CheckCircle className="h-8 w-8 text-red-600" />
@@ -439,12 +439,12 @@ export default function CashierQueuePage() {
         {/* Status Tabs */}
         <Tabs defaultValue="all" className="space-y-6">
           <TabsList className="grid w-full grid-cols-6">
-            <TabsTrigger value="all">All ({counts.total})</TabsTrigger>
-            <TabsTrigger value="waiting">Waiting ({counts.waiting})</TabsTrigger>
-            <TabsTrigger value="called">Called ({counts.called})</TabsTrigger>
-            <TabsTrigger value="in_service">In Service ({counts.in_service})</TabsTrigger>
-            <TabsTrigger value="done">Done ({counts.done})</TabsTrigger>
-            <TabsTrigger value="cancelled">Cancelled ({counts.cancelled})</TabsTrigger>
+            <TabsTrigger value="all">ทั้งหมด ({counts.total})</TabsTrigger>
+            <TabsTrigger value="waiting">รอเรียก ({counts.waiting})</TabsTrigger>
+            <TabsTrigger value="called">เรียกแล้ว ({counts.called})</TabsTrigger>
+            <TabsTrigger value="in_service">กำลังบริการ ({counts.in_service})</TabsTrigger>
+            <TabsTrigger value="done">เสร็จสิ้น ({counts.done})</TabsTrigger>
+            <TabsTrigger value="cancelled">ยกเลิก ({counts.cancelled})</TabsTrigger>
           </TabsList>
           
           {/* All Tickets */}

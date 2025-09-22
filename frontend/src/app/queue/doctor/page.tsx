@@ -82,11 +82,11 @@ interface DoctorTicket {
 }
 
 const statusConfig = {
-  waiting: { label: 'Waiting', color: 'bg-blue-100 text-blue-800', icon: Clock },
-  called: { label: 'Called', color: 'bg-yellow-100 text-yellow-800', icon: Phone },
-  in_service: { label: 'In Service', color: 'bg-teal-100 text-teal-800', icon: Activity },
-  done: { label: 'Done', color: 'bg-green-100 text-green-800', icon: CheckCircle },
-  cancelled: { label: 'Cancelled', color: 'bg-red-100 text-red-800', icon: CheckCircle },
+  waiting: { label: 'รอเรียก', color: 'bg-blue-100 text-blue-800', icon: Clock },
+  called: { label: 'เรียกแล้ว', color: 'bg-yellow-100 text-yellow-800', icon: Phone },
+  in_service: { label: 'กำลังตรวจ', color: 'bg-teal-100 text-teal-800', icon: Activity },
+  done: { label: 'เสร็จสิ้น', color: 'bg-green-100 text-green-800', icon: CheckCircle },
+  cancelled: { label: 'ยกเลิก', color: 'bg-red-100 text-red-800', icon: CheckCircle },
 };
 
 export default function DoctorQueuePage() {
@@ -134,7 +134,7 @@ export default function DoctorQueuePage() {
 
     } catch (error: any) {
       console.error('Error fetching doctor queue:', error);
-      toast.error(error.message || 'Failed to load doctor queue');
+      toast.error(error.message || 'ไม่สามารถโหลดคิวหมอได้');
     } finally {
       setIsLoading(false);
     }
@@ -145,12 +145,12 @@ export default function DoctorQueuePage() {
       setIsUpdating(ticketId);
       
       await GraphQLAPI.updateQueueStatus(ticketId, 'called');
-      toast.success('Patient called');
+      toast.success('เรียกผู้ป่วยแล้ว');
       fetchDoctorQueue(); // Refresh data
 
     } catch (error: any) {
       console.error('Error calling ticket:', error);
-      toast.error(error.message || 'Failed to call patient');
+      toast.error(error.message || 'ไม่สามารถเรียกผู้ป่วยได้');
     } finally {
       setIsUpdating(null);
     }
@@ -161,12 +161,12 @@ export default function DoctorQueuePage() {
       setIsUpdating(ticketId);
       
       await GraphQLAPI.updateQueueStatus(ticketId, 'in_service');
-      toast.success('Doctor consultation started');
+      toast.success('เริ่มการตรวจแพทย์แล้ว');
       fetchDoctorQueue(); // Refresh data
 
     } catch (error: any) {
       console.error('Error starting ticket:', error);
-      toast.error(error.message || 'Failed to start consultation');
+      toast.error(error.message || 'ไม่สามารถเริ่มการตรวจได้');
     } finally {
       setIsUpdating(null);
     }
@@ -177,12 +177,12 @@ export default function DoctorQueuePage() {
       setIsUpdating(ticketId);
       
       await GraphQLAPI.updateQueueStatus(ticketId, QUEUE_TICKET_STATUS.DONE);
-      toast.success('Doctor consultation completed');
+      toast.success('การตรวจแพทย์เสร็จสิ้น');
       fetchDoctorQueue(); // Refresh data
 
     } catch (error: any) {
       console.error('Error completing ticket:', error);
-      toast.error(error.message || 'Failed to complete consultation');
+      toast.error(error.message || 'ไม่สามารถเสร็จสิ้นการตรวจได้');
     } finally {
       setIsUpdating(null);
     }
@@ -250,7 +250,7 @@ export default function DoctorQueuePage() {
 
   const handleSaveConsultation = async () => {
     if (!selectedTicket?.visit) {
-      toast.error('No visit found for this ticket');
+      toast.error('ไม่พบข้อมูลการมาเยี่ยมสำหรับตั๋วนี้');
       return;
     }
 
@@ -343,11 +343,11 @@ export default function DoctorQueuePage() {
           visitId: selectedTicket.visit.id,
           station: 'cashier'
         });
-        toast.success('Patient sent to cashier queue');
+        toast.success('ส่งผู้ป่วยไปคิวแคชเชียร์แล้ว');
       } catch (error: any) {
         // If ticket already exists, that's fine
         if (error.message?.includes('Active queue ticket already exists')) {
-          toast.success('Patient is already in cashier queue');
+          toast.success('ผู้ป่วยอยู่ในคิวแคชเชียร์แล้ว');
         } else {
           console.error('Error creating cashier queue ticket:', error);
         }
@@ -447,7 +447,7 @@ export default function DoctorQueuePage() {
             )}
             {ticket.visit?.chief_complaint && (
               <p className="text-sm text-gray-600 mt-1">
-                <strong>Chief Complaint:</strong> {ticket.visit.chief_complaint}
+                <strong>อาการสำคัญ:</strong> {ticket.visit.chief_complaint}
               </p>
             )}
           </div>
@@ -461,7 +461,7 @@ export default function DoctorQueuePage() {
                 className="bg-yellow-600 hover:bg-yellow-700"
               >
                 <Phone className="w-3 h-3 mr-1" />
-                Call
+เรียก
               </Button>
             )}
             
@@ -473,7 +473,7 @@ export default function DoctorQueuePage() {
                 className="bg-teal-600 hover:bg-teal-700"
               >
                 <Play className="w-3 h-3 mr-1" />
-                Start Consultation
+เริ่มตรวจ
               </Button>
             )}
             
@@ -488,7 +488,7 @@ export default function DoctorQueuePage() {
                       className="border-blue-600 text-blue-600 hover:bg-blue-50"
                     >
                       <Stethoscope className="w-3 h-3 mr-1" />
-                      View Vitals
+ดูสัญญาณชีพ
                     </Button>
                     <Button
                       size="sm"
@@ -508,7 +508,7 @@ export default function DoctorQueuePage() {
                   className="bg-green-600 hover:bg-green-700"
                 >
                   <CheckCircle className="w-3 h-3 mr-1" />
-                  Complete
+เสร็จสิ้น
                 </Button>
               </>
             )}
@@ -542,8 +542,8 @@ export default function DoctorQueuePage() {
         {/* Header */}
         <div className="flex justify-between items-center mb-6">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Doctor Queue</h1>
-            <p className="text-gray-600 mt-1">Manage doctor consultation queue</p>
+            <h1 className="text-3xl font-bold text-gray-900">คิวหมอ</h1>
+            <p className="text-gray-600 mt-1">จัดการคิวการตรวจแพทย์</p>
           </div>
           
           <div className="flex gap-2">
@@ -553,7 +553,7 @@ export default function DoctorQueuePage() {
               disabled={isLoading}
             >
               <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-              Refresh
+รีเฟรช
             </Button>
           </div>
         </div>
@@ -563,7 +563,7 @@ export default function DoctorQueuePage() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
             <Input
-              placeholder="Search by patient name, phone, or ID..."
+              placeholder="ค้นหาตามชื่อ เบอร์โทร หรือ ID ผู้ป่วย..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10"
@@ -577,7 +577,7 @@ export default function DoctorQueuePage() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Waiting</p>
+                  <p className="text-sm font-medium text-gray-600">รอเรียก</p>
                   <p className="text-2xl font-bold text-blue-600">{counts.waiting}</p>
                 </div>
                 <Clock className="h-8 w-8 text-blue-600" />
@@ -589,7 +589,7 @@ export default function DoctorQueuePage() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Called</p>
+                  <p className="text-sm font-medium text-gray-600">เรียกแล้ว</p>
                   <p className="text-2xl font-bold text-yellow-600">{counts.called}</p>
                 </div>
                 <Phone className="h-8 w-8 text-yellow-600" />
@@ -601,7 +601,7 @@ export default function DoctorQueuePage() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">In Service</p>
+                  <p className="text-sm font-medium text-gray-600">กำลังตรวจ</p>
                   <p className="text-2xl font-bold text-teal-600">{counts.in_service}</p>
                 </div>
                 <Activity className="h-8 w-8 text-teal-600" />
@@ -613,7 +613,7 @@ export default function DoctorQueuePage() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Completed</p>
+                  <p className="text-sm font-medium text-gray-600">เสร็จสิ้น</p>
                   <p className="text-2xl font-bold text-green-600">{counts.done}</p>
                 </div>
                 <CheckCircle className="h-8 w-8 text-green-600" />
@@ -625,7 +625,7 @@ export default function DoctorQueuePage() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Cancelled</p>
+                  <p className="text-sm font-medium text-gray-600">ยกเลิก</p>
                   <p className="text-2xl font-bold text-red-600">{counts.cancelled}</p>
                 </div>
                 <CheckCircle className="h-8 w-8 text-red-600" />
@@ -637,12 +637,12 @@ export default function DoctorQueuePage() {
         {/* Status Tabs */}
         <Tabs defaultValue="all" className="space-y-6">
           <TabsList className="grid w-full grid-cols-6">
-            <TabsTrigger value="all">All ({counts.total})</TabsTrigger>
-            <TabsTrigger value="waiting">Waiting ({counts.waiting})</TabsTrigger>
-            <TabsTrigger value="called">Called ({counts.called})</TabsTrigger>
-            <TabsTrigger value="in_service">In Service ({counts.in_service})</TabsTrigger>
-            <TabsTrigger value="done">Done ({counts.done})</TabsTrigger>
-            <TabsTrigger value="cancelled">Cancelled ({counts.cancelled})</TabsTrigger>
+            <TabsTrigger value="all">ทั้งหมด ({counts.total})</TabsTrigger>
+            <TabsTrigger value="waiting">รอเรียก ({counts.waiting})</TabsTrigger>
+            <TabsTrigger value="called">เรียกแล้ว ({counts.called})</TabsTrigger>
+            <TabsTrigger value="in_service">กำลังตรวจ ({counts.in_service})</TabsTrigger>
+            <TabsTrigger value="done">เสร็จสิ้น ({counts.done})</TabsTrigger>
+            <TabsTrigger value="cancelled">ยกเลิก ({counts.cancelled})</TabsTrigger>
           </TabsList>
           
           {/* All Tickets */}
@@ -680,7 +680,7 @@ export default function DoctorQueuePage() {
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Stethoscope className="w-5 h-5" />
-                Patient Vitals - {selectedTicket?.patient?.first_name} {selectedTicket?.patient?.last_name}
+สัญญาณชีพผู้ป่วย - {selectedTicket?.patient?.first_name} {selectedTicket?.patient?.last_name}
               </DialogTitle>
             </DialogHeader>
             
@@ -690,7 +690,7 @@ export default function DoctorQueuePage() {
                   <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg">
                     <Ruler className="w-5 h-5 text-blue-600" />
                     <div>
-                      <p className="text-sm text-gray-600">Height</p>
+                      <p className="text-sm text-gray-600">ส่วนสูง</p>
                       <p className="font-semibold">{selectedTicket.visit.vitals.heightCm || 'N/A'} cm</p>
                     </div>
                   </div>
@@ -698,7 +698,7 @@ export default function DoctorQueuePage() {
                   <div className="flex items-center gap-2 p-3 bg-green-50 rounded-lg">
                     <Weight className="w-5 h-5 text-green-600" />
                     <div>
-                      <p className="text-sm text-gray-600">Weight</p>
+                      <p className="text-sm text-gray-600">น้ำหนัก</p>
                       <p className="font-semibold">{selectedTicket.visit.vitals.weightKg || 'N/A'} kg</p>
                     </div>
                   </div>
@@ -706,7 +706,7 @@ export default function DoctorQueuePage() {
                   <div className="flex items-center gap-2 p-3 bg-orange-50 rounded-lg">
                     <Thermometer className="w-5 h-5 text-orange-600" />
                     <div>
-                      <p className="text-sm text-gray-600">Temperature</p>
+                      <p className="text-sm text-gray-600">อุณหภูมิ</p>
                       <p className="font-semibold">{selectedTicket.visit.vitals.tempC || 'N/A'} °C</p>
                     </div>
                   </div>
@@ -714,7 +714,7 @@ export default function DoctorQueuePage() {
                   <div className="flex items-center gap-2 p-3 bg-red-50 rounded-lg">
                     <Heart className="w-5 h-5 text-red-600" />
                     <div>
-                      <p className="text-sm text-gray-600">Heart Rate</p>
+                      <p className="text-sm text-gray-600">อัตราการเต้นของหัวใจ</p>
                       <p className="font-semibold">{selectedTicket.visit.vitals.hr || 'N/A'} bpm</p>
                     </div>
                   </div>
@@ -722,7 +722,7 @@ export default function DoctorQueuePage() {
                   <div className="flex items-center gap-2 p-3 bg-purple-50 rounded-lg">
                     <Activity className="w-5 h-5 text-purple-600" />
                     <div>
-                      <p className="text-sm text-gray-600">Blood Pressure</p>
+                      <p className="text-sm text-gray-600">ความดันโลหิต</p>
                       <p className="font-semibold">
                         {selectedTicket.visit.vitals.sbp && selectedTicket.visit.vitals.dbp 
                           ? `${selectedTicket.visit.vitals.sbp}/${selectedTicket.visit.vitals.dbp} mmHg`
@@ -754,7 +754,7 @@ export default function DoctorQueuePage() {
                     onClick={() => setIsVitalsModalOpen(false)}
                     className="flex-1"
                   >
-                    Close
+ปิด
                   </Button>
                 </div>
               </div>
@@ -763,7 +763,7 @@ export default function DoctorQueuePage() {
             {!selectedTicket?.visit?.vitals && (
               <div className="text-center py-8">
                 <Stethoscope className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-500">No vitals recorded yet</p>
+                <p className="text-gray-500">ยังไม่มีข้อมูลสัญญาณชีพ</p>
                 <Button
                   variant="outline"
                   onClick={() => setIsVitalsModalOpen(false)}

@@ -76,11 +76,11 @@ interface Patient {
 }
 
 const statusConfig = {
-  waiting: { label: 'Waiting', color: 'bg-blue-100 text-blue-800', icon: Clock },
-  called: { label: 'Called', color: 'bg-yellow-100 text-yellow-800', icon: Phone },
-  in_service: { label: 'In Service', color: 'bg-teal-100 text-teal-800', icon: Activity },
-  done: { label: 'Done', color: 'bg-green-100 text-green-800', icon: CheckCircle },
-  cancelled: { label: 'Cancelled', color: 'bg-red-100 text-red-800', icon: XCircle },
+  waiting: { label: 'รอเรียก', color: 'bg-blue-100 text-blue-800', icon: Clock },
+  called: { label: 'เรียกแล้ว', color: 'bg-yellow-100 text-yellow-800', icon: Phone },
+  in_service: { label: 'กำลังคัดกรอง', color: 'bg-teal-100 text-teal-800', icon: Activity },
+  done: { label: 'เสร็จสิ้น', color: 'bg-green-100 text-green-800', icon: CheckCircle },
+  cancelled: { label: 'ยกเลิก', color: 'bg-red-100 text-red-800', icon: XCircle },
 };
 
 export default function TriageQueuePage() {
@@ -140,7 +140,7 @@ export default function TriageQueuePage() {
 
     } catch (error: any) {
       console.error('Error fetching triage queue:', error);
-      toast.error(error.message || 'Failed to load triage queue');
+      toast.error(error.message || 'ไม่สามารถโหลดคิวคัดกรองได้');
     } finally {
       setIsLoading(false);
     }
@@ -158,7 +158,7 @@ export default function TriageQueuePage() {
       setSearchResults(result.searchPatients || []);
     } catch (error: any) {
       console.error('Error searching patients:', error);
-      toast.error('Failed to search patients');
+      toast.error('ไม่สามารถค้นหาผู้ป่วยได้');
     } finally {
       setIsSearching(false);
     }
@@ -169,7 +169,7 @@ export default function TriageQueuePage() {
       setIsUpdating('creating');
       
       await GraphQLAPI.createTriageTicket(patientId, priority);
-      toast.success('Triage ticket created successfully');
+      toast.success('สร้างตั๋วคัดกรองสำเร็จ');
       fetchTriageQueue(); // Refresh data
       setIsCreateModalOpen(false);
       setPatientSearchQuery('');
@@ -178,9 +178,9 @@ export default function TriageQueuePage() {
     } catch (error: any) {
       console.error('Error creating triage ticket:', error);
       if (error.message?.includes('DUPLICATE_TRIAGE_TICKET_TODAY')) {
-        toast.error('Patient already has an active triage ticket today');
+        toast.error('ผู้ป่วยมีตั๋วคัดกรองที่ใช้งานอยู่แล้ววันนี้');
       } else {
-        toast.error(error.message || 'Failed to create triage ticket');
+        toast.error(error.message || 'ไม่สามารถสร้างตั๋วคัดกรองได้');
       }
     } finally {
       setIsUpdating(null);
@@ -192,12 +192,12 @@ export default function TriageQueuePage() {
       setIsUpdating(ticketId);
       
       await GraphQLAPI.queueCall(ticketId);
-      toast.success('Patient called');
+      toast.success('เรียกผู้ป่วยแล้ว');
       fetchTriageQueue(); // Refresh data
 
     } catch (error: any) {
       console.error('Error calling ticket:', error);
-      toast.error(error.message || 'Failed to call patient');
+      toast.error(error.message || 'ไม่สามารถเรียกผู้ป่วยได้');
     } finally {
       setIsUpdating(null);
     }
@@ -208,12 +208,12 @@ export default function TriageQueuePage() {
       setIsUpdating(ticketId);
       
       await GraphQLAPI.queueStart(ticketId);
-      toast.success('Triage service started');
+      toast.success('เริ่มบริการคัดกรองแล้ว');
       fetchTriageQueue(); // Refresh data
 
     } catch (error: any) {
       console.error('Error starting ticket:', error);
-      toast.error(error.message || 'Failed to start triage service');
+      toast.error(error.message || 'ไม่สามารถเริ่มบริการคัดกรองได้');
     } finally {
       setIsUpdating(null);
     }
@@ -224,12 +224,12 @@ export default function TriageQueuePage() {
       setIsUpdating(ticketId);
       
       await GraphQLAPI.queueComplete(ticketId);
-      toast.success('Triage service completed');
+      toast.success('บริการคัดกรองเสร็จสิ้น');
       fetchTriageQueue(); // Refresh data
 
     } catch (error: any) {
       console.error('Error completing ticket:', error);
-      toast.error(error.message || 'Failed to complete triage service');
+      toast.error(error.message || 'ไม่สามารถเสร็จสิ้นบริการคัดกรองได้');
     } finally {
       setIsUpdating(null);
     }
@@ -299,7 +299,7 @@ export default function TriageQueuePage() {
 
   const handleSaveVitals = async () => {
     if (!selectedTicket?.visit) {
-      toast.error('No visit found for this ticket');
+      toast.error('ไม่พบข้อมูลการมาเยี่ยมสำหรับตั๋วนี้');
       return;
     }
 
@@ -320,7 +320,7 @@ export default function TriageQueuePage() {
       });
       
       await GraphQLAPI.upsertVitals(vitalsData);
-      toast.success('Vitals saved successfully!');
+      toast.success('บันทึกสัญญาณชีพสำเร็จ!');
       
       // Check if doctor queue ticket already exists
       const hasDoctorQueueTicket = existingVitals?.queueTickets?.some(
@@ -334,17 +334,17 @@ export default function TriageQueuePage() {
             visitId: selectedTicket.visit.id,
             station: QUEUE_TICKET_STATION.DOCTOR
           });
-          toast.success('Patient sent to doctor queue for SOAP assessment');
+          toast.success('ส่งผู้ป่วยไปคิวหมอเพื่อประเมิน SOAP');
         } catch (error: any) {
           // If ticket already exists (race condition), that's fine
           if (error.message?.includes('Active queue ticket already exists')) {
-            toast.success('Vitals updated successfully! Patient is already in doctor queue');
+            toast.success('อัปเดตสัญญาณชีพสำเร็จ! ผู้ป่วยอยู่ในคิวหมอแล้ว');
           } else {
             throw error; // Re-throw if it's a different error
           }
         }
       } else {
-        toast.success('Vitals updated successfully! Patient is already in doctor queue');
+        toast.success('อัปเดตสัญญาณชีพสำเร็จ! ผู้ป่วยอยู่ในคิวหมอแล้ว');
       }
       
       // Close modal and refresh data
@@ -354,7 +354,7 @@ export default function TriageQueuePage() {
 
     } catch (error: any) {
       console.error('Error saving vitals:', error);
-      toast.error(error.message || 'Failed to save vitals');
+      toast.error(error.message || 'ไม่สามารถบันทึกสัญญาณชีพได้');
     } finally {
       setIsSavingVitals(false);
     }
@@ -427,7 +427,7 @@ export default function TriageQueuePage() {
                 className="bg-yellow-600 hover:bg-yellow-700"
               >
                 <Phone className="w-3 h-3 mr-1" />
-                Call
+เรียก
               </Button>
             )}
             
@@ -439,7 +439,7 @@ export default function TriageQueuePage() {
                 className="bg-teal-600 hover:bg-teal-700"
               >
                 <Play className="w-3 h-3 mr-1" />
-                Start Triage
+เริ่มคัดกรอง
               </Button>
             )}
             
@@ -453,7 +453,7 @@ export default function TriageQueuePage() {
                     className="border-blue-600 text-blue-600 hover:bg-blue-50"
                   >
                     <Stethoscope className="w-3 h-3 mr-1" />
-                    Record Vitals
+บันทึกสัญญาณชีพ
                   </Button>
                 )}
                 <Button
@@ -463,7 +463,7 @@ export default function TriageQueuePage() {
                   className="bg-green-600 hover:bg-green-700"
                 >
                   <CheckCircle className="w-3 h-3 mr-1" />
-                  Complete
+เสร็จสิ้น
                 </Button>
               </>
             )}
@@ -472,13 +472,13 @@ export default function TriageQueuePage() {
           {/* Timestamps */}
           <div className="mt-3 pt-2 border-t text-xs text-gray-500 space-y-1">
             {ticket.called_at && (
-              <div>Called: {format(new Date(ticket.called_at), 'HH:mm:ss')}</div>
+              <div>เรียก: {format(new Date(ticket.called_at), 'HH:mm:ss')}</div>
             )}
             {ticket.started_at && (
-              <div>Started: {format(new Date(ticket.started_at), 'HH:mm:ss')}</div>
+              <div>เริ่ม: {format(new Date(ticket.started_at), 'HH:mm:ss')}</div>
             )}
             {ticket.done_at && (
-              <div>Completed: {format(new Date(ticket.done_at), 'HH:mm:ss')}</div>
+              <div>เสร็จ: {format(new Date(ticket.done_at), 'HH:mm:ss')}</div>
             )}
           </div>
         </CardContent>
@@ -508,26 +508,26 @@ export default function TriageQueuePage() {
       <div className="container mx-auto p-6">
         {/* Header */}
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold text-gray-900">Triage Queue</h1>
+          <h1 className="text-3xl font-bold text-gray-900">คิวคัดกรอง</h1>
           <div className="flex gap-2">
             <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
               <DialogTrigger asChild>
                 <Button className="bg-blue-600 hover:bg-blue-700">
                   <Plus className="w-4 h-4 mr-2" />
-                  Create Ticket
+สร้างตั๋ว
                 </Button>
               </DialogTrigger>
               <DialogContent className="sm:max-w-md">
                 <DialogHeader>
-                  <DialogTitle>Create Triage Ticket</DialogTitle>
+                  <DialogTitle>สร้างตั๋วคัดกรอง</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4">
                   <div>
-                    <label className="text-sm font-medium">Search Patient</label>
+                    <label className="text-sm font-medium">ค้นหาผู้ป่วย</label>
                     <div className="relative">
                       <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                       <Input
-                        placeholder="Search by name, phone, or ID..."
+                        placeholder="ค้นหาตามชื่อ เบอร์โทร หรือ ID..."
                         value={patientSearchQuery}
                         onChange={(e) => {
                           setPatientSearchQuery(e.target.value);
@@ -568,7 +568,7 @@ export default function TriageQueuePage() {
             
             <Button onClick={fetchTriageQueue} variant="outline">
               <RefreshCw className="w-4 h-4 mr-2" />
-              Refresh
+              รีเฟรช
             </Button>
           </div>
         </div>
@@ -579,7 +579,7 @@ export default function TriageQueuePage() {
             <div className="relative">
               <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
               <Input
-                placeholder="Search patients..."
+                placeholder="ค้นหาผู้ป่วย..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10"
@@ -594,7 +594,7 @@ export default function TriageQueuePage() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Waiting</p>
+                  <p className="text-sm font-medium text-gray-600">รอเรียก</p>
                   <p className="text-2xl font-bold text-blue-600">{counts.waiting}</p>
                 </div>
                 <Clock className="h-8 w-8 text-blue-600" />
@@ -606,7 +606,7 @@ export default function TriageQueuePage() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Called</p>
+                  <p className="text-sm font-medium text-gray-600">เรียกแล้ว</p>
                   <p className="text-2xl font-bold text-yellow-600">{counts.called}</p>
                 </div>
                 <Phone className="h-8 w-8 text-yellow-600" />
@@ -618,7 +618,7 @@ export default function TriageQueuePage() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">In Service</p>
+                  <p className="text-sm font-medium text-gray-600">กำลังคัดกรอง</p>
                   <p className="text-2xl font-bold text-teal-600">{counts.in_service}</p>
                 </div>
                 <Activity className="h-8 w-8 text-teal-600" />
@@ -630,7 +630,7 @@ export default function TriageQueuePage() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Completed</p>
+                  <p className="text-sm font-medium text-gray-600">เสร็จสิ้น</p>
                   <p className="text-2xl font-bold text-green-600">{counts.done}</p>
                 </div>
                 <CheckCircle className="h-8 w-8 text-green-600" />
@@ -642,7 +642,7 @@ export default function TriageQueuePage() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Cancelled</p>
+                  <p className="text-sm font-medium text-gray-600">ยกเลิก</p>
                   <p className="text-2xl font-bold text-red-600">{counts.cancelled}</p>
                 </div>
                 <XCircle className="h-8 w-8 text-red-600" />
@@ -654,12 +654,12 @@ export default function TriageQueuePage() {
         {/* Status Tabs */}
         <Tabs defaultValue="all" className="space-y-6">
           <TabsList className="grid w-full grid-cols-6">
-            <TabsTrigger value="all">All ({counts.total})</TabsTrigger>
-            <TabsTrigger value="waiting">Waiting ({counts.waiting})</TabsTrigger>
-            <TabsTrigger value="called">Called ({counts.called})</TabsTrigger>
-            <TabsTrigger value="in_service">In Service ({counts.in_service})</TabsTrigger>
-            <TabsTrigger value="done">Done ({counts.done})</TabsTrigger>
-            <TabsTrigger value="cancelled">Cancelled ({counts.cancelled})</TabsTrigger>
+            <TabsTrigger value="all">ทั้งหมด ({counts.total})</TabsTrigger>
+            <TabsTrigger value="waiting">รอเรียก ({counts.waiting})</TabsTrigger>
+            <TabsTrigger value="called">เรียกแล้ว ({counts.called})</TabsTrigger>
+            <TabsTrigger value="in_service">กำลังคัดกรอง ({counts.in_service})</TabsTrigger>
+            <TabsTrigger value="done">เสร็จสิ้น ({counts.done})</TabsTrigger>
+            <TabsTrigger value="cancelled">ยกเลิก ({counts.cancelled})</TabsTrigger>
           </TabsList>
           
           {/* All Tickets */}
@@ -728,7 +728,7 @@ export default function TriageQueuePage() {
               <div>
                 <Label htmlFor="heightCm" className="flex items-center gap-1">
                   <Ruler className="w-4 h-4" />
-                  Height (cm)
+ส่วนสูง (ซม.)
                 </Label>
                 <Input
                   id="heightCm"
@@ -742,7 +742,7 @@ export default function TriageQueuePage() {
               <div>
                 <Label htmlFor="weightKg" className="flex items-center gap-1">
                   <Weight className="w-4 h-4" />
-                  Weight (kg)
+น้ำหนัก (กก.)
                 </Label>
                 <Input
                   id="weightKg"
@@ -756,7 +756,7 @@ export default function TriageQueuePage() {
               <div>
                 <Label htmlFor="tempC" className="flex items-center gap-1">
                   <Thermometer className="w-4 h-4" />
-                  Temperature (°C)
+อุณหภูมิ (°C)
                 </Label>
                 <Input
                   id="tempC"
@@ -771,7 +771,7 @@ export default function TriageQueuePage() {
               <div>
                 <Label htmlFor="hr" className="flex items-center gap-1">
                   <Heart className="w-4 h-4" />
-                  Heart Rate (bpm)
+อัตราการเต้นของหัวใจ (bpm)
                 </Label>
                 <Input
                   id="hr"
@@ -818,7 +818,7 @@ export default function TriageQueuePage() {
               <div>
                 <Label htmlFor="spo2" className="flex items-center gap-1">
                   <Zap className="w-4 h-4" />
-                  SpO2 (%)
+SpO2 (%)
                 </Label>
                 <Input
                   id="spo2"
@@ -846,7 +846,7 @@ export default function TriageQueuePage() {
                 onClick={() => setIsVitalsModalOpen(false)}
                 disabled={isSavingVitals || isLoadingVitals}
               >
-                ยกเลิก
+ยกเลิก
               </Button>
             </div>
           </div>
