@@ -13,6 +13,7 @@ import { toast } from 'sonner'
 import { GraphQLAPI } from '@/clients/graphql'
 import PatientImageUpload from '@/components/common/PatientImageUpload'
 import ThailandAddressSelector from '@/components/forms/ThailandAddressSelector'
+import { serializeDrugAllergies } from '@/utils/patient-utils'
 
 interface AddPatientFormProps {
   isOpen: boolean
@@ -243,7 +244,7 @@ export default function AddPatientForm({ isOpen, onClose, onSuccess }: AddPatien
         zip_code: formData.zip_code || undefined,
         latitude: formData.latitude ? parseFloat(formData.latitude) : undefined,
         longitude: formData.longitude ? parseFloat(formData.longitude) : undefined,
-        drug_allergies: formData.drug_allergies.length > 0 ? JSON.stringify(formData.drug_allergies) : '',
+        drug_allergies: serializeDrugAllergies(formData.drug_allergies),
         drug_allergies_other: formData.drug_allergies_other || undefined,
         medical_conditions: formData.medical_conditions || undefined,
         notes: formData.notes || undefined,

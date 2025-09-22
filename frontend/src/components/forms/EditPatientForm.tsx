@@ -13,6 +13,7 @@ import { toast } from 'sonner'
 import { GraphQLAPI } from '@/clients/graphql'
 import { API_CONFIG } from '@/config/api'
 import PatientImageUpload from '@/components/common/PatientImageUpload'
+import { parseDrugAllergies, serializeDrugAllergies } from '@/utils/patient-utils'
 
 interface EditPatientFormProps {
   isOpen: boolean
@@ -155,7 +156,7 @@ export default function EditPatientForm({ isOpen, onClose, onSuccess, patientId 
             longitude: patientData.longitude ? patientData.longitude.toString() : '',
             
             // Medical Information
-            drug_allergies: patientData.drug_allergies ? (typeof patientData.drug_allergies === 'string' ? (patientData.drug_allergies.startsWith('[') ? JSON.parse(patientData.drug_allergies) : [patientData.drug_allergies]) : patientData.drug_allergies) : [],
+            drug_allergies: parseDrugAllergies(patientData.drug_allergies),
             drug_allergies_other: patientData.drug_allergies_other || '',
             medical_conditions: patientData.medical_conditions || '',
             notes: patientData.notes || '',
@@ -262,7 +263,7 @@ export default function EditPatientForm({ isOpen, onClose, onSuccess, patientId 
         zip_code: formData.zip_code || undefined,
         latitude: formData.latitude ? parseFloat(formData.latitude) : undefined,
         longitude: formData.longitude ? parseFloat(formData.longitude) : undefined,
-        drug_allergies: formData.drug_allergies.length > 0 ? JSON.stringify(formData.drug_allergies) : '',
+        drug_allergies: serializeDrugAllergies(formData.drug_allergies),
         drug_allergies_other: formData.drug_allergies_other || undefined,
         medical_conditions: formData.medical_conditions || undefined,
         notes: formData.notes || undefined,
@@ -703,7 +704,7 @@ export default function EditPatientForm({ isOpen, onClose, onSuccess, patientId 
                       zip_code: patient.zip_code || '',
                       latitude: patient.latitude ? patient.latitude.toString() : '',
                       longitude: patient.longitude ? patient.longitude.toString() : '',
-                      drug_allergies: patient.drug_allergies ? (typeof patient.drug_allergies === 'string' ? (patient.drug_allergies.startsWith('[') ? JSON.parse(patient.drug_allergies) : [patient.drug_allergies]) : patient.drug_allergies) : [],
+                      drug_allergies: parseDrugAllergies(patient.drug_allergies),
                       drug_allergies_other: patient.drug_allergies_other || '',
                       medical_conditions: patient.medical_conditions || '',
                       notes: patient.notes || '',

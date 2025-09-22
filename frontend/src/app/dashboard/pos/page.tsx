@@ -15,6 +15,7 @@ import { logger } from "@/lib/logger"
 import { useUser } from "@/hooks/use-user"
 import { API_CONFIG } from "@/config/api"
 import JsBarcode from 'jsbarcode'
+import { parseDrugAllergies } from '@/utils/patient-utils'
 
 
 
@@ -360,17 +361,8 @@ export default function POSPage() {
       
       // ประมวลผลข้อมูลแพ้ยา
       if (patient.drug_allergies) {
-        try {
-          const drugAllergies = typeof patient.drug_allergies === 'string' ? 
-            (patient.drug_allergies.startsWith('[') ? JSON.parse(patient.drug_allergies) : [patient.drug_allergies]) : 
-            patient.drug_allergies
-          
-          if (Array.isArray(drugAllergies)) {
-            allergies.push(...drugAllergies.filter(drug => drug && drug.trim() !== ''))
-          }
-        } catch (error) {
-          console.warn('Error parsing drug_allergies:', error)
-        }
+        const drugAllergies = parseDrugAllergies(patient.drug_allergies)
+        allergies.push(...drugAllergies)
       }
       
       // ประมวลผลข้อมูลโรคประจำตัว
