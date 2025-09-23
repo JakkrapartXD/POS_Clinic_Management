@@ -52,6 +52,9 @@ export const APPOINTMENT_STATUS = {
 export const APP_CONSTANTS = {
   COOKIES: {
     AUTH_TOKEN: 'auth-token'
+  },
+  ROUTES: {
+    DASHBOARD: '/dashboard'
   }
 } as const;
 

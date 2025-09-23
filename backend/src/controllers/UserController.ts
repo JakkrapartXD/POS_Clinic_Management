@@ -3,9 +3,11 @@ import { cookie } from "@elysiajs/cookie";
 import { hash } from "bcrypt";
 import { UserService } from "../services/UserService";
 import { AuthMiddleware } from "../middleware/AuthMiddleware";
+import { RolePermissionsMiddleware } from "../middleware/RolePermissionsMiddleware";
 
 const userService = new UserService();
 const authMiddleware = new AuthMiddleware();
+const rolePermissions = new RolePermissionsMiddleware();
 
 // Validation schemas
 const userCreateModel = t.Object({
@@ -28,7 +30,7 @@ export const userController = (app: Elysia) =>
       "/users",
       async ({ set, cookie, body }) => {
         // Admin authentication check
-        const adminCheck = await authMiddleware.checkAdminRights(cookie);
+        const adminCheck = await rolePermissions.checkAdminRights(cookie);
         if (!adminCheck.success) {
           set.status = adminCheck.statusCode;
           return { success: false, message: adminCheck.message };
@@ -61,7 +63,7 @@ export const userController = (app: Elysia) =>
       "/users/role",
       async ({ set, cookie, body }) => {
         // Admin authentication check
-        const adminCheck = await authMiddleware.checkAdminRights(cookie);
+        const adminCheck = await rolePermissions.checkAdminRights(cookie);
         if (!adminCheck.success) {
           set.status = adminCheck.statusCode;
           return { success: false, message: adminCheck.message };
@@ -94,7 +96,7 @@ export const userController = (app: Elysia) =>
     })
     .get("/me/role", async ({ set, cookie }) => {
       // User authentication check
-      const authCheck = await authMiddleware.verifyAuth(cookie);
+      const authCheck = await rolePermissions.verifyAuth(cookie);
       if (!authCheck.success) {
         set.status = authCheck.statusCode;
         return { success: false, message: authCheck.message };
