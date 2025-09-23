@@ -85,8 +85,6 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
       'inventory',
       'patients',
       'visits',
-      'queue',
-      'queue/triage',
       'queue/doctor',
       'documents',
       'users'
@@ -97,8 +95,6 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
       'inventory',
       'patients',
       'visits',
-      'queue',
-      'queue/triage',
       'queue/doctor',
       'documents',
       'users'
@@ -130,13 +126,11 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
     allowedPages: [
       'notifications',
       'patients',
-      'queue',
       'queue/triage'
     ],
     menuItems: [
       'notifications',
       'patients',
-      'queue',
       'queue/triage'
     ]
   }

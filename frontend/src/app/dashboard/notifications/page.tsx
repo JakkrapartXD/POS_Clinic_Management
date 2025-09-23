@@ -69,7 +69,10 @@ export default function NotificationsPage() {
       })
       
       setStockAlerts(stockData.stockExpiryAlerts?.items || [])
-      setAppointments(appointmentData.todaysAppointments?.items || [])
+      // Filter appointments to show only scheduled (not visited yet)
+      const scheduledAppointments = (appointmentData.todaysAppointments?.items || [])
+        .filter((appointment: any) => appointment.status === "scheduled")
+      setAppointments(scheduledAppointments)
     } catch (error) {
       console.error('Error fetching notifications data:', error)
       setStockAlerts([])
@@ -138,7 +141,7 @@ export default function NotificationsPage() {
             <EmptyState 
               icon={Bell} 
               title="ไม่มีแจ้งเตือนวันนี้" 
-              description="ไม่มีสินค้าใกล้หมดอายุหรือนัดหมายในวันนี้" 
+              description="ไม่มีสินค้าใกล้หมดอายุหรือนัดหมายที่ยังไม่ได้มาในวันนี้" 
             />
           ) : (
             <div className="space-y-3">
@@ -178,7 +181,7 @@ export default function NotificationsPage() {
                 </div>
               ))}
 
-              {/* Appointments */}
+              {/* Appointments - Only show scheduled appointments (not visited yet) */}
               {appointments.map((appointment: any) => (
                 <div 
                   key={`appointment-${appointment.appointment_id}`} 
@@ -190,8 +193,8 @@ export default function NotificationsPage() {
                       <div className="flex items-center gap-2 mb-1">
                         <Calendar className="h-4 w-4 text-blue-500" />
                         <h3 className="font-medium text-gray-900">{appointment.patient_fullname}</h3>
-                        <Badge variant={appointment.status === "scheduled" ? "default" : "secondary"}>
-                          {appointment.status === "scheduled" ? "นัดแล้ว" : appointment.status}
+                        <Badge variant="default" className="bg-blue-100 text-blue-800">
+                          นัดแล้ว
                         </Badge>
                       </div>
                       <div className="text-sm text-gray-600 space-y-1">
