@@ -55,6 +55,16 @@ export const APP_CONSTANTS = {
   },
   ROUTES: {
     DASHBOARD: '/dashboard'
+  },
+  FILE_UPLOAD: {
+    ACCEPTED_TYPES: [
+      'image/jpeg',
+      'image/jpg', 
+      'image/png',
+      'image/gif',
+      'image/webp'
+    ],
+    MAX_SIZE: 5 * 1024 * 1024 // 5MB
   }
 } as const;
 

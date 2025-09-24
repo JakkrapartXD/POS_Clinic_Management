@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useEffect, useCallback, memo } from "react"
+import { useState, useMemo, useEffect, useCallback, memo, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import AddProductForm from "@/components/forms/AddProductForm"
@@ -801,4 +801,12 @@ function InventoryPage() {
   )
 }
 
-export default memo(InventoryPage)
+function InventoryPageWithSuspense() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <InventoryPage />
+    </Suspense>
+  )
+}
+
+export default memo(InventoryPageWithSuspense)
