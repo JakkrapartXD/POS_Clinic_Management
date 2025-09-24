@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import "./globals1.css";
-import { UserProvider } from "@/hooks/use-user";
-import { Toaster } from "react-hot-toast";
+import { ClientProviders } from "@/components/ClientProviders";
+import { ThemeProvider } from "@/providers/theme-provider";
 
 export const metadata: Metadata = {
   title: "SN Clinic | คลินิกบริหารยาผู้ป่วยรักษายา",
@@ -14,33 +14,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body className="antialiased">
-        <UserProvider>
-          {children}
-          <Toaster 
-            position="top-right"
-            toastOptions={{
-              duration: 4000,
-              style: {
-                background: '#363636',
-                color: '#fff',
-              },
-              success: {
-                duration: 3000,
-                style: {
-                  background: '#10B981',
-                },
-              },
-              error: {
-                duration: 5000,
-                style: {
-                  background: '#EF4444',
-                },
-              },
-            }}
-          />
-        </UserProvider>
+        <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
+          <ClientProviders>
+            {children}
+          </ClientProviders>
+        </ThemeProvider>
       </body>
     </html>
   );

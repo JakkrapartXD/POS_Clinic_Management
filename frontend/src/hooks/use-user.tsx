@@ -19,6 +19,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [isHydrated, setIsHydrated] = useState(false)
 
   const loadUser = async () => {
     try {
@@ -80,6 +81,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
+    // Mark as hydrated on client side
+    setIsHydrated(true)
     loadUser()
     
     // Only refresh user data when storage changes (for same-origin tabs)
@@ -120,7 +123,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <UserContext.Provider value={{ user, loading, error, refreshUser, clearUser }}>
+    <UserContext.Provider value={{ user, loading: loading || !isHydrated, error, refreshUser, clearUser }}>
       {children}
     </UserContext.Provider>
   )
