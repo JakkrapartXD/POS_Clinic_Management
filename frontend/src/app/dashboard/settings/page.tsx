@@ -8,20 +8,20 @@ import PageGuard from "@/components/guards/page-guard"
 
 export default function SettingsPage() {
   const settingsGroups = [
-    {
-      title: "การตั้งค่าร้านค้า",
-      items: [
-        {
-          id: "store-closure",
-          icon: Store,
-          title: "ร้านค้า",
-          subtitle: "แก้ไขข้อมูลร้านค้า",
-          description: "ชื่อ การเปิด-ปิด และข้อมูลร้านค้า",
-          href: "/dashboard/settings/store",
-          hasSwitch: false,
-        }
-      ],
-    },
+    // {
+    //   title: "การตั้งค่าร้านค้า",
+    //   items: [
+    //     {
+    //       id: "store-closure",
+    //       icon: Store,
+    //       title: "ร้านค้า",
+    //       subtitle: "แก้ไขข้อมูลร้านค้า",
+    //       description: "ชื่อ การเปิด-ปิด และข้อมูลร้านค้า",
+    //       href: "/dashboard/settings/store",
+    //       hasSwitch: false,
+    //     }
+    //   ],
+    // },
     // {
     //   title: "การตั้งค่าระบบ",
     //   items: [
@@ -66,15 +66,15 @@ export default function SettingsPage() {
           href: "/dashboard/settings/data",
           hasSwitch: false,
         },
-        {
-          id: "notifications",
-          icon: Bell,
-          title: "การแจ้งเตือนล่วงหน้าสินค้า",
-          subtitle: "",
-          description: "ตั้งค่าให้ระบบแจ้งเตือน และแจ้งให้ทราบล่วงหน้า",
-          href: "/dashboard/settings/notifications",
-          hasSwitch: false,
-        },
+        // {
+        //   id: "notifications",
+        //   icon: Bell,
+        //   title: "การแจ้งเตือนล่วงหน้าสินค้า",
+        //   subtitle: "",
+        //   description: "ตั้งค่าให้ระบบแจ้งเตือน และแจ้งให้ทราบล่วงหน้า",
+        //   href: "/dashboard/settings/notifications",
+        //   hasSwitch: false,
+        // },
       ],
     },
   ]

@@ -415,6 +415,11 @@ export default function DoctorQueuePage() {
         ));
       }
       
+      // Force refresh with fresh data (skip cache)
+      setTimeout(() => {
+        fetchDoctorQueue(true); // Pass skipCache = true
+      }, 100);
+      
       // Close modal
       setIsConsultationModalOpen(false);
       setSelectedTicket(null);

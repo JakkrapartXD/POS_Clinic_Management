@@ -153,6 +153,32 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
     setFormData(prev => ({ ...prev, [field]: value }))
   }
 
+  // Handle category change with special logic for medical services
+  const handleCategoryChange = (value: string) => {
+    const actualValue = value === 'not-specified' ? '' : value
+    setSelectValues(prev => ({ ...prev, category: actualValue }))
+    handleInputChange('category', actualValue)
+    
+    // Special handling for medical services
+    if (actualValue === 'medical-service') {
+      // Set unit to "ครั้ง" only
+      setSelectValues(prev => ({ ...prev, unit: 'ครั้ง' }))
+      handleInputChange('unit', 'ครั้ง')
+      
+      // Set VAT to 0%
+      handleInputChange('vat_percent', '0')
+      
+      // Set initial stock to 9999999 with cost 0
+      handleInputChange('add_initial_stock', true)
+      handleInputChange('initial_stock_quantity', '9999999')
+      handleInputChange('initial_stock_cost', '0')
+      handleInputChange('initial_stock_production_date', '')
+      handleInputChange('initial_stock_expiration_date', '')
+      handleInputChange('initial_stock_production_lot', '')
+      handleInputChange('initial_stock_note', '')
+    }
+  }
+
   const handleImageChange = (file: File | null, imageUrl?: string) => {
     setFormData(prev => ({ 
       ...prev, 
@@ -258,11 +284,7 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
 
                 <Select 
                   value={selectValues.category || 'not-specified'} 
-                  onValueChange={(value) => {
-                    const actualValue = value === 'not-specified' ? '' : value
-                    setSelectValues(prev => ({ ...prev, category: actualValue }))
-                    handleInputChange('category', actualValue)
-                  }}
+                  onValueChange={handleCategoryChange}
                 >
                   <SelectTrigger className="mt-2 h-12 px-4 rounded-xl border-2 border-gray-200 bg-white focus:bg-white focus:border-purple-300 focus:ring-2 focus:ring-teal-100 transition-all duration-200 shadow-sm">
                     <SelectValue placeholder="ไม่จำเป็นต้องระบุ" />
@@ -273,6 +295,7 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
                     <SelectItem value="supplement">อาหารเสริม</SelectItem>
                     <SelectItem value="cosmetics">เครื่องสำอาง</SelectItem>
                     <SelectItem value="medical-device">อุปกรณ์การแพทย์</SelectItem>
+                    <SelectItem value="medical-service">บริการทางการแพทย์</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -348,40 +371,49 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
                       <SelectValue placeholder="เลือกหน่วยนับ" />
                     </SelectTrigger>
                     <SelectContent className="bg-white">
-                      <SelectItem value="เม็ด">เม็ด</SelectItem>
-                      <SelectItem value="แคปซูล">แคปซูล</SelectItem>
-                      <SelectItem value="ขวด">ขวด</SelectItem>
-                      <SelectItem value="หลอด">หลอด</SelectItem>
-                      <SelectItem value="แผง">แผง</SelectItem>
-                      <SelectItem value="ซอง">ซอง</SelectItem>
-                      <SelectItem value="กระปุก">กระปุก</SelectItem>
-                      <SelectItem value="ถุง">ถุง</SelectItem>
-                      <SelectItem value="กล่อง">กล่อง</SelectItem>
-                      <SelectItem value="หยด">หยด</SelectItem>
-                      <SelectItem value="มิลลิลิตร">มิลลิลิตร</SelectItem>
-                      <SelectItem value="กรัม">กรัม</SelectItem>
-                      <SelectItem value="กิโลกรัม">กิโลกรัม</SelectItem>
-                      <SelectItem value="ชิ้น">ชิ้น</SelectItem>
-                      <SelectItem value="อัน">อัน</SelectItem>
-                      <SelectItem value="คู่">คู่</SelectItem>
-                      <SelectItem value="ชุด">ชุด</SelectItem>
-                      <SelectItem value="แผ่น">แผ่น</SelectItem>
-                      <SelectItem value="ม้วน">ม้วน</SelectItem>
-                      <SelectItem value="อื่นๆ">อื่นๆ</SelectItem>
+                      {selectValues.category === 'medical-service' ? (
+                        <SelectItem value="ครั้ง">ครั้ง</SelectItem>
+                      ) : (
+                        <>
+                          <SelectItem value="เม็ด">เม็ด</SelectItem>
+                          <SelectItem value="แคปซูล">แคปซูล</SelectItem>
+                          <SelectItem value="ขวด">ขวด</SelectItem>
+                          <SelectItem value="หลอด">หลอด</SelectItem>
+                          <SelectItem value="แผง">แผง</SelectItem>
+                          <SelectItem value="ซอง">ซอง</SelectItem>
+                          <SelectItem value="กระปุก">กระปุก</SelectItem>
+                          <SelectItem value="ถุง">ถุง</SelectItem>
+                          <SelectItem value="กล่อง">กล่อง</SelectItem>
+                          <SelectItem value="หยด">หยด</SelectItem>
+                          <SelectItem value="มิลลิลิตร">มิลลิลิตร</SelectItem>
+                          <SelectItem value="กรัม">กรัม</SelectItem>
+                          <SelectItem value="กิโลกรัม">กิโลกรัม</SelectItem>
+                          <SelectItem value="ชิ้น">ชิ้น</SelectItem>
+                          <SelectItem value="อัน">อัน</SelectItem>
+                          <SelectItem value="คู่">คู่</SelectItem>
+                          <SelectItem value="ชุด">ชุด</SelectItem>
+                          <SelectItem value="แผ่น">แผ่น</SelectItem>
+                          <SelectItem value="ม้วน">ม้วน</SelectItem>
+                          <SelectItem value="ครั้ง">ครั้ง</SelectItem>
+                          <SelectItem value="อื่นๆ">อื่นๆ</SelectItem>
+                        </>
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
               </div>
 
-              <div>
-                <Label className="text-sm font-medium text-gray-700">ชื่อสามัญทางยา</Label>
-                <Input
-                  value={formData.generic_name}
-                  onChange={(e) => handleInputChange('generic_name', e.target.value)}
-                  className="mt-2 h-12 px-4 rounded-xl border-2 border-gray-200 bg-gray-50 focus:bg-white focus:border-purple-300 focus:ring-2 focus:ring-teal-100 transition-all duration-200 shadow-sm"
-                  placeholder="ระบุชื่อยาสามัญ"
-                />
-              </div>
+              {selectValues.category !== 'medical-service' && (
+                <div>
+                  <Label className="text-sm font-medium text-gray-700">ชื่อสามัญทางยา</Label>
+                  <Input
+                    value={formData.generic_name}
+                    onChange={(e) => handleInputChange('generic_name', e.target.value)}
+                    className="mt-2 h-12 px-4 rounded-xl border-2 border-gray-200 bg-gray-50 focus:bg-white focus:border-purple-300 focus:ring-2 focus:ring-teal-100 transition-all duration-200 shadow-sm"
+                    placeholder="ระบุชื่อยาสามัญ"
+                  />
+                </div>
+              )}
 
               <div>
                 <Label className="text-sm font-medium text-gray-700">ชื่อย่อ <span className="text-gray-400">ไม่จำเป็นต้องระบุ</span></Label>
@@ -422,29 +454,31 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
         </Card>
 
         {/* Expiry Warning */}
-        <Card>
-          <CardContent className="p-6">
-            <h2 className="text-lg font-semibold text-gray-700 mb-4">วันแจ้งเตือนก่อนวันหมดอายุ</h2>
-            
-            <div className="grid grid-cols-5 gap-2">
-              {["30", "60", "90", "180", "240"].map((days) => (
-                <Button
-                  key={days}
-                  variant={formData.expiration_warning_days === days ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => handleInputChange('expiration_warning_days', days)}
-                  className={`text-sm h-12 rounded-xl transition-all duration-200 shadow-sm ${
-                    formData.expiration_warning_days === days 
-                      ? "bg-teal-500 text-white border-teal-500 shadow-lg" 
-                      : "text-gray-600 border-2 border-gray-200 bg-gray-50 hover:bg-white hover:border-teal-200"
-                  }`}
-                >
-                  ก่อน {days} วัน
-                </Button>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        {selectValues.category !== 'medical-service' && (
+          <Card>
+            <CardContent className="p-6">
+              <h2 className="text-lg font-semibold text-gray-700 mb-4">วันแจ้งเตือนก่อนวันหมดอายุ</h2>
+              
+              <div className="grid grid-cols-5 gap-2">
+                {["30", "60", "90", "180", "240"].map((days) => (
+                  <Button
+                    key={days}
+                    variant={formData.expiration_warning_days === days ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => handleInputChange('expiration_warning_days', days)}
+                    className={`text-sm h-12 rounded-xl transition-all duration-200 shadow-sm ${
+                      formData.expiration_warning_days === days 
+                        ? "bg-teal-500 text-white border-teal-500 shadow-lg" 
+                        : "text-gray-600 border-2 border-gray-200 bg-gray-50 hover:bg-white hover:border-teal-200"
+                    }`}
+                  >
+                    ก่อน {days} วัน
+                  </Button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* VAT Settings */}
         <Card>
@@ -477,101 +511,106 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
 
 
         {/* Registration Reports */}
-        <Card>
-          <CardContent className="p-6">
-            <h2 className="text-lg font-semibold text-gray-700 mb-4">การขึ้นทะเบียนบัญชี</h2>
-            
-            <div className="space-y-3">
-              <div className="flex items-center space-x-2">
-                <Checkbox 
-                  id="report-9"
-                  checked={formData.report_type.includes('report-9')}
-                  onCheckedChange={(checked) => handleReportTypeChange('report-9', checked as boolean)}
-                />
-                <Label htmlFor="report-9" className="text-sm">
-                  <span className="font-medium">รายงาน ข.ย.๙</span>
-                  <br />
-                  <span className="text-gray-500">รายงานการซื้อยาทุกประเภท</span>
-                </Label>
-              </div>
+        {selectValues.category !== 'medical-service' && (
+          <Card>
+            <CardContent className="p-6">
+              <h2 className="text-lg font-semibold text-gray-700 mb-4">การขึ้นทะเบียนบัญชี</h2>
+              
+              <div className="space-y-3">
+                <div className="flex items-center space-x-2">
+                  <Checkbox 
+                    id="report-9"
+                    checked={formData.report_type.includes('report-9')}
+                    onCheckedChange={(checked) => handleReportTypeChange('report-9', checked as boolean)}
+                  />
+                  <Label htmlFor="report-9" className="text-sm">
+                    <span className="font-medium">รายงาน ข.ย.๙</span>
+                    <br />
+                    <span className="text-gray-500">รายงานการซื้อยาทุกประเภท</span>
+                  </Label>
+                </div>
 
-              <div className="flex items-center space-x-2">
-                <Checkbox 
-                  id="report-10"
-                  checked={formData.report_type.includes('report-10')}
-                  onCheckedChange={(checked) => handleReportTypeChange('report-10', checked as boolean)}
-                />
-                <Label htmlFor="report-10" className="text-sm">
-                  <span className="font-medium">รายงาน ข.ย.๑๐</span>
-                  <br />
-                  <span className="text-gray-500">รายงานการขายยาควบคุมพิเศษ</span>
-                </Label>
-              </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox 
+                    id="report-10"
+                    checked={formData.report_type.includes('report-10')}
+                    onCheckedChange={(checked) => handleReportTypeChange('report-10', checked as boolean)}
+                  />
+                  <Label htmlFor="report-10" className="text-sm">
+                    <span className="font-medium">รายงาน ข.ย.๑๐</span>
+                    <br />
+                    <span className="text-gray-500">รายงานการขายยาควบคุมพิเศษ</span>
+                  </Label>
+                </div>
 
-              <div className="flex items-center space-x-2">
-                <Checkbox 
-                  id="report-11"
-                  checked={formData.report_type.includes('report-11')}
-                  onCheckedChange={(checked) => handleReportTypeChange('report-11', checked as boolean)}
-                />
-                <Label htmlFor="report-11" className="text-sm">
-                  <span className="font-medium">รายงาน ข.ย.๑๑</span>
-                  <br />
-                  <span className="text-gray-500">รายงานการขายยาอันตราย</span>
-                </Label>
+                <div className="flex items-center space-x-2">
+                  <Checkbox 
+                    id="report-11"
+                    checked={formData.report_type.includes('report-11')}
+                    onCheckedChange={(checked) => handleReportTypeChange('report-11', checked as boolean)}
+                  />
+                  <Label htmlFor="report-11" className="text-sm">
+                    <span className="font-medium">รายงาน ข.ย.๑๑</span>
+                    <br />
+                    <span className="text-gray-500">รายงานการขายยาอันตราย</span>
+                  </Label>
+                </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Symptom Category */}
-        <Card>
-          <CardContent className="p-6">
-            <h2 className="text-lg font-semibold text-gray-700 mb-4">หมวดหมู่ยาแยกตามอาการที่รักษา</h2>
-            
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                { value: "digestive", label: "ระบบทางเดินอาหาร" },
-                { value: "cardiovascular", label: "ระบบหัวใจและหลอดเลือด" },
-                { value: "respiratory", label: "ระบบทางเดินหายใจ" },
-                { value: "nervous", label: "ระบบประสาท" },
-                { value: "antibiotic", label: "ยาปฏิชีวนะ ยาฆ่าเชื้อ" },
-                { value: "endocrine", label: "ระบบต่อมไร้ท่อ" },
-                { value: "gynecology", label: "ระบบสูตินรีเวช" },
-                { value: "cancer", label: "มะเร็งและยากดภูมิคุ้มกัน" },
-                { value: "nutrition", label: "สารอาหารและผลิตภัณฑ์เกี่ยวกับเลือด" },
-                { value: "musculoskeletal", label: "กระดูก กล้ามเนื้อ และข้อ" },
-                { value: "eye", label: "ตา" },
-                { value: "ent", label: "หู คอ จมูก และช่องปาก" },
-                { value: "skin", label: "ผิวหนัง" },
-                { value: "vaccine", label: "วัคซีนและภูมิคุ้มกัน" },
-                { value: "anesthesia", label: "ยาดมสลบ" },
-                { value: "other", label: "อื่นๆ ที่เป็นยา" }
-              ].map((category) => (
-                <div key={category.value} className="flex items-center space-x-2">
-                  <Checkbox 
-                    id={`symptom-${category.value}`}
-                    checked={formData.symptom_category.includes(category.value)}
-                    onCheckedChange={(checked) => {
-                      const currentCategories = formData.symptom_category
-                      if (checked) {
-                        handleInputChange('symptom_category', [...currentCategories, category.value])
-                      } else {
-                        handleInputChange('symptom_category', currentCategories.filter(cat => cat !== category.value))
-                      }
-                    }}
-                  />
-                  <Label htmlFor={`symptom-${category.value}`} className="text-sm">{category.label}</Label>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        {selectValues.category !== 'medical-service' && (
+          <Card>
+            <CardContent className="p-6">
+              <h2 className="text-lg font-semibold text-gray-700 mb-4">หมวดหมู่ยาแยกตามอาการที่รักษา</h2>
+              
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { value: "digestive", label: "ระบบทางเดินอาหาร" },
+                  { value: "cardiovascular", label: "ระบบหัวใจและหลอดเลือด" },
+                  { value: "respiratory", label: "ระบบทางเดินหายใจ" },
+                  { value: "nervous", label: "ระบบประสาท" },
+                  { value: "antibiotic", label: "ยาปฏิชีวนะ ยาฆ่าเชื้อ" },
+                  { value: "endocrine", label: "ระบบต่อมไร้ท่อ" },
+                  { value: "gynecology", label: "ระบบสูตินรีเวช" },
+                  { value: "cancer", label: "มะเร็งและยากดภูมิคุ้มกัน" },
+                  { value: "nutrition", label: "สารอาหารและผลิตภัณฑ์เกี่ยวกับเลือด" },
+                  { value: "musculoskeletal", label: "กระดูก กล้ามเนื้อ และข้อ" },
+                  { value: "eye", label: "ตา" },
+                  { value: "ent", label: "หู คอ จมูก และช่องปาก" },
+                  { value: "skin", label: "ผิวหนัง" },
+                  { value: "vaccine", label: "วัคซีนและภูมิคุ้มกัน" },
+                  { value: "anesthesia", label: "ยาดมสลบ" },
+                  { value: "other", label: "อื่นๆ ที่เป็นยา" }
+                ].map((category) => (
+                  <div key={category.value} className="flex items-center space-x-2">
+                    <Checkbox 
+                      id={`symptom-${category.value}`}
+                      checked={formData.symptom_category.includes(category.value)}
+                      onCheckedChange={(checked) => {
+                        const currentCategories = formData.symptom_category
+                        if (checked) {
+                          handleInputChange('symptom_category', [...currentCategories, category.value])
+                        } else {
+                          handleInputChange('symptom_category', currentCategories.filter(cat => cat !== category.value))
+                        }
+                      }}
+                    />
+                    <Label htmlFor={`symptom-${category.value}`} className="text-sm">{category.label}</Label>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Dosage Information */}
-        <Card>
-          <CardContent className="p-6">
-            <h2 className="text-lg font-semibold text-gray-700 mb-4">ข้อมูลฉลากยา/หมายเหตุ</h2>
+        {selectValues.category !== 'medical-service' && (
+          <Card>
+            <CardContent className="p-6">
+              <h2 className="text-lg font-semibold text-gray-700 mb-4">ข้อมูลฉลากยา/หมายเหตุ</h2>
             
             <div className="space-y-4 mb-6">
               <div className="flex items-center space-x-4">
@@ -777,12 +816,14 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
             </div>
           </CardContent>
         </Card>
+        )}
 
         {/* Initial Stock */}
-        <Card>
-          <CardContent className="p-6">
-            <h2 className="text-lg font-semibold text-gray-700 mb-4">สต๊อกเริ่มต้น</h2>
-            <p className="text-sm text-gray-500 mb-6">เพิ่มสต๊อกแรกพร้อมกับการสร้างสินค้า</p>
+        {selectValues.category !== 'medical-service' && (
+          <Card>
+            <CardContent className="p-6">
+              <h2 className="text-lg font-semibold text-gray-700 mb-4">สต๊อกเริ่มต้น</h2>
+              <p className="text-sm text-gray-500 mb-6">เพิ่มสต๊อกแรกพร้อมกับการสร้างสินค้า</p>
             
             <div className="space-y-4">
               <div className="flex items-center space-x-2">
@@ -887,6 +928,7 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
             </div>
           </CardContent>
         </Card>
+        )}
 
         {/* Product Image Upload */}
         <Card>

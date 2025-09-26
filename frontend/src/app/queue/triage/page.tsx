@@ -431,6 +431,11 @@ export default function TriageQueuePage() {
         ));
       }
       
+      // Force refresh with fresh data (skip cache)
+      setTimeout(() => {
+        fetchTriageQueue(true); // Pass skipCache = true
+      }, 100);
+      
       // Close modal
       setIsVitalsModalOpen(false);
       setSelectedTicket(null);
