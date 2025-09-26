@@ -34,6 +34,7 @@ import { format } from 'date-fns';
 import { GraphQLAPI } from '@/clients/graphql';
 import PageGuard from '@/components/guards/page-guard';
 import { QUEUE_TICKET_STATUS, QUEUE_TICKET_STATION } from '@/constants';
+import { useCacheContext } from '@/hooks/useCacheContext';
 
 interface DoctorTicket {
   id: string;
@@ -96,6 +97,9 @@ export default function DoctorQueuePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
   
+  // Cache context management
+  const { currentContext } = useCacheContext();
+  
   // Vitals modal states
   const [isVitalsModalOpen, setIsVitalsModalOpen] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<DoctorTicket | null>(null);
@@ -116,11 +120,16 @@ export default function DoctorQueuePage() {
   useEffect(() => {
     fetchDoctorQueue();
     // Set up polling for real-time updates
-    const interval = setInterval(fetchDoctorQueue, 30000); // Refresh every 30 seconds
+    const interval = setInterval(() => {
+      // Skip polling if any ticket is being updated
+      if (!isUpdating) {
+        fetchDoctorQueue();
+      }
+    }, 30000); // Refresh every 30 seconds
     return () => clearInterval(interval);
-  }, [selectedStatus]);
+  }, [selectedStatus, isUpdating]); // Added isUpdating to dependencies
 
-  const fetchDoctorQueue = async () => {
+  const fetchDoctorQueue = async (skipCache = false) => {
     try {
       setIsLoading(true);
       
@@ -128,7 +137,7 @@ export default function DoctorQueuePage() {
         station: QUEUE_TICKET_STATION.DOCTOR,
         status: selectedStatus === 'all' ? undefined : selectedStatus.toUpperCase(),
         pagination: { take: 100 }
-      });
+      }, skipCache);
       
       setDoctorTickets(result.queueTickets || []);
 
@@ -145,6 +154,11 @@ export default function DoctorQueuePage() {
       setIsUpdating(ticketId);
       
       await GraphQLAPI.updateQueueStatus(ticketId, 'called');
+      
+      // Force refresh with fresh data (skip cache)
+      setTimeout(() => {
+        fetchDoctorQueue(true); // Pass skipCache = true
+      }, 100);
       
       // Update state immediately
       setDoctorTickets(prev => prev.map(ticket => 
@@ -169,6 +183,11 @@ export default function DoctorQueuePage() {
       
       await GraphQLAPI.updateQueueStatus(ticketId, 'in_service');
       
+      // Force refresh with fresh data (skip cache)
+      setTimeout(() => {
+        fetchDoctorQueue(true); // Pass skipCache = true
+      }, 100);
+      
       // Update state immediately
       setDoctorTickets(prev => prev.map(ticket => 
         ticket.id === ticketId 
@@ -191,6 +210,11 @@ export default function DoctorQueuePage() {
       setIsUpdating(ticketId);
       
       await GraphQLAPI.updateQueueStatus(ticketId, QUEUE_TICKET_STATUS.DONE);
+      
+      // Force refresh with fresh data (skip cache)
+      setTimeout(() => {
+        fetchDoctorQueue(true); // Pass skipCache = true
+      }, 100);
       
       // Update state immediately
       setDoctorTickets(prev => prev.map(ticket => 
@@ -586,7 +610,7 @@ export default function DoctorQueuePage() {
           <div className="flex gap-2">
             <Button
               variant="outline"
-              onClick={fetchDoctorQueue}
+              onClick={() => fetchDoctorQueue()}
               disabled={isLoading}
             >
               <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />

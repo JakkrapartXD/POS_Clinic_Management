@@ -5,7 +5,7 @@ import { User, UserProfile, UpdateUserInput, UsersResponse, ChangePasswordRespon
 import { logger } from '@/lib/logger';
 import { MappedProductData, ImportResult, ImportSettings } from '@/types/csv-import';
 import { handleAuthError } from '@/utils/auth';
-import { cache, CACHE_CONFIG } from '@/lib/cache';
+import { cache, CACHE_CONFIG, CACHE_CONTEXTS, SENSITIVE_NAMESPACES, AUTH_SCOPE_NAMESPACES } from '@/lib/cache';
 
 // Product interface for GraphQL operations
 interface Product {
@@ -216,11 +216,23 @@ class GraphQLClient {
   private authErrorHandler?: (error: any) => void;
   private pendingRequests: Map<string, Promise<any>> = new Map();
   private lastRequestTime: Map<string, number> = new Map();
+  private currentContext: string = CACHE_CONTEXTS.DEFAULT;
 
   constructor() {
     this.baseURL = API_CONFIG.BASE_URL;
     this.endpoint = API_CONFIG.ENDPOINTS.GRAPHQL;
     this.timeout = API_CONFIG.TIMEOUT;
+  }
+
+  // Set current context for cache isolation
+  setContext(context: string): void {
+    this.currentContext = context;
+    cache.setContext(context);
+  }
+
+  // Get current context
+  getContext(): string {
+    return this.currentContext;
   }
 
   // Set authentication error handler
@@ -234,10 +246,45 @@ class GraphQLClient {
     return query.trim().startsWith('query') || query.trim().startsWith('{');
   }
 
-  // Generate cache key for query
+  // Generate cache key for query with namespace and context
   private generateCacheKey(query: string, variables?: any): string {
     const operationName = this.extractOperationName(query);
-    return cache.generateKey(operationName, variables);
+    const namespace = this.getNamespaceForOperation(operationName);
+    
+    // Add operation-specific identifier to prevent collision
+    const operationId = this.getOperationIdentifier(operationName, variables);
+    
+    const cacheKey = cache.generateKey(operationId, variables, {
+      namespace,
+      context: this.currentContext
+    });
+    
+    // Debug: Log cache key generation
+    logger.info('Generated cache key', { 
+      operationName, 
+      operationId, 
+      namespace, 
+      context: this.currentContext, 
+      variables,
+      cacheKey 
+    }, 'GRAPHQL_CACHE');
+    
+    return cacheKey;
+  }
+
+  // Get operation-specific identifier to prevent cache collision
+  private getOperationIdentifier(operationName: string, variables?: any): string {
+    // For queue operations, include station in identifier
+    if (operationName === 'GetQueueTickets' && variables?.station) {
+      return `${operationName}:${variables.station}`;
+    }
+    
+    // For triage operations, include status in identifier
+    if (operationName === 'GetTriageQueue' && variables?.status) {
+      return `${operationName}:${variables.status}`;
+    }
+    
+    return operationName;
   }
 
   // Generate request key for deduplication
@@ -253,19 +300,46 @@ class GraphQLClient {
     return match ? match[1] : 'anonymous';
   }
 
+  // Get namespace for operation based on operation name
+  private getNamespaceForOperation(operationName: string): string {
+    // Check specific operations first (more specific to less specific)
+    if (operationName === 'GetTriageQueue') return CACHE_CONFIG.TRIAGE.NAMESPACE;
+    if (operationName === 'GetQueueTickets') return CACHE_CONFIG.QUEUE.NAMESPACE;
+    if (operationName.includes('Triage')) return CACHE_CONFIG.TRIAGE.NAMESPACE;
+    if (operationName.includes('Queue')) return CACHE_CONFIG.QUEUE.NAMESPACE;
+    if (operationName.includes('Products')) return CACHE_CONFIG.PRODUCTS.NAMESPACE;
+    if (operationName.includes('Categories')) return CACHE_CONFIG.CATEGORIES.NAMESPACE;
+    if (operationName.includes('User')) return CACHE_CONFIG.USER_DATA.NAMESPACE;
+    if (operationName.includes('Patient')) return CACHE_CONFIG.PATIENTS.NAMESPACE;
+    if (operationName.includes('Order')) return CACHE_CONFIG.ORDERS.NAMESPACE;
+    return 'default';
+  }
+
   // Get cache TTL based on operation
   private getCacheTTL(operationName: string): number {
+    // Check specific operations first (more specific to less specific)
+    if (operationName === 'GetTriageQueue') return CACHE_CONFIG.TRIAGE.TTL;
+    if (operationName === 'GetQueueTickets') return CACHE_CONFIG.QUEUE.TTL;
+    if (operationName.includes('Triage')) return CACHE_CONFIG.TRIAGE.TTL;
+    if (operationName.includes('Queue')) return CACHE_CONFIG.QUEUE.TTL;
     if (operationName.includes('Products')) return CACHE_CONFIG.PRODUCTS.TTL;
     if (operationName.includes('Categories')) return CACHE_CONFIG.CATEGORIES.TTL;
     if (operationName.includes('User')) return CACHE_CONFIG.USER_DATA.TTL;
+    if (operationName.includes('Patient')) return CACHE_CONFIG.PATIENTS.TTL;
+    if (operationName.includes('Order')) return CACHE_CONFIG.ORDERS.TTL;
     return 2 * 60 * 1000; // Default 2 minutes
   }
 
   // Invalidate cache for specific operation
   invalidateCache(operationName: string, variables?: any): void {
-    const cacheKey = cache.generateKey(operationName, variables);
+    const namespace = this.getNamespaceForOperation(operationName);
+    const operationId = this.getOperationIdentifier(operationName, variables);
+    const cacheKey = cache.generateKey(operationId, variables, {
+      namespace,
+      context: this.currentContext
+    });
     cache.delete(cacheKey);
-    logger.info('Invalidated GraphQL cache', { cacheKey }, 'GRAPHQL_CACHE');
+    logger.info('Invalidated GraphQL cache', { cacheKey, namespace, context: this.currentContext }, 'GRAPHQL_CACHE');
   }
 
   // Invalidate all cache entries matching a pattern
@@ -281,6 +355,28 @@ class GraphQLClient {
   clearCache(): void {
     cache.clear();
     logger.info('Cleared all GraphQL cache', {}, 'GRAPHQL_CACHE');
+  }
+
+  // Clear cache for current context
+  clearContextCache(): void {
+    cache.clearContext(this.currentContext);
+    logger.info('Cleared GraphQL cache for context', { context: this.currentContext }, 'GRAPHQL_CACHE');
+  }
+
+  // Clear sensitive data cache (for navigation)
+  clearSensitiveCache(): void {
+    SENSITIVE_NAMESPACES.forEach(namespace => {
+      cache.clearNamespace(namespace);
+    });
+    logger.info('Cleared sensitive GraphQL cache', { namespaces: SENSITIVE_NAMESPACES }, 'GRAPHQL_CACHE');
+  }
+
+  // Clear auth scope cache (for auth changes)
+  clearAuthScopeCache(): void {
+    AUTH_SCOPE_NAMESPACES.forEach(namespace => {
+      cache.clearNamespace(namespace);
+    });
+    logger.info('Cleared auth scope GraphQL cache', { namespaces: AUTH_SCOPE_NAMESPACES }, 'GRAPHQL_CACHE');
   }
 
   private async request<T>(
@@ -1982,6 +2078,36 @@ export const GraphQLAPI = {
   setAuthErrorHandler: (handler: (error: any) => void) => 
     graphqlClient.setAuthErrorHandler(handler),
 
+  // Cache management
+  setContext: (context: string) => graphqlClient.setContext(context),
+  getContext: () => graphqlClient.getContext(),
+  clearCache: () => graphqlClient.clearCache(),
+  clearContextCache: () => graphqlClient.clearContextCache(),
+  clearSensitiveCache: () => graphqlClient.clearSensitiveCache(),
+  clearAuthScopeCache: () => graphqlClient.clearAuthScopeCache(),
+  
+  // Clear all queue-related cache and force refresh
+  clearAllQueueCache: () => {
+    // Clear all cache entries that contain queue or triage operations
+    graphqlClient.invalidateCachePattern('GetQueueTickets');
+    graphqlClient.invalidateCachePattern('GetTriageQueue');
+    graphqlClient.invalidateCachePattern('queue:');
+    graphqlClient.invalidateCachePattern('triage:');
+    
+    // Clear cache by namespace to ensure complete cleanup
+    cache.clearNamespace('queue');
+    cache.clearNamespace('triage');
+    
+    logger.info('Cleared all queue-related cache', {}, 'GRAPHQL_CACHE');
+  },
+  
+  // Get cache statistics for debugging
+  getCacheStats: () => {
+    const stats = cache.getStats();
+    logger.info('Cache statistics', stats, 'GRAPHQL_CACHE');
+    return stats;
+  },
+
   // User operations
   getCurrentUser: (): Promise<{ me: User }> => 
     graphqlClient.query(GraphQLQueries.ME),
@@ -2353,9 +2479,6 @@ export const GraphQLAPI = {
   invalidateCachePattern: (pattern: string) =>
     graphqlClient.invalidateCachePattern(pattern),
 
-  clearCache: () =>
-    graphqlClient.clearCache(),
-
   // Visit Operations
   getPatient: (id: string): Promise<{ patient: Patient }> =>
     graphqlClient.query(GraphQLQueries.GET_PATIENT, {
@@ -2414,8 +2537,8 @@ export const GraphQLAPI = {
     station?: string; 
     status?: string; 
     pagination?: PaginationInput 
-  }): Promise<{ queueTickets: any[] }> =>
-    graphqlClient.query(GraphQLQueries.GET_QUEUE_TICKETS, { variables }),
+  }, skipCache = false): Promise<{ queueTickets: any[] }> =>
+    graphqlClient.query(GraphQLQueries.GET_QUEUE_TICKETS, { variables, skipCache }),
 
   createQueueTicket: (input: { visitId: string; station: string }): Promise<{ createQueueTicket: any }> =>
     graphqlClient.mutation(GraphQLMutations.CREATE_QUEUE_TICKET, {
@@ -2433,8 +2556,8 @@ export const GraphQLAPI = {
     skip?: number; 
     take?: number; 
     search?: string 
-  }): Promise<{ triageQueue: { total: number; tickets: any[] } }> =>
-    graphqlClient.query(GraphQLQueries.GET_TRIAGE_QUEUE, { variables }),
+  }, skipCache = false): Promise<{ triageQueue: { total: number; tickets: any[] } }> =>
+    graphqlClient.query(GraphQLQueries.GET_TRIAGE_QUEUE, { variables, skipCache }),
 
   createTriageTicket: (patientId: string, priority?: number): Promise<{ createTriageTicket: any }> =>
     graphqlClient.mutation(GraphQLMutations.CREATE_TRIAGE_TICKET, {

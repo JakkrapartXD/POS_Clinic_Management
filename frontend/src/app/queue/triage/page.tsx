@@ -34,6 +34,7 @@ import { format } from 'date-fns';
 import { GraphQLAPI } from '@/clients/graphql';
 import PageGuard from '@/components/guards/page-guard';
 import { QUEUE_TICKET_STATUS, QUEUE_TICKET_STATION } from '@/constants';
+import { useCacheContext } from '@/hooks/useCacheContext';
 
 interface TriageTicket {
   id: string;
@@ -105,6 +106,9 @@ export default function TriageQueuePage() {
   const [patientSearchQuery, setPatientSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Patient[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+
+  // Cache context management
+  const { currentContext } = useCacheContext();
   
   // Vitals modal states
   const [isVitalsModalOpen, setIsVitalsModalOpen] = useState(false);
@@ -126,11 +130,16 @@ export default function TriageQueuePage() {
   useEffect(() => {
     fetchTriageQueue();
     // Set up polling for real-time updates
-    const interval = setInterval(fetchTriageQueue, 30000); // Refresh every 30 seconds
+    const interval = setInterval(() => {
+      // Skip polling if any ticket is being updated
+      if (!isUpdating) {
+        fetchTriageQueue();
+      }
+    }, 30000); // Refresh every 30 seconds
     return () => clearInterval(interval);
-  }, [selectedStatus, searchQuery]);
+  }, [selectedStatus, searchQuery, isUpdating]);
 
-  const fetchTriageQueue = async () => {
+  const fetchTriageQueue = async (skipCache = false) => {
     try {
       setIsLoading(true);
       
@@ -147,7 +156,7 @@ export default function TriageQueuePage() {
         variables.search = searchQuery.trim();
       }
       
-      const result = await GraphQLAPI.getTriageQueue(variables);
+      const result = await GraphQLAPI.getTriageQueue(variables, skipCache);
       setTriageTickets(result.triageQueue.tickets || []);
 
     } catch (error: any) {
@@ -221,6 +230,11 @@ export default function TriageQueuePage() {
           : ticket
       ));
       
+      // Force refresh with fresh data (skip cache)
+      setTimeout(() => {
+        fetchTriageQueue(true); // Pass skipCache = true
+      }, 100);
+      
       toast.success('เรียกผู้ป่วยแล้ว');
 
     } catch (error: any) {
@@ -244,6 +258,11 @@ export default function TriageQueuePage() {
           : ticket
       ));
       
+      // Force refresh with fresh data (skip cache)
+      setTimeout(() => {
+        fetchTriageQueue(true); // Pass skipCache = true
+      }, 100);
+      
       toast.success('เริ่มบริการคัดกรองแล้ว');
 
     } catch (error: any) {
@@ -266,6 +285,11 @@ export default function TriageQueuePage() {
           ? { ...ticket, status: 'done', done_at: new Date().toISOString() }
           : ticket
       ));
+      
+      // Force refresh with fresh data (skip cache)
+      setTimeout(() => {
+        fetchTriageQueue(true); // Pass skipCache = true
+      }, 100);
       
       toast.success('บริการคัดกรองเสร็จสิ้น');
 
@@ -625,7 +649,7 @@ export default function TriageQueuePage() {
               </DialogContent>
             </Dialog>
             
-            <Button onClick={fetchTriageQueue} variant="outline">
+            <Button onClick={() => fetchTriageQueue()} variant="outline">
               <RefreshCw className="w-4 h-4 mr-2" />
               รีเฟรช
             </Button>

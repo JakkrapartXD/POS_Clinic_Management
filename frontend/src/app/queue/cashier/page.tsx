@@ -24,6 +24,7 @@ import { format } from 'date-fns';
 import { GraphQLAPI } from '@/clients/graphql';
 import PageGuard from '@/components/guards/page-guard';
 import { useRouter } from 'next/navigation';
+import { useCacheContext } from '@/hooks/useCacheContext';
 
 interface CashierTicket {
   id: string;
@@ -82,14 +83,22 @@ export default function CashierQueuePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
 
+  // Cache context management
+  const { currentContext } = useCacheContext();
+
   useEffect(() => {
     fetchCashierQueue();
     // Set up polling for real-time updates
-    const interval = setInterval(fetchCashierQueue, 30000); // Refresh every 30 seconds
+    const interval = setInterval(() => {
+      // Skip polling if any ticket is being updated
+      if (!isUpdating) {
+        fetchCashierQueue();
+      }
+    }, 30000); // Refresh every 30 seconds
     return () => clearInterval(interval);
-  }, [selectedStatus]);
+  }, [selectedStatus, isUpdating]); // Added isUpdating to dependencies
 
-  const fetchCashierQueue = async () => {
+  const fetchCashierQueue = async (skipCache = false) => {
     try {
       setIsLoading(true);
       
@@ -97,7 +106,7 @@ export default function CashierQueuePage() {
         station: 'cashier',
         status: selectedStatus === 'all' ? undefined : selectedStatus.toUpperCase(),
         pagination: { take: 100 }
-      });
+      }, skipCache);
       
       setCashierTickets(result.queueTickets || []);
 
@@ -114,6 +123,11 @@ export default function CashierQueuePage() {
       setIsUpdating(ticketId);
       
       await GraphQLAPI.updateQueueStatus(ticketId, 'called');
+      
+      // Force refresh with fresh data (skip cache)
+      setTimeout(() => {
+        fetchCashierQueue(true); // Pass skipCache = true
+      }, 100);
       
       // Update state immediately
       setCashierTickets(prev => prev.map(ticket => 
@@ -138,6 +152,11 @@ export default function CashierQueuePage() {
       
       await GraphQLAPI.updateQueueStatus(ticketId, 'in_service');
       
+      // Force refresh with fresh data (skip cache)
+      setTimeout(() => {
+        fetchCashierQueue(true); // Pass skipCache = true
+      }, 100);
+      
       // Update state immediately
       setCashierTickets(prev => prev.map(ticket => 
         ticket.id === ticketId 
@@ -160,6 +179,11 @@ export default function CashierQueuePage() {
       setIsUpdating(ticketId);
       
       await GraphQLAPI.updateQueueStatus(ticketId, 'done');
+      
+      // Force refresh with fresh data (skip cache)
+      setTimeout(() => {
+        fetchCashierQueue(true); // Pass skipCache = true
+      }, 100);
       
       // Update state immediately
       setCashierTickets(prev => prev.map(ticket => 
@@ -372,7 +396,7 @@ export default function CashierQueuePage() {
           <div className="flex gap-2">
             <Button
               variant="outline"
-              onClick={fetchCashierQueue}
+              onClick={() => fetchCashierQueue()}
               disabled={isLoading}
             >
               <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />

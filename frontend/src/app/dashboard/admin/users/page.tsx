@@ -28,6 +28,7 @@ import {
 import PageGuard from "@/components/guards/page-guard"
 import { GraphQLAPI } from "@/clients/graphql"
 import { User } from "@/types/user"
+import { useCacheContext, useSensitiveDataCache } from "@/hooks/useCacheContext"
 
 // Interface for local user state
 interface LocalUser {
@@ -106,6 +107,10 @@ export default function UserManagementPage() {
     role: "",
     status: "active"
   })
+
+  // Cache context management for sensitive data
+  const { currentContext } = useCacheContext();
+  useSensitiveDataCache(); // Automatically clear sensitive cache on mount/unmount
 
   // Ref for search input
   const searchInputRef = useRef<HTMLInputElement>(null)

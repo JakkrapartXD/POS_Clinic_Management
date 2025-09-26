@@ -31,6 +31,7 @@ import { format } from 'date-fns';
 import { GraphQLAPI } from '@/clients/graphql';
 import PageGuard from '@/components/guards/page-guard';
 import { QUEUE_TICKET_STATUS, QUEUE_TICKET_STATION } from '@/constants';
+import { useCacheContext } from '@/hooks/useCacheContext';
 
 interface QueueTicket {
   id: string;
@@ -104,14 +105,22 @@ export default function QueueManagementPage() {
   const [previousVitals, setPreviousVitals] = useState<any[]>([]);
   const [isLoadingVitals, setIsLoadingVitals] = useState(false);
 
+  // Cache context management
+  const { currentContext } = useCacheContext();
+
   useEffect(() => {
     fetchQueueData();
     // Set up polling for real-time updates
-    const interval = setInterval(fetchQueueData, 30000); // Refresh every 30 seconds
+    const interval = setInterval(() => {
+      // Skip polling if any ticket is being updated
+      if (!isUpdating) {
+        fetchQueueData();
+      }
+    }, 30000); // Refresh every 30 seconds
     return () => clearInterval(interval);
-  }, [selectedStation, selectedStatus]);
+  }, [selectedStation, selectedStatus, isUpdating]); // Added isUpdating to dependencies
 
-  const fetchQueueData = async () => {
+  const fetchQueueData = async (skipCache = false) => {
     try {
       setIsLoading(true);
       
@@ -127,7 +136,7 @@ export default function QueueManagementPage() {
         variables.status = selectedStatus.toUpperCase();
       }
       
-      const result = await GraphQLAPI.getQueueTickets(variables);
+      const result = await GraphQLAPI.getQueueTickets(variables, skipCache);
       setQueueTickets(result.queueTickets || []);
 
     } catch (error: any) {
@@ -154,10 +163,12 @@ export default function QueueManagementPage() {
       // Call GraphQL mutation to delete all queue tickets
       await GraphQLAPI.deleteAllQueueTickets();
       
-      toast.success('เคลียร์คิวทั้งหมดสำเร็จ');
+      // Force refresh with fresh data (skip cache)
+      setTimeout(() => {
+        fetchQueueData(true); // Pass skipCache = true
+      }, 100);
       
-      // Refresh queue data
-      await fetchQueueData();
+      toast.success('เคลียร์คิวทั้งหมดสำเร็จ');
       
       // Close modal
       closeClearModal();
@@ -193,6 +204,11 @@ export default function QueueManagementPage() {
         }
         return ticket;
       }));
+      
+      // Force refresh with fresh data (skip cache)
+      setTimeout(() => {
+        fetchQueueData(true); // Pass skipCache = true
+      }, 100);
       
       toast.success(`อัปเดตสถานะคิวเป็น ${newStatus} แล้ว`);
 
@@ -455,7 +471,7 @@ export default function QueueManagementPage() {
             </SelectContent>
           </Select>
           
-          <Button onClick={fetchQueueData} variant="outline">
+          <Button onClick={() => fetchQueueData()} variant="outline">
             <RefreshCw className="w-4 h-4 mr-2" />
 รีเฟรช
           </Button>
