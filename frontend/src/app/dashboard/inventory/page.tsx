@@ -491,8 +491,6 @@ function InventoryPage() {
         input.categoryId = categoryId
       }
 
-      // Note: report_type is not supported in CreateProductInput schema
-      // Remove report_type from input to avoid GraphQL error
 
       logger.info('Creating product with input', { input }, 'INVENTORY')
       
