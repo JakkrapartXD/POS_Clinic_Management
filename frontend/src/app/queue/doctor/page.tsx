@@ -27,7 +27,11 @@ import {
   User,
   FileText,
   Search,
-  Save
+  Save,
+  ShoppingCart,
+  Plus,
+  Minus,
+  X
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -116,6 +120,15 @@ export default function DoctorQueuePage() {
   const [isSavingConsultation, setIsSavingConsultation] = useState(false);
   const [existingConsultation, setExistingConsultation] = useState<any>(null);
   const [isLoadingConsultation, setIsLoadingConsultation] = useState(false);
+
+  // Prescription modal states
+  const [isPrescriptionModalOpen, setIsPrescriptionModalOpen] = useState(false);
+  const [prescriptionCart, setPrescriptionCart] = useState<any[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
+  const [productSearchQuery, setProductSearchQuery] = useState('');
+  const [isLoadingProducts, setIsLoadingProducts] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [categories, setCategories] = useState<any[]>([]);
 
   useEffect(() => {
     fetchDoctorQueue();
@@ -291,6 +304,124 @@ export default function DoctorQueuePage() {
         });
       }
     }
+  };
+
+  const openPrescriptionModal = async (ticket: DoctorTicket) => {
+    setSelectedTicket(ticket);
+    setIsPrescriptionModalOpen(true);
+    
+    // Load existing prescription cart from localStorage
+    const visitId = ticket.visit?.id;
+    if (visitId) {
+      const savedCart = localStorage.getItem(`prescription_cart_${visitId}`);
+      if (savedCart) {
+        setPrescriptionCart(JSON.parse(savedCart));
+      } else {
+        setPrescriptionCart([]);
+      }
+    }
+    
+    // Load products if not already loaded
+    if (products.length === 0) {
+      await fetchProducts();
+    }
+  };
+
+  const fetchProducts = async () => {
+    try {
+      setIsLoadingProducts(true);
+      const response = await GraphQLAPI.getAllProducts({
+        filter: {
+          status: 'active'
+        }
+      });
+      
+      if (response.products?.products) {
+        setProducts(response.products.products);
+        
+        // Create categories from products
+        const categoryMap = new Map<string, number>();
+        response.products.products.forEach((product: any) => {
+          const categoryName = product.category?.name || 'ไม่ระบุหมวดหมู่';
+          categoryMap.set(categoryName, (categoryMap.get(categoryName) || 0) + 1);
+        });
+        
+        const categoryList = [
+          { id: "all", name: "แสดงทั้งหมด", count: response.products.products.length }
+        ];
+        
+        categoryMap.forEach((count, name) => {
+          categoryList.push({ id: name, name, count });
+        });
+        
+        setCategories(categoryList);
+      }
+    } catch (error) {
+      console.error('Error fetching products:', error);
+      toast.error('ไม่สามารถโหลดข้อมูลสินค้าได้');
+    } finally {
+      setIsLoadingProducts(false);
+    }
+  };
+
+  const addToPrescriptionCart = (product: any) => {
+    const existingItem = prescriptionCart.find((item) => item.id === product.id);
+
+    if (existingItem) {
+      setPrescriptionCart(prescriptionCart.map((item) => 
+        item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
+      ));
+    } else {
+      const cartItem = {
+        id: product.id,
+        product_name: product.product_name,
+        sale_price: product.sale_price,
+        unit: product.unit || '',
+        pack_size: product.pack_size || '',
+        quantity: 1,
+        sku: product.sku || '',
+        barcode: product.barcode || '',
+        stock_quantity: product.stock_quantity || 0,
+        vat_percent: product.vat_percent || 0
+      };
+      setPrescriptionCart([...prescriptionCart, cartItem]);
+    }
+  };
+
+  const removeFromPrescriptionCart = (productId: string) => {
+    setPrescriptionCart(prescriptionCart.filter((item) => item.id !== productId));
+  };
+
+  const updatePrescriptionQuantity = (productId: string, quantity: number) => {
+    if (quantity <= 0) {
+      removeFromPrescriptionCart(productId);
+      return;
+    }
+
+    setPrescriptionCart(prescriptionCart.map((item) => 
+      item.id === productId ? { ...item, quantity } : item
+    ));
+  };
+
+  const savePrescriptionCart = () => {
+    if (!selectedTicket?.visit?.id) {
+      toast.error('ไม่พบข้อมูลการมาเยี่ยม');
+      return;
+    }
+
+    const visitId = selectedTicket.visit.id;
+    localStorage.setItem(`prescription_cart_${visitId}`, JSON.stringify(prescriptionCart));
+    toast.success('บันทึกการสั่งยาสำเร็จ');
+    setIsPrescriptionModalOpen(false);
+  };
+
+  const clearPrescriptionCart = () => {
+    if (!selectedTicket?.visit?.id) return;
+    
+    const visitId = selectedTicket.visit.id;
+    localStorage.removeItem(`prescription_cart_${visitId}`);
+    setPrescriptionCart([]);
+    toast.success('ล้างตะกร้าสั่งยาสำเร็จ');
   };
 
   const handleSaveConsultation = async () => {
@@ -564,6 +695,15 @@ export default function DoctorQueuePage() {
                     >
                       <FileText className="w-3 h-3 mr-1" />
                       บันทึกการตรวจ
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => openPrescriptionModal(ticket)}
+                      className="border-orange-600 text-orange-600 hover:bg-orange-50"
+                    >
+                      <ShoppingCart className="w-3 h-3 mr-1" />
+                      สั่งยา
                     </Button>
                   </>
                 )}
@@ -975,6 +1115,149 @@ export default function DoctorQueuePage() {
                 >
                   ยกเลิก
                 </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Prescription Modal */}
+        <Dialog open={isPrescriptionModalOpen} onOpenChange={setIsPrescriptionModalOpen}>
+          <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <ShoppingCart className="w-5 h-5" />
+                สั่งยา - {selectedTicket?.patient?.first_name} {selectedTicket?.patient?.last_name}
+              </DialogTitle>
+            </DialogHeader>
+            
+            <div className="flex h-[70vh] gap-4">
+              {/* Product Selection */}
+              <div className="flex-1 overflow-auto">
+                <div className="space-y-4">
+                  {/* Search Bar */}
+                  <div className="relative">
+                    <Input
+                      placeholder="ค้นหาสินค้าจากชื่อ หรือบาร์โค้ด..."
+                      value={productSearchQuery}
+                      onChange={(e) => setProductSearchQuery(e.target.value)}
+                      className="pl-10"
+                    />
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 h-4 w-4" />
+                  </div>
+
+                  {/* Category Tabs */}
+                  <Tabs value={selectedCategory} onValueChange={setSelectedCategory}>
+                    <TabsList className="w-full overflow-auto">
+                      {categories.map((category) => (
+                        <TabsTrigger key={category.id} value={category.id} className="text-xs">
+                          {category.name} {category.count > 0 && `(${category.count})`}
+                        </TabsTrigger>
+                      ))}
+                    </TabsList>
+                  </Tabs>
+
+                  {/* Product Grid */}
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                    {products
+                      .filter(product => {
+                        const matchesSearch = product.product_name.toLowerCase().includes(productSearchQuery.toLowerCase()) ||
+                                             product.sku?.toLowerCase().includes(productSearchQuery.toLowerCase()) ||
+                                             product.barcode?.includes(productSearchQuery);
+                        const matchesCategory = selectedCategory === "all" || product.category?.name === selectedCategory;
+                        return matchesSearch && matchesCategory;
+                      })
+                      .map((product) => (
+                        <Card
+                          key={product.id}
+                          className="cursor-pointer hover:shadow-md transition-shadow"
+                          onClick={() => addToPrescriptionCart(product)}
+                        >
+                          <CardContent className="p-3">
+                            <div className="bg-gray-100 h-16 mb-2 flex items-center justify-center rounded-md overflow-hidden">
+                              <span className="text-gray-400 text-xl">Rx</span>
+                            </div>
+                            <h3 className="font-medium text-xs mb-1 line-clamp-2">{product.product_name}</h3>
+                            <div className="text-xs text-gray-500 mb-1">
+                              {product.pack_size} {product.unit}
+                            </div>
+                            <div className="text-xs text-gray-400 mb-1">
+                              สต๊อก: {product.stock_quantity}
+                            </div>
+                            <div className="text-orange-600 font-medium text-sm">฿{product.sale_price.toFixed(2)}</div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Prescription Cart */}
+              <div className="w-80 border-l bg-gray-50 flex flex-col">
+                <div className="p-4 border-b bg-white">
+                  <h3 className="text-lg font-medium text-center">ตะกร้าสั่งยา</h3>
+                </div>
+
+                <div className="flex-1 overflow-auto p-4">
+                  {prescriptionCart.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full text-gray-400">
+                      <div className="text-4xl mb-2">🛒</div>
+                      <p className="text-sm">ยังไม่มีรายการยา</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {prescriptionCart.map((item) => (
+                        <div key={item.id} className="flex items-center justify-between bg-white p-3 rounded-lg shadow-sm">
+                          <div className="flex-1">
+                            <h4 className="font-medium text-sm">{item.product_name}</h4>
+                            <div className="text-xs text-gray-500">{item.pack_size} {item.unit}</div>
+                            <div className="text-orange-600 text-sm">฿{item.sale_price.toFixed(2)}</div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="h-6 w-6"
+                              onClick={() => updatePrescriptionQuantity(item.id, item.quantity - 1)}
+                            >
+                              <Minus className="h-3 w-3" />
+                            </Button>
+                            <span className="w-6 text-center text-sm">{item.quantity}</span>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="h-6 w-6"
+                              onClick={() => updatePrescriptionQuantity(item.id, item.quantity + 1)}
+                            >
+                              <Plus className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="border-t p-4 bg-white space-y-2">
+                  <div className="text-sm text-gray-600">
+                    รวม {prescriptionCart.length} รายการ
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={savePrescriptionCart}
+                      className="flex-1 bg-orange-600 hover:bg-orange-700"
+                    >
+                      <Save className="w-4 h-4 mr-2" />
+                      บันทึก
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={clearPrescriptionCart}
+                      disabled={prescriptionCart.length === 0}
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
               </div>
             </div>
           </DialogContent>

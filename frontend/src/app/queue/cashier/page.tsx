@@ -208,6 +208,13 @@ export default function CashierQueuePage() {
       const patientResult = await GraphQLAPI.getPatient(ticket.patientId);
       const patientData = patientResult.patient;
       
+      // Check if there's a prescription cart for this visit
+      let hasPrescriptionCart = false;
+      if (ticket.visit?.id) {
+        const prescriptionCart = localStorage.getItem(`prescription_cart_${ticket.visit.id}`);
+        hasPrescriptionCart = prescriptionCart !== null;
+      }
+      
       // Navigate to POS page with visit data
       const visitData = {
         visitId: ticket.visit?.id,
@@ -216,7 +223,8 @@ export default function CashierQueuePage() {
         patientPhone: ticket.patient?.phone,
         patientEmail: ticket.patient?.email,
         visitData: ticket.visit,
-        patientData: patientData // Add patient data with medical information
+        patientData: patientData, // Add patient data with medical information
+        hasPrescriptionCart: hasPrescriptionCart // Add flag to indicate if prescription cart exists
       };
       
       // Store visit data in sessionStorage for POS page to use
@@ -224,6 +232,10 @@ export default function CashierQueuePage() {
       
       // Navigate to POS page
       router.push('/dashboard/pos');
+      
+      if (hasPrescriptionCart) {
+        toast.success('โหลดข้อมูลการสั่งยาจากหมอแล้ว');
+      }
     } catch (error: any) {
       console.error('Error fetching patient data:', error);
       toast.error('ไม่สามารถโหลดข้อมูลผู้ป่วยได้');
@@ -307,6 +319,14 @@ export default function CashierQueuePage() {
               <p className="text-sm text-gray-600 mt-1">
                 <strong>การวินิจฉัย:</strong> {ticket.visit.diagnosis}
               </p>
+            )}
+            {ticket.visit?.id && localStorage.getItem(`prescription_cart_${ticket.visit.id}`) && (
+              <div className="mt-2">
+                <Badge variant="outline" className="text-orange-600 border-orange-600">
+                  <ShoppingCart className="w-3 h-3 mr-1" />
+                  มีการสั่งยา
+                </Badge>
+              </div>
             )}
           </div>
           
