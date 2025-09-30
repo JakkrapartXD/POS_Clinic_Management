@@ -1,9 +1,12 @@
 import { Elysia, t } from "elysia";
 import { jwt } from "@elysiajs/jwt";
+import { cookie } from "@elysiajs/cookie";
 import { PrismaClient } from "@prisma/client";
 import { ClinicService } from "../services/ClinicService";
+import { RolePermissionsMiddleware } from "../middleware/RolePermissionsMiddleware";
 
 const prisma = new PrismaClient();
+const rolePermissions = new RolePermissionsMiddleware();
 
 // Validation schemas
 const createVisitModel = t.Object({
@@ -95,6 +98,7 @@ const requireRole = (user: any, allowedRoles: string[]) => {
 };
 
 export const clinicController = new Elysia()
+  .use(cookie())
   .use(jwt({
     name: 'jwt',
     secret: process.env.JWT_SECRET!
@@ -314,14 +318,25 @@ export const clinicController = new Elysia()
   // GET /queue - Get queue tickets by station
   .get('/queue', async ({ 
     query, 
-    headers, 
-    jwt, 
+    cookie,
     set, 
     clinicService 
   }) => {
     try {
-      const user = await requireAuth(headers, jwt);
-      requireRole(user, ['doctor', 'admin', 'staff', 'cashier']);
+      // Check if user has permission for specific station or general queue access
+      const station = query.station as string;
+      let permissionCheck;
+      
+      if (station) {
+        permissionCheck = await rolePermissions.checkQueuePermission(cookie, station);
+      } else {
+        permissionCheck = await rolePermissions.checkAnyQueuePermission(cookie);
+      }
+      
+      if (!permissionCheck.success) {
+        set.status = permissionCheck.statusCode;
+        return { success: false, message: permissionCheck.message };
+      }
 
       const queueTickets = await clinicService.getQueueTickets({
         station: query.station as any,
@@ -332,8 +347,7 @@ export const clinicController = new Elysia()
 
       return { success: true, data: queueTickets };
     } catch (error: any) {
-      set.status = error.message.includes('Access denied') ? 403 : 
-                  error.message.includes('authorization') || error.message.includes('JWT') ? 401 : 400;
+      set.status = 500;
       return { success: false, error: error.message };
     }
   })
@@ -342,26 +356,35 @@ export const clinicController = new Elysia()
   .put('/queue/:ticketId/status', async ({ 
     params: { ticketId }, 
     body, 
-    headers, 
-    jwt, 
+    cookie,
     set, 
     clinicService 
   }) => {
     try {
-      const user = await requireAuth(headers, jwt);
-      requireRole(user, ['doctor', 'admin', 'staff', 'cashier']);
+      // First get the ticket to determine which station it belongs to
+      const ticket = await clinicService.getQueueTicketById(ticketId);
+      if (!ticket) {
+        set.status = 404;
+        return { success: false, message: "Queue ticket not found" };
+      }
+
+      // Check permission for the specific station
+      const permissionCheck = await rolePermissions.checkQueuePermission(cookie, ticket.station);
+      if (!permissionCheck.success) {
+        set.status = permissionCheck.statusCode;
+        return { success: false, message: permissionCheck.message };
+      }
 
       const queueTicket = await clinicService.updateQueueStatus(
         ticketId, 
         body.status, 
-        user.id,
+        permissionCheck.userId,
         body.note
       );
 
       return { success: true, data: queueTicket };
     } catch (error: any) {
-      set.status = error.message.includes('Access denied') ? 403 : 
-                  error.message.includes('authorization') || error.message.includes('JWT') ? 401 : 400;
+      set.status = 500;
       return { success: false, error: error.message };
     }
   }, {

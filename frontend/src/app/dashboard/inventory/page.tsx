@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useEffect, useCallback, memo } from "react"
+import { useState, useMemo, useEffect, useCallback, memo, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import AddProductForm from "@/components/forms/AddProductForm"
@@ -491,8 +491,6 @@ function InventoryPage() {
         input.categoryId = categoryId
       }
 
-      // Note: report_type is not supported in CreateProductInput schema
-      // Remove report_type from input to avoid GraphQL error
 
       logger.info('Creating product with input', { input }, 'INVENTORY')
       
@@ -801,4 +799,12 @@ function InventoryPage() {
   )
 }
 
-export default memo(InventoryPage)
+function InventoryPageWithSuspense() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <InventoryPage />
+    </Suspense>
+  )
+}
+
+export default memo(InventoryPageWithSuspense)

@@ -77,7 +77,7 @@ export const removeCookie = (name: string): void => {
  * Check if file type is allowed
  */
 export const isFileTypeAllowed = (file: File): boolean => {
-  return APP_CONSTANTS.FILE_UPLOAD.ACCEPTED_TYPES.includes(file.type);
+  return APP_CONSTANTS.FILE_UPLOAD.ACCEPTED_TYPES.includes(file.type as any);
 };
 
 /**

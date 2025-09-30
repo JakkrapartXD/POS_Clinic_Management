@@ -40,9 +40,8 @@ interface ProductFormData {
   // Symptom Category
   symptom_category: string[]
   
-  // Registration
-  license_number: string
-  report_type: string[]
+  // Registration - Support multiple license types
+  license_numbers: string[]
   
   // Dosage Information
   dosage_unit: string
@@ -66,7 +65,6 @@ interface ProductFormData {
   purchase_note: string
   
   // Label Settings
-  auto_print_label: boolean
   show_dosage_table: boolean
 }
 
@@ -94,6 +92,56 @@ export default function EditProductForm({ onBack, onSubmit, initialData }: EditP
     return []
   }
 
+  // Helper function to parse license numbers safely
+  const parseLicenseNumbers = (data: any): string[] => {
+    if (!data) return []
+    if (Array.isArray(data)) return data
+    if (typeof data === 'string') {
+      // Handle comma-separated license numbers
+      if (data.includes(',')) {
+        return data.split(',').map(license => license.trim()).filter(license => license)
+      }
+      // Handle single license number
+      return data ? [data] : []
+    }
+    return []
+  }
+
+  // Helper function to handle license checkbox changes
+  const handleLicenseChange = (licenseType: string, checked: boolean) => {
+    setFormData(prev => {
+      const currentLicenses = prev.license_numbers || []
+      
+      if (checked) {
+        // Add license if not already present
+        if (!currentLicenses.includes(licenseType)) {
+          return {
+            ...prev,
+            license_numbers: [...currentLicenses, licenseType]
+          }
+        }
+      } else {
+        // Remove license if present
+        return {
+          ...prev,
+          license_numbers: currentLicenses.filter(license => license !== licenseType)
+        }
+      }
+      
+      return prev
+    })
+  }
+
+  // Helper function to get license display name
+  const getLicenseDisplayName = (licenseType: string): string => {
+    const licenseNames: { [key: string]: string } = {
+      'ข.ย.9': 'รายงาน ข.ย.๙ (รายงานการซื้อยาทุกประเภท)',
+      'ข.ย.10': 'รายงาน ข.ย.๑๐ (รายงานการขายยาควบคุมพิเศษ)',
+      'ข.ย.11': 'รายงาน ข.ย.๑๑ (รายงานการขายยาอันตราย)'
+    }
+    return licenseNames[licenseType] || licenseType
+  }
+
   // Separate state for Select components to handle controlled/uncontrolled issues
   const [selectValues, setSelectValues] = useState({
     category: initialData?.category || "",
@@ -112,8 +160,7 @@ export default function EditProductForm({ onBack, onSubmit, initialData }: EditP
     vat_percent: initialData?.vat_percent?.toString() || "0",
     expiration_warning_days: initialData?.expiration_warning_date?.toString() || "90",
     symptom_category: parseSymptomCategory(initialData?.symptom_category),
-    license_number: initialData?.license_number || "",
-    report_type: [],
+    license_numbers: parseLicenseNumbers(initialData?.license_number),
     dosage_unit: initialData?.dosage_unit || "",
     dosage: initialData?.dosage || "",
     times_per_day: initialData?.times_per_day?.toString() || "",
@@ -129,7 +176,6 @@ export default function EditProductForm({ onBack, onSubmit, initialData }: EditP
     usage_instruction: initialData?.usage_instruction || "",
     sale_note: initialData?.sale_note || "",
     purchase_note: initialData?.purchase_note || "",
-    auto_print_label: false,
     show_dosage_table: false
   })
 
@@ -146,14 +192,6 @@ export default function EditProductForm({ onBack, onSubmit, initialData }: EditP
 
 
 
-  const handleReportTypeChange = (reportType: string, checked: boolean) => {
-    const currentReports = formData.report_type
-    if (checked) {
-      handleInputChange('report_type', [...currentReports, reportType])
-    } else {
-      handleInputChange('report_type', currentReports.filter(r => r !== reportType))
-    }
-  }
 
   const handleSubmit = async () => {
     // Validate required fields
@@ -164,7 +202,14 @@ export default function EditProductForm({ onBack, onSubmit, initialData }: EditP
     
     setIsSubmitting(true)
     try {
-      await onSubmit(formData)
+      // Prepare form data for submission
+      const submissionData = {
+        ...formData,
+        // Convert license_numbers array to comma-separated string for backend compatibility
+        license_number: formData.license_numbers?.join(',') || ''
+      }
+      
+      await onSubmit(submissionData)
       setHasChanges(false) // Reset changes after successful submit
     } catch (error) {
       console.error('Error submitting form:', error)
@@ -237,8 +282,7 @@ export default function EditProductForm({ onBack, onSubmit, initialData }: EditP
         vat_percent: initialData.vat_percent?.toString() || "0",
         expiration_warning_days: initialData.expiration_warning_date?.toString() || "90",
         symptom_category: parseSymptomCategory(initialData.symptom_category),
-        license_number: initialData.license_number || "",
-        report_type: [],
+        license_numbers: parseLicenseNumbers(initialData.license_number),
         dosage_unit: initialData.dosage_unit || "",
         dosage: initialData.dosage || "",
         times_per_day: initialData.times_per_day?.toString() || "",
@@ -254,7 +298,6 @@ export default function EditProductForm({ onBack, onSubmit, initialData }: EditP
         usage_instruction: initialData.usage_instruction || "",
         sale_note: initialData.sale_note || "",
         purchase_note: initialData.purchase_note || "",
-        auto_print_label: false,
         show_dosage_table: false
       })
     }
@@ -476,12 +519,29 @@ export default function EditProductForm({ onBack, onSubmit, initialData }: EditP
           <CardContent className="p-6">
             <h2 className="text-lg font-semibold text-gray-700 mb-4">การขึ้นทะเบียนบัญชี</h2>
             
+            {/* Selected Licenses Summary */}
+            {formData.license_numbers && formData.license_numbers.length > 0 && (
+              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <h3 className="text-sm font-medium text-blue-800 mb-2">รายการที่เลือก:</h3>
+                <div className="flex flex-wrap gap-2">
+                  {formData.license_numbers.map((license, index) => (
+                    <span 
+                      key={index}
+                      className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                    >
+                      {license}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            
             <div className="space-y-3">
               <div className="flex items-center space-x-2">
                 <Checkbox 
                   id="report-9"
-                  checked={formData.report_type.includes('report-9')}
-                  onCheckedChange={(checked) => handleReportTypeChange('report-9', checked as boolean)}
+                  checked={formData.license_numbers?.includes('ข.ย.9') || false}
+                  onCheckedChange={(checked) => handleLicenseChange('ข.ย.9', checked as boolean)}
                 />
                 <Label htmlFor="report-9" className="text-sm">
                   <span className="font-medium">รายงาน ข.ย.๙</span>
@@ -493,8 +553,8 @@ export default function EditProductForm({ onBack, onSubmit, initialData }: EditP
               <div className="flex items-center space-x-2">
                 <Checkbox 
                   id="report-10"
-                  checked={formData.report_type.includes('report-10')}
-                  onCheckedChange={(checked) => handleReportTypeChange('report-10', checked as boolean)}
+                  checked={formData.license_numbers?.includes('ข.ย.10') || false}
+                  onCheckedChange={(checked) => handleLicenseChange('ข.ย.10', checked as boolean)}
                 />
                 <Label htmlFor="report-10" className="text-sm">
                   <span className="font-medium">รายงาน ข.ย.๑๐</span>
@@ -506,8 +566,8 @@ export default function EditProductForm({ onBack, onSubmit, initialData }: EditP
               <div className="flex items-center space-x-2">
                 <Checkbox 
                   id="report-11"
-                  checked={formData.report_type.includes('report-11')}
-                  onCheckedChange={(checked) => handleReportTypeChange('report-11', checked as boolean)}
+                  checked={formData.license_numbers?.includes('ข.ย.11') || false}
+                  onCheckedChange={(checked) => handleLicenseChange('ข.ย.11', checked as boolean)}
                 />
                 <Label htmlFor="report-11" className="text-sm">
                   <span className="font-medium">รายงาน ข.ย.๑๑</span>
@@ -568,21 +628,6 @@ export default function EditProductForm({ onBack, onSubmit, initialData }: EditP
           <CardContent className="p-6">
             <h2 className="text-lg font-semibold text-gray-700 mb-4">ข้อมูลฉลากยา/หมายเหตุ</h2>
             
-            <div className="space-y-4 mb-6">
-              <div className="flex items-center space-x-4">
-                <Switch 
-                  id="auto-print"
-                  checked={formData.auto_print_label}
-                  onCheckedChange={(checked) => handleInputChange('auto_print_label', checked)}
-                  className="data-[state=checked]:bg-teal-500"
-                />
-                <Label htmlFor="auto-print" className="text-sm cursor-pointer">
-                  <span className="font-medium">พิมพ์อัตโนมัติหลังชำระ</span>
-                  <br />
-                  <span className="text-gray-500">เมื่อชำระสินค้าระบบจะทำการสั่งพิมพ์ฉลากของสินค้านี้โดยอัตโนมัติ</span>
-                </Label>
-              </div>
-            </div>
 
             <div className="grid grid-cols-3 gap-4 mb-4">
               <div>

@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Bell, Package, Calendar } from "lucide-react"
 import EmptyState from "@/components/ui/empty-state"
 import { GraphQLAPI } from "@/clients/graphql"
+import { useUser } from "@/hooks/use-user"
 
 // Color mapping for stock alerts
 const getColorClasses = (color: string) => {
@@ -37,6 +38,7 @@ const formatDate = (dateString: string) => {
 
 export default function NotificationsPage() {
   const router = useRouter()
+  const { user } = useUser()
   const [stockAlerts, setStockAlerts] = useState<any[]>([])
   const [appointments, setAppointments] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -50,26 +52,32 @@ export default function NotificationsPage() {
     weekday: 'long'
   })
 
+  // Check permissions for different notification types
+  const canViewStockAlerts = user?.role && ['admin', 'doctor', 'cashier'].includes(user.role)
+  const canViewAppointments = user?.role && ['admin', 'doctor', 'nurse', 'staff'].includes(user.role)
+
   // Fetch data function
   const fetchData = async () => {
     try {
       setLoading(true)
       
-      // Fetch stock alerts using GraphQL API
+      // Fetch stock alerts for all users (but control access via click)
       const stockData = await GraphQLAPI.getStockExpiryAlerts({
         skip: 0,
         take: 100
       })
+      setStockAlerts(stockData.stockExpiryAlerts?.items || [])
       
-      // Fetch appointments using GraphQL API
+      // Fetch appointments for all users (but control access via click)
       const appointmentData = await GraphQLAPI.getTodaysAppointments({
         date: today.toISOString(),
         skip: 0,
         take: 100
       })
-      
-      setStockAlerts(stockData.stockExpiryAlerts?.items || [])
-      setAppointments(appointmentData.todaysAppointments?.items || [])
+      // Filter appointments to show only scheduled (not visited yet)
+      const scheduledAppointments = (appointmentData.todaysAppointments?.items || [])
+        .filter((appointment: any) => appointment.status === "scheduled")
+      setAppointments(scheduledAppointments)
     } catch (error) {
       console.error('Error fetching notifications data:', error)
       setStockAlerts([])
@@ -79,17 +87,25 @@ export default function NotificationsPage() {
     }
   }
 
-  // Fetch data on component mount
+  // Fetch data on component mount and when user role changes
   useEffect(() => {
-    fetchData()
-  }, [])
+    if (user?.role) {
+      fetchData()
+    }
+  }, [user?.role])
 
   // Navigation functions
   const handleStockAlertClick = (productId: string) => {
+    if (!canViewStockAlerts) {
+      return // Just do nothing if no permission
+    }
     router.push(`/dashboard/inventory?productId=${productId}&tab=stock`)
   }
 
   const handleAppointmentClick = (patientId: string) => {
+    if (!canViewAppointments) {
+      return // Just do nothing if no permission
+    }
     router.push(`/dashboard/patients/${patientId}`)
   }
 
@@ -138,15 +154,19 @@ export default function NotificationsPage() {
             <EmptyState 
               icon={Bell} 
               title="ไม่มีแจ้งเตือนวันนี้" 
-              description="ไม่มีสินค้าใกล้หมดอายุหรือนัดหมายในวันนี้" 
+              description="ไม่มีสินค้าใกล้หมดอายุหรือนัดหมายที่ยังไม่ได้มาในวันนี้"
             />
           ) : (
             <div className="space-y-3">
-              {/* Stock Alerts */}
+              {/* Stock Alerts - Show for all users but only clickable for authorized users */}
               {stockAlerts.map((item: any) => (
                 <div 
                   key={`stock-${item.stock_id}`} 
-                  className={`border rounded-lg p-4 hover:bg-gray-50 cursor-pointer transition-colors ${getColorClasses(item.color)}`}
+                  className={`border rounded-lg p-4 transition-colors ${getColorClasses(item.color)} ${
+                    canViewStockAlerts 
+                      ? 'hover:bg-gray-50 cursor-pointer' 
+                      : 'cursor-not-allowed opacity-75'
+                  }`}
                   onClick={() => handleStockAlertClick(item.product_id)}
                 >
                   <div className="flex items-center justify-between">
@@ -171,18 +191,22 @@ export default function NotificationsPage() {
                         เหลือ {item.days_left} วัน
                       </div>
                       <div className="text-xs text-gray-500 mt-1">
-                        คลิกเพื่อดูรายละเอียด
+                        {canViewStockAlerts ? 'คลิกเพื่อดูรายละเอียด' : 'ไม่มีสิทธิ์เข้าถึง'}
                       </div>
                     </div>
                   </div>
                 </div>
               ))}
 
-              {/* Appointments */}
+              {/* Appointments - Show for all users but only clickable for authorized users */}
               {appointments.map((appointment: any) => (
                 <div 
                   key={`appointment-${appointment.appointment_id}`} 
-                  className="border rounded-lg p-4 hover:bg-gray-50 cursor-pointer transition-colors"
+                  className={`border rounded-lg p-4 transition-colors ${
+                    canViewAppointments 
+                      ? 'hover:bg-gray-50 cursor-pointer' 
+                      : 'cursor-not-allowed opacity-75'
+                  }`}
                   onClick={() => handleAppointmentClick(appointment.patient_id)}
                 >
                   <div className="flex items-center justify-between">
@@ -190,8 +214,8 @@ export default function NotificationsPage() {
                       <div className="flex items-center gap-2 mb-1">
                         <Calendar className="h-4 w-4 text-blue-500" />
                         <h3 className="font-medium text-gray-900">{appointment.patient_fullname}</h3>
-                        <Badge variant={appointment.status === "scheduled" ? "default" : "secondary"}>
-                          {appointment.status === "scheduled" ? "นัดแล้ว" : appointment.status}
+                        <Badge variant="default" className="bg-blue-100 text-blue-800">
+                          นัดแล้ว
                         </Badge>
                       </div>
                       <div className="text-sm text-gray-600 space-y-1">
@@ -204,7 +228,7 @@ export default function NotificationsPage() {
                         {formatDate(appointment.time)}
                       </div>
                       <div className="text-xs text-gray-500 mt-1">
-                        คลิกเพื่อดูรายละเอียด
+                        {canViewAppointments ? 'คลิกเพื่อดูรายละเอียด' : 'ไม่มีสิทธิ์เข้าถึง'}
                       </div>
                     </div>
                   </div>

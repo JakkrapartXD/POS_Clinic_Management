@@ -1,12 +1,19 @@
 import { verify } from "jsonwebtoken";
 import { UserModel } from "../models/UserModel";
+import { 
+  type CookieObject, 
+  type AuthResult, 
+  type PermissionResult,
+  extractJwtToken 
+} from "../types/auth";
+import { getAuthConfig, getCookieNames } from "../config/auth";
 
-const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
 const userModel = new UserModel();
 
 export class AuthMiddleware {
-  async verifyAuth(cookie: any) {
-    const jwtToken = cookie["next-auth.jwt-token"]?.value;
+  async verifyAuth(cookie: CookieObject): Promise<AuthResult> {
+    const cookieNames = getCookieNames();
+    const jwtToken = extractJwtToken(cookie, cookieNames.jwtToken);
     
     if (!jwtToken) {
       return {
@@ -17,7 +24,8 @@ export class AuthMiddleware {
     }
     
     try {
-      const payload = verify(jwtToken, JWT_SECRET);
+      const config = getAuthConfig();
+      const payload = verify(jwtToken, config.jwt.secret);
       const userId = typeof payload === "object" && payload !== null ? payload.sub : null;
       
       if (!userId) {
@@ -41,7 +49,7 @@ export class AuthMiddleware {
     }
   }
   
-  async checkAdminRights(cookie: any) {
+  async checkAdminRights(cookie: CookieObject): Promise<PermissionResult> {
     // First verify the user is authenticated
     const authResult = await this.verifyAuth(cookie);
     if (!authResult.success) {

@@ -4,13 +4,13 @@ import PageGuard from "@/components/guards/page-guard"
 
 export default function DocumentsPage() {
   const documentTypes = [
-    {
-      id: "customer",
-      title: "CUSTOMER",
-      subtitle: "ลูกค้า",
-      href: "/dashboard/documents/customers",
-      color: "text-teal-600",
-    },
+    // {
+    //   id: "customer",
+    //   title: "CUSTOMER",
+    //   subtitle: "ลูกค้า",
+    //   href: "/dashboard/documents/customers",
+    //   color: "text-teal-600",
+    // },
     {
       id: "rt",
       title: "RT",

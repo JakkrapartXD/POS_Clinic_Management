@@ -1325,40 +1325,6 @@ export default function ReportsPage() {
                 )}
               </CardContent>
             </Card>
-
-            {/* Mock up for Low Stock Products */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <AlertTriangle className="h-5 w-5 mr-2 text-orange-500" />
-                  สินค้าใกล้หมดสต๊อก
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center text-gray-500 py-8">
-                  <AlertTriangle className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                  <p>Mock up - ฟีเจอร์นี้จะพร้อมใช้งานในอนาคต</p>
-                  <p className="text-sm">จะแสดงรายการสินค้าที่มีสต๊อกต่ำกว่า reorder point</p>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Mock up for Expiring Products */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <Calendar className="h-5 w-5 mr-2 text-red-500" />
-                  สินค้าใกล้หมดอายุ
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center text-gray-500 py-8">
-                  <Calendar className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                  <p>Mock up - ฟีเจอร์นี้จะพร้อมใช้งานในอนาคต</p>
-                  <p className="text-sm">จะแสดงรายการสินค้าที่ใกล้หมดอายุ</p>
-                </div>
-              </CardContent>
-            </Card>
           </TabsContent>
         </Tabs>
       </div>

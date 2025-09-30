@@ -11,6 +11,14 @@ interface ScheduleConfig {
   retentionDays: number;
 }
 
+interface SchedulerStatus {
+  enabled: boolean;
+  frequency: string;
+  time: string;
+  nextRun?: string;
+  isRunning: boolean;
+}
+
 export class BackupScheduler {
   private backupService: DatabaseBackupService;
   private config: ScheduleConfig;
@@ -278,6 +286,20 @@ export class BackupScheduler {
    */
   getConfig(): ScheduleConfig {
     return { ...this.config };
+  }
+
+  /**
+   * Get current scheduler status
+   */
+  getStatus(): SchedulerStatus {
+    const nextRun = this.calculateNextRun();
+    return {
+      enabled: this.config.enabled,
+      frequency: this.config.frequency,
+      time: this.config.time,
+      nextRun: this.config.enabled ? nextRun.toISOString() : undefined,
+      isRunning: this.scheduledIntervals.length > 0
+    };
   }
 
   /**

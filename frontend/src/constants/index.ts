@@ -52,6 +52,19 @@ export const APPOINTMENT_STATUS = {
 export const APP_CONSTANTS = {
   COOKIES: {
     AUTH_TOKEN: 'auth-token'
+  },
+  ROUTES: {
+    DASHBOARD: '/dashboard'
+  },
+  FILE_UPLOAD: {
+    ACCEPTED_TYPES: [
+      'image/jpeg',
+      'image/jpg', 
+      'image/png',
+      'image/gif',
+      'image/webp'
+    ],
+    MAX_SIZE: 5 * 1024 * 1024 // 5MB
   }
 } as const;
 

@@ -201,7 +201,34 @@ export default function POSPage() {
           })
         }
         
-        // Parse prescription items from visit notes if available
+        // Load prescription cart from localStorage if visitId exists
+        if (visitData.visitId) {
+          const prescriptionCart = localStorage.getItem(`prescription_cart_${visitData.visitId}`)
+          if (prescriptionCart) {
+            try {
+              const cartItems = JSON.parse(prescriptionCart)
+              // Convert prescription cart items to POS cart items
+              const posCartItems = cartItems.map((item: any) => ({
+                id: item.id,
+                product_name: item.product_name,
+                sale_price: item.sale_price,
+                unit: item.unit,
+                pack_size: item.pack_size,
+                quantity: item.quantity,
+                sku: item.sku,
+                barcode: item.barcode,
+                stock_quantity: item.stock_quantity,
+                vat_percent: item.vat_percent || 0
+              }))
+              setCartItems(posCartItems)
+              console.log('Loaded prescription cart:', posCartItems)
+            } catch (error) {
+              console.error('Error parsing prescription cart:', error)
+            }
+          }
+        }
+        
+        // Parse prescription items from visit notes if available (fallback)
         if (visitData.visitData?.notes) {
           try {
             const notes = visitData.visitData.notes
@@ -543,6 +570,12 @@ export default function POSPage() {
       
       // ลบข้อมูลการสั่งยาจากหมอหลังจากชำระเงินเสร็จ
       if (prescriptionVisitData) {
+        // Clear prescription cart from localStorage
+        if (prescriptionVisitData.visitId) {
+          localStorage.removeItem(`prescription_cart_${prescriptionVisitData.visitId}`)
+          console.log(`🧹 [${paymentSessionId}] Prescription cart cleared from localStorage`)
+        }
+        
         setPrescriptionVisitData(null)
         setPrescriptionItems([])
         console.log(`🧹 [${paymentSessionId}] Prescription data cleared after payment`)

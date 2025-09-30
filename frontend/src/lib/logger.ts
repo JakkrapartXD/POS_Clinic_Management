@@ -150,6 +150,35 @@ class Logger {
       this.debug('Navigation', { from, to }, 'USER')
     }
   }
+
+  cache = {
+    // Debug-level cache operations (development only)
+    keyGenerated: (operation: string, key: string, ttl?: number) => {
+      this.debug('Cache key generated', { operation, key, ttl }, 'CACHE')
+    },
+    hit: (key: string, operation: string) => {
+      this.debug('Cache hit', { key, operation }, 'CACHE')
+    },
+    miss: (key: string, operation: string) => {
+      this.debug('Cache miss', { key, operation }, 'CACHE')
+    },
+    set: (key: string, operation: string, ttl: number) => {
+      this.debug('Cache set', { key, operation, ttl }, 'CACHE')
+    },
+    
+    // Info-level cache operations (important events)
+    cleared: (type: string, count?: number, reason?: string) => {
+      this.info('Cache cleared', { type, count, reason }, 'CACHE')
+    },
+    invalidated: (pattern: string, count: number) => {
+      this.info('Cache invalidated', { pattern, count }, 'CACHE')
+    },
+    
+    // Performance logging (development only)
+    performance: (operation: string, duration: number, size?: number) => {
+      this.debug('Cache performance', { operation, duration, size }, 'CACHE_PERF')
+    }
+  }
 }
 
 // Export singleton instance

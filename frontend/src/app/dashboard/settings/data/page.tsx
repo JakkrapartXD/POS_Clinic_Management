@@ -34,6 +34,7 @@ import Link from "next/link"
 import PageGuard from "@/components/guards/page-guard"
 import { logger } from "@/lib/logger"
 import { BackupAPI, type GoogleDriveConfig, type BackupFile, type GoogleDriveStatus, type SchedulerConfig, type SchedulerStatus } from "@/clients/backup"
+import toast from "react-hot-toast"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { Textarea } from "@/components/ui/textarea"
 
@@ -125,7 +126,7 @@ export default function DataBackupPage() {
         setBackupHistory(combinedHistory)
       }
     } catch (error) {
-      logger.error('Failed to load backup data', error as Error, 'SETTINGS')
+      logger.error('ไม่สามารถโหลดข้อมูลการสำรองได้', error as Error, 'SETTINGS')
     }
   }
   
@@ -152,14 +153,14 @@ export default function DataBackupPage() {
           const response = await BackupAPI.updateSchedulerConfig(newConfig)
           if (response.success) {
             await loadSchedulerStatus() // รีโหลดสถานะ
-            logger.info('Auto backup enabled automatically after Google Drive connection')
+            logger.info('เปิดการสำรองอัตโนมัติโดยอัตโนมัติหลังเชื่อมต่อ Google Drive')
           }
         } catch (error) {
-          logger.error('Failed to auto-enable backup after Google Drive connection', error as Error, 'SETTINGS')
+          logger.error('ไม่สามารถเปิดการสำรองอัตโนมัติหลังเชื่อมต่อ Google Drive', error as Error, 'SETTINGS')
         }
       }
     } catch (error) {
-      logger.error('Failed to load Google Drive status', error as Error, 'SETTINGS')
+      logger.error('ไม่สามารถโหลดสถานะ Google Drive ได้', error as Error, 'SETTINGS')
     }
   }
   
@@ -176,7 +177,7 @@ export default function DataBackupPage() {
         setGoogleDriveEnabled(response.config.uploadToGoogleDrive && googleDriveStatus.connected)
       }
     } catch (error) {
-      logger.error('Failed to load scheduler status', error as Error, 'SETTINGS')
+      logger.error('ไม่สามารถโหลดสถานะตัวจัดตารางเวลาได้', error as Error, 'SETTINGS')
     }
   }
   
@@ -194,14 +195,62 @@ export default function DataBackupPage() {
       const response = await BackupAPI.updateSchedulerConfig(newConfig)
       
       if (response.success) {
-        alert('บันทึกการตั้งค่าเสร็จสิ้น!')
+        toast.success('บันทึกการตั้งค่าเสร็จสิ้น!')
         await loadSchedulerStatus()
       } else {
-        throw new Error(response.error || 'Failed to save settings')
+        throw new Error(response.error || 'การบันทึกการตั้งค่าล้มเหลว')
       }
     } catch (error) {
-      logger.error('Failed to save settings', error as Error, 'SETTINGS')
-      alert(`การบันทึกการตั้งค่าล้มเหลว: ${(error as Error).message}`)
+      logger.error('ไม่สามารถบันทึกการตั้งค่าได้', error as Error, 'SETTINGS')
+      toast.error(`การบันทึกการตั้งค่าล้มเหลว: ${(error as Error).message}`)
+    }
+  }
+
+  const handleToggleScheduler = async (enabled: boolean) => {
+    try {
+      // อัพเดต state ก่อน
+      setAutoBackupEnabled(enabled)
+      
+      // สร้าง config ใหม่
+      const newConfig: Partial<SchedulerConfig> = {
+        enabled: enabled,
+        frequency: backupSchedule as any,
+        time: backupTime,
+        uploadToGoogleDrive: googleDriveEnabled,
+        keepLocalCopy: true,
+        retentionDays: parseInt(retentionDays)
+      }
+      
+      // อัพเดต config ใน backend
+      const response = await BackupAPI.updateSchedulerConfig(newConfig)
+      
+      if (response.success) {
+        toast.success(`การสำรองอัตโนมัติ${enabled ? 'เปิด' : 'ปิด'}แล้ว!`)
+        await loadSchedulerStatus()
+      } else {
+        // ถ้าล้มเหลว ให้ย้อนกลับ state
+        setAutoBackupEnabled(!enabled)
+        throw new Error(response.error || 'การเปลี่ยนสถานะการสำรองอัตโนมัติล้มเหลว')
+      }
+    } catch (error) {
+      logger.error('ไม่สามารถเปลี่ยนสถานะตัวจัดตารางเวลาได้', error as Error, 'SETTINGS')
+      toast.error(`การ${enabled ? 'เปิด' : 'ปิด'}การสำรองอัตโนมัติล้มเหลว: ${(error as Error).message}`)
+    }
+  }
+
+  const handleTriggerScheduledBackup = async () => {
+    try {
+      const response = await BackupAPI.triggerScheduledBackup()
+      
+      if (response.success) {
+        toast.success('เริ่มการสำรองข้อมูลตามตารางเวลาที่กำหนดแล้ว!')
+        await loadBackupData() // รีโหลดข้อมูล backup
+      } else {
+        throw new Error(response.error || 'การเริ่มการสำรองตามตารางเวลาล้มเหลว')
+      }
+    } catch (error) {
+      logger.error('ไม่สามารถเริ่มการสำรองตามตารางเวลาได้', error as Error, 'SETTINGS')
+      toast.error(`การเริ่มการสำรองตามตารางเวลาล้มเหลว: ${(error as Error).message}`)
     }
   }
 
@@ -226,15 +275,15 @@ export default function DataBackupPage() {
       setBackupProgress(100)
       
       if (response.success) {
-        alert(`การสำรองข้อมูลเสร็จสิ้น! ${uploadToGoogleDrive ? '(อัพโหลดไป Google Drive แล้ว)' : ''}`)
+        toast.success(`การสำรองข้อมูลเสร็จสิ้น! ${uploadToGoogleDrive ? '(อัพโหลดไป Google Drive แล้ว)' : ''}`)
         await loadBackupData() // Reload backup list
       } else {
-        throw new Error(response.error || 'Backup failed')
+        throw new Error(response.error || 'การสำรองข้อมูลล้มเหลว')
       }
       
     } catch (error) {
-      logger.error('Manual backup failed', error as Error, 'BACKUP')
-      alert(`การสำรองข้อมูลล้มเหลว: ${(error as Error).message}`)
+      logger.error('การสำรองข้อมูลด้วยตนเองล้มเหลว', error as Error, 'BACKUP')
+      toast.error(`การสำรองข้อมูลล้มเหลว: ${(error as Error).message}`)
     } finally {
       setIsBackupRunning(false)
       setBackupProgress(0)
@@ -252,23 +301,23 @@ export default function DataBackupPage() {
       const response = await BackupAPI.restoreBackup(type, backupId)
       
       if (response.success) {
-        alert('กู้คืนข้อมูลเสร็จสิ้น!')
+        toast.success('กู้คืนข้อมูลเสร็จสิ้น!')
       } else {
-        throw new Error(response.error || 'Restore failed')
+        throw new Error(response.error || 'การกู้คืนข้อมูลล้มเหลว')
       }
     } catch (error) {
-      logger.error('Data restore failed', error as Error, 'BACKUP')
-      alert(`การกู้คืนข้อมูลล้มเหลว: ${(error as Error).message}`)
+      logger.error('การกู้คืนข้อมูลล้มเหลว', error as Error, 'BACKUP')
+      toast.error(`การกู้คืนข้อมูลล้มเหลว: ${(error as Error).message}`)
     }
   }
 
   const handleDownloadBackup = async (filename: string) => {
     try {
-      logger.info('Downloading backup', { filename }, 'BACKUP')
+      logger.info('กำลังดาวน์โหลดไฟล์สำรอง', { filename }, 'BACKUP')
       await BackupAPI.triggerDownload(filename)
     } catch (error) {
-      logger.error('Backup download failed', error as Error, 'BACKUP')
-      alert(`การดาวน์โหลดล้มเหลว: ${(error as Error).message}`)
+      logger.error('การดาวน์โหลดไฟล์สำรองล้มเหลว', error as Error, 'BACKUP')
+      toast.error(`การดาวน์โหลดล้มเหลว: ${(error as Error).message}`)
     }
   }
   
@@ -281,15 +330,15 @@ export default function DataBackupPage() {
       const response = await BackupAPI.deleteBackup(type, backupId)
       
       if (response.success) {
-        alert('ลบไฟล์สำรองข้อมูลเสร็จสิ้น')
+        toast.success('ลบไฟล์สำรองข้อมูลเสร็จสิ้น')
         await loadBackupData()
       } else {
-        throw new Error(response.error || 'Delete failed')
+        throw new Error(response.error || 'การลบไฟล์ล้มเหลว')
       }
       } catch (error) {
-        logger.error('Delete backup failed', error as Error, 'BACKUP')
-        alert(`การลบไฟล์ล้มเหลว: ${(error as Error).message}`)
-    }
+        logger.error('การลบไฟล์สำรองล้มเหลว', error as Error, 'BACKUP')
+        toast.error(`การลบไฟล์ล้มเหลว: ${(error as Error).message}`)
+      }
   }
   
   const handleConfigureGoogleDrive = async () => {
@@ -304,10 +353,10 @@ export default function DataBackupPage() {
         setShowConfigDialog(false)
         setShowAuthDialog(true)
       } else {
-        throw new Error(response.message || 'Configuration failed')
+        throw new Error(response.message || 'การตั้งค่า Google Drive ล้มเหลว')
       }
     } catch (error) {
-      alert(`การตั้งค่า Google Drive ล้มเหลว: ${(error as Error).message}`)
+      toast.error(`การตั้งค่า Google Drive ล้มเหลว: ${(error as Error).message}`)
     } finally {
       setIsConfiguring(false)
     }
@@ -320,15 +369,15 @@ export default function DataBackupPage() {
       const response = await BackupAPI.authorizeGoogleDrive(authCode)
       
       if (response.success) {
-        alert('เชื่อมต่อ Google Drive เสร็จสิ้น!')
+        toast.success('เชื่อมต่อ Google Drive เสร็จสิ้น!')
         setShowAuthDialog(false)
         setAuthCode('')
         await loadGoogleDriveStatus()
       } else {
-        throw new Error(response.message || 'Authorization failed')
+        throw new Error(response.message || 'การยืนยัน Google Drive ล้มเหลว')
       }
     } catch (error) {
-      alert(`การยืนยัน Google Drive ล้มเหลว: ${(error as Error).message}`)
+      toast.error(`การยืนยัน Google Drive ล้มเหลว: ${(error as Error).message}`)
     } finally {
       setIsConfiguring(false)
     }
@@ -355,7 +404,7 @@ export default function DataBackupPage() {
         return new Date(isoString);
       }
     } catch (error) {
-      logger.debug('Failed to extract date from filename:', filename);
+      logger.debug('ไม่สามารถแยกวันที่จากชื่อไฟล์ได้:', filename);
     }
     return null;
   }
@@ -404,7 +453,7 @@ export default function DataBackupPage() {
                   </div>
                   <Switch 
                     checked={autoBackupEnabled}
-                    onCheckedChange={setAutoBackupEnabled}
+                    onCheckedChange={handleToggleScheduler}
                   />
                 </div>
 
@@ -555,7 +604,7 @@ export default function DataBackupPage() {
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <Button 
                     onClick={() => handleManualBackup(false)}
                     disabled={isBackupRunning}
@@ -587,6 +636,21 @@ export default function DataBackupPage() {
                     <span className="text-xs opacity-75">
                       {googleDriveStatus.connected ? 'Cloud Backup' : 'ไม่ได้เชื่อมต่อ'}
                     </span>
+                  </Button>
+
+                  <Button 
+                    variant="secondary"
+                    onClick={handleTriggerScheduledBackup}
+                    disabled={isBackupRunning}
+                    className="h-20 flex-col"
+                  >
+                    {isBackupRunning ? (
+                      <Loader2 className="h-6 w-6 mb-2 animate-spin" />
+                    ) : (
+                      <Clock className="h-6 w-6 mb-2" />
+                    )}
+                    <span>ทดสอบตามตารางเวลา</span>
+                    <span className="text-xs opacity-75">Scheduled Test</span>
                   </Button>
                 </div>
               </CardContent>

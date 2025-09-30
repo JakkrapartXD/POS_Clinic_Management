@@ -1,6 +1,7 @@
 import { Elysia, t } from "elysia";
 import { cookie } from "@elysiajs/cookie";
 import { AuthService } from "../services/AuthService";
+import { getCookieNames, getSessionConfig } from "../config/auth";
 
 // Validation schemas
 const authSignUpModel = t.Object({
@@ -45,20 +46,23 @@ export const authController = (app: Elysia, redisClient?: any) => {
         }
         
         // Set cookies
-        cookie["next-auth.session-token"].set({
+        const cookieNames = getCookieNames();
+        const sessionConfig = getSessionConfig();
+        
+        cookie[cookieNames.sessionToken].set({
           value: result.sessionToken,
           expires: result.expires,
           path: "/",
-          httpOnly: true,
-          sameSite: "lax",
+          httpOnly: sessionConfig.httpOnly,
+          sameSite: sessionConfig.sameSite,
         });
 
-        cookie["next-auth.jwt-token"].set({
+        cookie[cookieNames.jwtToken].set({
           value: result.token,
           expires: result.expires,
           path: "/",
-          httpOnly: true,
-          sameSite: "lax",
+          httpOnly: sessionConfig.httpOnly,
+          sameSite: sessionConfig.sameSite,
         });
 
         return {
@@ -72,20 +76,22 @@ export const authController = (app: Elysia, redisClient?: any) => {
       }
     )
     .get("/sign-out", async ({ cookie }) => {
-      const sessionToken = cookie["next-auth.session-token"]?.value;
+      const cookieNames = getCookieNames();
+      const sessionToken = cookie[cookieNames.sessionToken]?.value;
       if (sessionToken) {
 
         await authService.signOut(sessionToken);
         
         // Remove both cookies
-        cookie["next-auth.session-token"].remove();
-        cookie["next-auth.jwt-token"].remove();
+        cookie[cookieNames.sessionToken].remove();
+        cookie[cookieNames.jwtToken].remove();
       }
 
       return { success: true };
     })
     .get("/token-verify", async ({ cookie, set }) => {
-      const jwtToken = cookie["next-auth.jwt-token"]?.value;
+      const cookieNames = getCookieNames();
+      const jwtToken = cookie[cookieNames.jwtToken]?.value;
 
       if (!jwtToken) {
         set.status = 401;

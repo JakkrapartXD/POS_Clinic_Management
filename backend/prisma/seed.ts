@@ -170,24 +170,78 @@ async function main() {
         product_type: 'service',
         sku: 'S001',
         sale_price: 200.0,
-        cost: 150.0,
+        cost: 0.0,
         status: 'active',
         categoryId: serviceCategory.id,
         unit: 'ครั้ง',
         short_name: 'ค่าตรวจ',
-        stock_quantity: 999999, // Services don't have stock limits
+        stock_quantity: 9999999, // Services don't have stock limits
+        vat_percent: 0 // No VAT for medical services
       },
       {
         product_name: 'ทำแผล',
         product_type: 'service',
         sku: 'S002',
         sale_price: 150.0,
-        cost: 100.0,
+        cost: 0.0,
         status: 'active',
         categoryId: serviceCategory.id,
         unit: 'ครั้ง',
         short_name: 'ทำแผล',
-        stock_quantity: 999999, // Services don't have stock limits
+        stock_quantity: 9999999, // Services don't have stock limits
+        vat_percent: 0 // No VAT for medical services
+      },
+      {
+        product_name: 'ฉีดยา',
+        product_type: 'service',
+        sku: 'S003',
+        sale_price: 100.0,
+        cost: 0.0,
+        status: 'active',
+        categoryId: serviceCategory.id,
+        unit: 'ครั้ง',
+        short_name: 'ฉีดยา',
+        stock_quantity: 9999999,
+        vat_percent: 0
+      },
+      {
+        product_name: 'วัดความดัน',
+        product_type: 'service',
+        sku: 'S004',
+        sale_price: 50.0,
+        cost: 0.0,
+        status: 'active',
+        categoryId: serviceCategory.id,
+        unit: 'ครั้ง',
+        short_name: 'วัดความดัน',
+        stock_quantity: 9999999,
+        vat_percent: 0
+      },
+      {
+        product_name: 'วัดน้ำตาล',
+        product_type: 'service',
+        sku: 'S005',
+        sale_price: 80.0,
+        cost: 0.0,
+        status: 'active',
+        categoryId: serviceCategory.id,
+        unit: 'ครั้ง',
+        short_name: 'วัดน้ำตาล',
+        stock_quantity: 9999999,
+        vat_percent: 0
+      },
+      {
+        product_name: 'ให้คำปรึกษา',
+        product_type: 'service',
+        sku: 'S006',
+        sale_price: 300.0,
+        cost: 0.0,
+        status: 'active',
+        categoryId: serviceCategory.id,
+        unit: 'ครั้ง',
+        short_name: 'ให้คำปรึกษา',
+        stock_quantity: 9999999,
+        vat_percent: 0
       }
     ];
 
@@ -197,8 +251,22 @@ async function main() {
           data: service
         });
         console.log(`✅ Created service: ${service.product_name} (${createdService.id})`);
+        
+        // Create initial stock for the service
+        await prisma.stock.create({
+          data: {
+            productId: createdService.id,
+            quantity: 9999999, // Unlimited stock for services
+            quantity_in: 9999999,
+            production_date: null, // No production date for services
+            expiration_date: null, // No expiration date for services
+            note: 'สต๊อกเริ่มต้นสำหรับบริการทางการแพทย์',
+            is_outofstock: false
+          }
+        });
+        console.log(`📦 Created initial stock for service: ${service.product_name}`);
       }
-      console.log(`🏥 Successfully created ${defaultServices.length} clinic services.`);
+      console.log(`🏥 Successfully created ${defaultServices.length} clinic services with stock.`);
     } catch (error) {
       console.error('❌ Error creating service products:', error);
     }

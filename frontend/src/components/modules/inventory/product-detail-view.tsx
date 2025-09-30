@@ -17,6 +17,73 @@ import { API_CONFIG } from "@/config/api"
 import EditProductForm from "@/components/forms/EditProductForm"
 import { toast } from "sonner"
 
+// Define proper interfaces for stock items
+interface StockItem {
+  id: string;
+  productId: string;
+  product_name: string;
+  product_unit: string;
+  product_sale_price: number;
+  product_cost?: number;
+  product_sku?: string;
+  product_pack_size?: string;
+  product_stock_quantity?: number;
+  quantity: number;
+  quantity_in?: number;
+  production_date?: string;
+  expiration_date?: string;
+  note?: string;
+  created_at: string;
+  updated_at?: string;
+  is_outofstock: boolean;
+  // Stock status flags
+  stockStatus: {
+    hasStock: boolean;
+    isSynthetic: boolean; // Indicates if this is a synthetic entry for products without stock
+    originalProductId?: string; // For synthetic entries, reference to the original product
+  };
+}
+
+// Helper function to create stock items with proper structure
+const createStockItem = (data: any, isSynthetic: boolean = false): StockItem => {
+  return {
+    ...data,
+    stockStatus: {
+      hasStock: !isSynthetic,
+      isSynthetic,
+      originalProductId: isSynthetic ? data.productId : undefined
+    }
+  };
+};
+
+// Helper function to create synthetic stock entry for products without stock
+const createSyntheticStockEntry = (product: any): StockItem => {
+  return createStockItem({
+    id: `synthetic-${product.id}-${Date.now()}`, // Use timestamp to ensure uniqueness
+    productId: product.id,
+    product_name: product.product_name,
+    product_unit: product.unit,
+    product_sale_price: product.sale_price,
+    product_cost: product.cost,
+    product_sku: product.sku,
+    product_pack_size: product.pack_size,
+    product_stock_quantity: product.stock_quantity,
+    quantity: 0,
+    created_at: product.created_at,
+    is_outofstock: true
+  }, true);
+};
+
+// Helper function to check if a stock item is synthetic
+const isSyntheticStock = (stock: StockItem): boolean => {
+  return stock.stockStatus.isSynthetic;
+};
+
+// Helper function to get the original product ID for synthetic stocks
+const getOriginalProductId = (stock: StockItem): string => {
+  return stock.stockStatus.originalProductId || stock.productId;
+};
+
 interface ProductDetailViewProps {
   productId: string
   onBack: () => void
@@ -255,29 +322,43 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
           (prod: any) => prod.product_name === product.product_name
         )
         
-        // Get stocks for all products with the same name
+        // Try to get stocks for all products with the same name
         const allStocks: any[] = []
+        const productsWithoutStock: any[] = []
         
         for (const prod of sameNameProducts) {
-          const stocksResponse = await GraphQLAPI.getStocks({ productId: prod.id })
-          if (stocksResponse.stocks) {
-            // Add product info to each stock record
-            const stocksWithProductInfo = stocksResponse.stocks.map(stock => ({
-              ...stock,
-              productId: prod.id,
-              product_name: prod.product_name,
-              product_unit: prod.unit,
-              product_sale_price: prod.sale_price,
-              product_cost: prod.cost,
-              product_sku: prod.sku,
-              product_pack_size: prod.pack_size,
-              product_stock_quantity: prod.stock_quantity
-            }))
-            allStocks.push(...stocksWithProductInfo)
+          try {
+            const stocksResponse = await GraphQLAPI.getStocks({ productId: prod.id })
+            if (stocksResponse.stocks && stocksResponse.stocks.length > 0) {
+              // Add product info to each stock record
+              const stocksWithProductInfo = stocksResponse.stocks.map(stock => createStockItem({
+                ...stock,
+                productId: prod.id,
+                product_name: prod.product_name,
+                product_unit: prod.unit,
+                product_sale_price: prod.sale_price,
+                product_cost: prod.cost,
+                product_sku: prod.sku,
+                product_pack_size: prod.pack_size,
+                product_stock_quantity: prod.stock_quantity
+              }, false))
+              allStocks.push(...stocksWithProductInfo)
+            } else {
+              // No stock found, but product exists - add as synthetic stock entry
+              const syntheticStock = createSyntheticStockEntry(prod);
+              productsWithoutStock.push(syntheticStock);
+            }
+          } catch (stockErr) {
+            logger.warn('Failed to get stocks for product', { productId: prod.id }, 'PRODUCT_DETAIL')
+            // Add as synthetic stock entry if stock fetch fails
+            const syntheticStock = createSyntheticStockEntry(prod);
+            productsWithoutStock.push(syntheticStock);
           }
         }
         
-        setStocks(allStocks)
+        // Combine stocks and products without stock
+        const combinedData = [...allStocks, ...productsWithoutStock]
+        setStocks(combinedData)
       }
     } catch (err) {
       logger.error('Failed to load stocks for all products with same name', err, 'PRODUCT_DETAIL')
@@ -344,7 +425,10 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
   }
 
   // Get status badge
-  const getStatusBadge = (stock: any) => {
+  const getStatusBadge = (stock: StockItem) => {
+    if (stock.stockStatus.isSynthetic) {
+      return <Badge variant="outline" className="text-orange-600 border-orange-200">ไม่มีสต๊อก</Badge>
+    }
     if (stock.is_outofstock) {
       return <Badge variant="destructive">หมดสต๊อก</Badge>
     }
@@ -1045,6 +1129,10 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
         quantity: parseInt(stockFormData.quantity),
         quantity_in: parseInt(stockFormData.quantity),
         is_outofstock: false,
+        stockStatus: {
+          hasStock: true,
+          isSynthetic: false
+        },
         production_date: stockFormData.production_date ? new Date(stockFormData.production_date).toISOString() : undefined,
         expiration_date: stockFormData.expiration_date ? new Date(stockFormData.expiration_date).toISOString() : undefined,
         note: `เพิ่มสต๊อก - ล็อต: ${stockFormData.production_lot || 'ไม่ระบุ'}`
@@ -1829,8 +1917,8 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                           </tr>
                         </thead>
                         <tbody>
-                          {unitData.stocks.filter(stock => stock.quantity > 0).length > 0 ? (
-                            unitData.stocks.filter(stock => stock.quantity > 0).map((stock) => (
+                          {unitData.stocks.length > 0 ? (
+                            unitData.stocks.map((stock) => (
                               <tr key={stock.id} className="border-b hover:bg-gray-50">
                                 <td className="py-3 px-4">
                     <div>
@@ -1847,44 +1935,65 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                                 <td className="py-3 px-4 text-gray-500">{formatDate(stock.expiration_date)}</td>
                                 <td className="py-3 px-4 text-gray-500">{stock.product_cost ? `฿${stock.product_cost.toFixed(2)}` : '-'}</td>
                                 <td className="py-3 px-4 font-medium">฿{stock.product_sale_price?.toFixed(2) || '0.00'}</td>
-                                <td className="py-3 px-4 font-medium">{stock.quantity_in?.toLocaleString() || stock.quantity.toLocaleString()}x</td>
+                                <td className="py-3 px-4 font-medium text-green-600">
+                                  {stock.stockStatus.isSynthetic ? '-' : `+${stock.quantity_in?.toLocaleString() || stock.quantity.toLocaleString()}`}
+                                </td>
                                 <td className="py-3 px-4">
-                      <div>
-                                    <div className="font-medium">{stock.quantity.toLocaleString()}x</div>
-                                    <div className="text-sm text-blue-600">
-                                      <button 
-                                        className="hover:underline"
-                                        onClick={() => handleAdjustStockClick(unitData, stock)}
+                                  {stock.stockStatus.isSynthetic ? (
+                                    <span className="text-orange-600 font-semibold">-</span>
+                                  ) : (
+                                    <div>
+                                      <div className="font-medium">{stock.quantity.toLocaleString()}x</div>
+                                      <div className="text-sm text-blue-600">
+                                        <button 
+                                          className="hover:underline"
+                                          onClick={() => handleAdjustStockClick(unitData, stock)}
+                                        >
+                                          ปรับเพิ่ม/ลดสต๊อก
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="py-3 px-4">
+                                  {stock.stockStatus.isSynthetic ? (
+                                    <Badge variant="outline" className="text-orange-600 border-orange-200">ไม่มีสต๊อก</Badge>
+                                  ) : (
+                                    getStatusBadge(stock)
+                                  )}
+                                </td>
+                                <td className="py-3 px-4">
+                                  {stock.stockStatus.isSynthetic ? (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => handleAddStockClick(unitData)}
+                                      className="text-teal-600 border-teal-200 hover:bg-teal-50"
+                                    >
+                                      เพิ่มสต๊อก
+                                    </Button>
+                                  ) : (
+                                    <div className="flex space-x-2">
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleManageStockClick(stock)}
+                                        className="text-blue-600 hover:text-blue-700"
+                                        title="แก้ไขสต๊อก"
                                       >
-                                        ปรับเพิ่ม/ลดสต๊อก
-                                      </button>
-                        </div>
-                      </div>
-                                </td>
-                                <td className="py-3 px-4">
-                                  {getStatusBadge(stock)}
-                                </td>
-                                <td className="py-3 px-4">
-                                  <div className="flex space-x-2">
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => handleManageStockClick(stock)}
-                                      className="text-blue-600 hover:text-blue-700"
-                                      title="แก้ไขสต๊อก"
-                                    >
-                                      <Edit className="h-4 w-4" />
-                                    </Button>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => handleDeleteStockClick(stock)}
-                                      className="text-red-600 hover:text-red-700"
-                                      title="ลบสต๊อก"
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                    </Button>
-                    </div>
+                                        <Edit className="h-4 w-4" />
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleDeleteStockClick(stock)}
+                                        className="text-red-600 hover:text-red-700"
+                                        title="ลบสต๊อก"
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  )}
                                 </td>
                               </tr>
                             ))
@@ -1893,8 +2002,13 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                               <td colSpan={10} className="py-8 px-4 text-center text-gray-500">
                                 <div className="flex flex-col items-center space-y-3">
                                   <div className="text-lg">📦</div>
-                                  <div className="font-medium">ยังไม่มีสต๊อกในหน่วยนับนี้</div>
-                                  <div className="text-sm">กดปุ่ม "เพิ่มสต๊อกสินค้าใหม่" ด้านบนเพื่อเพิ่มสต๊อก</div>
+                                  <div className="font-medium">ไม่มีข้อมูลสินค้าในหน่วยนับนี้</div>
+                                  <Button
+                                    onClick={() => handleAddStockClick(unitData)}
+                                    className="mt-2 bg-teal-600 hover:bg-teal-700 text-white"
+                                  >
+                                    เพิ่มสต๊อกสินค้าใหม่
+                                  </Button>
                                 </div>
                               </td>
                             </tr>

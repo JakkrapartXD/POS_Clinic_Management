@@ -24,6 +24,7 @@ import { format } from 'date-fns';
 import { GraphQLAPI } from '@/clients/graphql';
 import PageGuard from '@/components/guards/page-guard';
 import { useRouter } from 'next/navigation';
+import { useCacheContext } from '@/hooks/useCacheContext';
 
 interface CashierTicket {
   id: string;
@@ -82,14 +83,22 @@ export default function CashierQueuePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
 
+  // Cache context management
+  const { currentContext } = useCacheContext();
+
   useEffect(() => {
     fetchCashierQueue();
     // Set up polling for real-time updates
-    const interval = setInterval(fetchCashierQueue, 30000); // Refresh every 30 seconds
+    const interval = setInterval(() => {
+      // Skip polling if any ticket is being updated
+      if (!isUpdating) {
+        fetchCashierQueue();
+      }
+    }, 30000); // Refresh every 30 seconds
     return () => clearInterval(interval);
-  }, [selectedStatus]);
+  }, [selectedStatus, isUpdating]); // Added isUpdating to dependencies
 
-  const fetchCashierQueue = async () => {
+  const fetchCashierQueue = async (skipCache = false) => {
     try {
       setIsLoading(true);
       
@@ -97,7 +106,7 @@ export default function CashierQueuePage() {
         station: 'cashier',
         status: selectedStatus === 'all' ? undefined : selectedStatus.toUpperCase(),
         pagination: { take: 100 }
-      });
+      }, skipCache);
       
       setCashierTickets(result.queueTickets || []);
 
@@ -114,8 +123,20 @@ export default function CashierQueuePage() {
       setIsUpdating(ticketId);
       
       await GraphQLAPI.updateQueueStatus(ticketId, 'called');
+      
+      // Force refresh with fresh data (skip cache)
+      setTimeout(() => {
+        fetchCashierQueue(true); // Pass skipCache = true
+      }, 100);
+      
+      // Update state immediately
+      setCashierTickets(prev => prev.map(ticket => 
+        ticket.id === ticketId 
+          ? { ...ticket, status: 'called', called_at: new Date().toISOString() }
+          : ticket
+      ));
+      
       toast.success('เรียกผู้ป่วยแล้ว');
-      fetchCashierQueue(); // Refresh data
 
     } catch (error: any) {
       console.error('Error calling ticket:', error);
@@ -130,8 +151,20 @@ export default function CashierQueuePage() {
       setIsUpdating(ticketId);
       
       await GraphQLAPI.updateQueueStatus(ticketId, 'in_service');
+      
+      // Force refresh with fresh data (skip cache)
+      setTimeout(() => {
+        fetchCashierQueue(true); // Pass skipCache = true
+      }, 100);
+      
+      // Update state immediately
+      setCashierTickets(prev => prev.map(ticket => 
+        ticket.id === ticketId 
+          ? { ...ticket, status: 'in_service', started_at: new Date().toISOString() }
+          : ticket
+      ));
+      
       toast.success('เริ่มบริการแคชเชียร์แล้ว');
-      fetchCashierQueue(); // Refresh data
 
     } catch (error: any) {
       console.error('Error starting ticket:', error);
@@ -146,8 +179,20 @@ export default function CashierQueuePage() {
       setIsUpdating(ticketId);
       
       await GraphQLAPI.updateQueueStatus(ticketId, 'done');
+      
+      // Force refresh with fresh data (skip cache)
+      setTimeout(() => {
+        fetchCashierQueue(true); // Pass skipCache = true
+      }, 100);
+      
+      // Update state immediately
+      setCashierTickets(prev => prev.map(ticket => 
+        ticket.id === ticketId 
+          ? { ...ticket, status: 'done', done_at: new Date().toISOString() }
+          : ticket
+      ));
+      
       toast.success('บริการแคชเชียร์เสร็จสิ้น');
-      fetchCashierQueue(); // Refresh data
 
     } catch (error: any) {
       console.error('Error completing ticket:', error);
@@ -163,6 +208,13 @@ export default function CashierQueuePage() {
       const patientResult = await GraphQLAPI.getPatient(ticket.patientId);
       const patientData = patientResult.patient;
       
+      // Check if there's a prescription cart for this visit
+      let hasPrescriptionCart = false;
+      if (ticket.visit?.id) {
+        const prescriptionCart = localStorage.getItem(`prescription_cart_${ticket.visit.id}`);
+        hasPrescriptionCart = prescriptionCart !== null;
+      }
+      
       // Navigate to POS page with visit data
       const visitData = {
         visitId: ticket.visit?.id,
@@ -171,7 +223,8 @@ export default function CashierQueuePage() {
         patientPhone: ticket.patient?.phone,
         patientEmail: ticket.patient?.email,
         visitData: ticket.visit,
-        patientData: patientData // Add patient data with medical information
+        patientData: patientData, // Add patient data with medical information
+        hasPrescriptionCart: hasPrescriptionCart // Add flag to indicate if prescription cart exists
       };
       
       // Store visit data in sessionStorage for POS page to use
@@ -179,6 +232,10 @@ export default function CashierQueuePage() {
       
       // Navigate to POS page
       router.push('/dashboard/pos');
+      
+      if (hasPrescriptionCart) {
+        toast.success('โหลดข้อมูลการสั่งยาจากหมอแล้ว');
+      }
     } catch (error: any) {
       console.error('Error fetching patient data:', error);
       toast.error('ไม่สามารถโหลดข้อมูลผู้ป่วยได้');
@@ -262,6 +319,14 @@ export default function CashierQueuePage() {
               <p className="text-sm text-gray-600 mt-1">
                 <strong>การวินิจฉัย:</strong> {ticket.visit.diagnosis}
               </p>
+            )}
+            {ticket.visit?.id && localStorage.getItem(`prescription_cart_${ticket.visit.id}`) && (
+              <div className="mt-2">
+                <Badge variant="outline" className="text-orange-600 border-orange-600">
+                  <ShoppingCart className="w-3 h-3 mr-1" />
+                  มีการสั่งยา
+                </Badge>
+              </div>
             )}
           </div>
           
@@ -351,7 +416,7 @@ export default function CashierQueuePage() {
           <div className="flex gap-2">
             <Button
               variant="outline"
-              onClick={fetchCashierQueue}
+              onClick={() => fetchCashierQueue()}
               disabled={isLoading}
             >
               <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />

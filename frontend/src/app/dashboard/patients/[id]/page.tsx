@@ -145,7 +145,7 @@ export default function PatientDetailPage() {
           setIsFetching(false);
         }, 5000);
       } else {
-        toast.error(error.message || 'Failed to load patient data');
+        toast.error(error.message || 'ไม่สามารถโหลดข้อมูลผู้ป่วยได้');
         setIsFetching(false);
       }
     } finally {
@@ -226,7 +226,12 @@ export default function PatientDetailPage() {
       console.log('Fetched visits:', visits);
       console.log('Visits with appointments:', visits.filter((visit: any) => visit.appointment));
       
-      setMedicalHistoryData(visits);
+      // Sort visits by visit_date from newest to oldest
+      const sortedVisits = visits.sort((a: any, b: any) => 
+        new Date(b.visit_date).getTime() - new Date(a.visit_date).getTime()
+      );
+      
+      setMedicalHistoryData(sortedVisits);
       
       // Extract appointments from visits and filter out cancelled appointments
       const appointments = visits
@@ -660,7 +665,7 @@ export default function PatientDetailPage() {
                 ดูประวัติการรักษา
               </Button>
               
-              <Button 
+              {/* <Button 
                 onClick={() => router.push('/queue/triage')}
                 variant="outline"
                 className="w-full"
@@ -668,7 +673,7 @@ export default function PatientDetailPage() {
                 <Clock className="w-4 h-4 mr-2" />
                 ดูคิวคัดกรอง
               </Button>
-              
+               */}
               <Button 
                 onClick={() => router.push(`/dashboard/patients/${patient.id}/receipts`)}
                 variant="outline"
@@ -716,7 +721,7 @@ export default function PatientDetailPage() {
                              appointment.status === 'scheduled' ? 'นัดแล้ว' : appointment.status}
                           </Badge>
                           <span className="text-sm font-medium">
-                            {format(new Date(appointment.appointment_time), 'dd/MM/yyyy HH:mm')}
+                            {format(new Date(appointment.appointment_time), 'dd/MM/yyyy')}
                           </span>
                         </div>
                         <p className="text-sm text-gray-600">{appointment.reason}</p>
@@ -866,7 +871,7 @@ export default function PatientDetailPage() {
                         <div className="bg-blue-50 p-3 rounded border border-blue-200">
                           <p className="text-sm font-medium text-blue-800">นัดหมายครั้งต่อไป:</p>
                           <p className="text-sm text-blue-700">
-                            {format(new Date(visit.appointment.appointment_time), 'dd/MM/yyyy HH:mm')} - {visit.appointment.reason}
+                            {format(new Date(visit.appointment.appointment_time), 'dd/MM/yyyy')} - {visit.appointment.reason}
                           </p>
                         </div>
                       )}
@@ -925,7 +930,7 @@ export default function PatientDetailPage() {
                   <Calendar className="w-4 h-4 text-gray-500" />
                   <span className="text-sm font-medium">วันที่นัดหมาย:</span>
                   <span className="text-sm">
-                    {format(new Date(appointmentToDelete.appointment_time), 'dd/MM/yyyy HH:mm')}
+                    {format(new Date(appointmentToDelete.appointment_time), 'dd/MM/yyyy')}
                   </span>
                 </div>
                 <div className="flex items-center gap-2">

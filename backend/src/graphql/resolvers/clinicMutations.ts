@@ -14,8 +14,8 @@ export const clinicMutations = {
       throw new Error("Authentication required");
     }
 
-    if (!["doctor", "admin", "staff"].includes(context.user.role)) {
-      throw new Error("Access denied. Required roles: doctor, admin, staff");
+    if (!["doctor", "admin", "staff", "nurse"].includes(context.user.role)) {
+      throw new Error("Access denied. Required roles: doctor, admin, staff, nurse");
     }
 
     try {
@@ -74,8 +74,8 @@ export const clinicMutations = {
       throw new Error("Authentication required");
     }
 
-    if (!["doctor", "admin", "staff"].includes(context.user.role)) {
-      throw new Error("Access denied. Required roles: doctor, admin, staff");
+    if (!["doctor", "admin", "staff", "nurse"].includes(context.user.role)) {
+      throw new Error("Access denied. Required roles: doctor, admin, staff, nurse");
     }
 
     try {
@@ -94,8 +94,8 @@ export const clinicMutations = {
       throw new Error("Authentication required");
     }
 
-    if (!["doctor", "admin", "staff", "cashier"].includes(context.user.role)) {
-      throw new Error("Access denied. Required roles: doctor, admin, staff, cashier");
+    if (!["doctor", "admin", "staff", "cashier", "nurse"].includes(context.user.role)) {
+      throw new Error("Access denied. Required roles: doctor, admin, staff, cashier, nurse");
     }
 
     try {
@@ -114,8 +114,8 @@ export const clinicMutations = {
       throw new Error("Authentication required");
     }
 
-    if (!["doctor", "admin", "staff", "cashier"].includes(context.user.role)) {
-      throw new Error("Access denied. Required roles: doctor, admin, staff, cashier");
+    if (!["doctor", "admin", "staff", "cashier", "nurse"].includes(context.user.role)) {
+      throw new Error("Access denied. Required roles: doctor, admin, staff, cashier, nurse");
     }
 
     try {
