@@ -6,6 +6,63 @@ import { ThemeProvider } from "@/providers/theme-provider";
 export const metadata: Metadata = {
   title: "SN Clinic | คลินิกบริหารยาผู้ป่วยรักษายา",
   description: "Clinic Management System",
+  keywords: ["clinic", "medical", "pharmacy", "management", "system"],
+  authors: [{ name: "SN Clinic" }],
+  creator: "SN Clinic",
+  publisher: "SN Clinic",
+  formatDetection: {
+    email: false,
+    address: false,
+    telephone: false,
+  },
+  metadataBase: new URL(process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'),
+  openGraph: {
+    title: "SN Clinic | คลินิกบริหารยาผู้ป่วยรักษายา",
+    description: "Clinic Management System",
+    url: "/",
+    siteName: "SN Clinic",
+    locale: "th_TH",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "SN Clinic | คลินิกบริหารยาผู้ป่วยรักษายา",
+    description: "Clinic Management System",
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
+      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+    ],
+    apple: [
+      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+    other: [
+      {
+        rel: "mask-icon",
+        url: "/safari-pinned-tab.svg",
+        color: "#10b981",
+      },
+    ],
+  },
+  manifest: "/site.webmanifest",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#10b981" },
+    { media: "(prefers-color-scheme: dark)", color: "#059669" },
+  ],
 };
 
 export default function RootLayout({
