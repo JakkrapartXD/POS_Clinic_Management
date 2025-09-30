@@ -1,7 +1,13 @@
 import { verify } from "jsonwebtoken";
 import { UserModel } from "../models/UserModel";
+import { 
+  type CookieObject, 
+  type AuthResult, 
+  type PermissionResult,
+  extractJwtToken 
+} from "../types/auth";
+import { getAuthConfig, getCookieNames } from "../config/auth";
 
-const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
 const userModel = new UserModel();
 
 // Role-based permissions matching frontend configuration
@@ -78,8 +84,9 @@ export const ROLE_PERMISSIONS = {
 export type UserRole = keyof typeof ROLE_PERMISSIONS;
 
 export class RolePermissionsMiddleware {
-  async verifyAuth(cookie: any) {
-    const jwtToken = cookie["next-auth.jwt-token"]?.value;
+  async verifyAuth(cookie: CookieObject): Promise<AuthResult> {
+    const cookieNames = getCookieNames();
+    const jwtToken = extractJwtToken(cookie, cookieNames.jwtToken);
     
     if (!jwtToken) {
       return {
@@ -90,7 +97,8 @@ export class RolePermissionsMiddleware {
     }
     
     try {
-      const payload = verify(jwtToken, JWT_SECRET);
+      const config = getAuthConfig();
+      const payload = verify(jwtToken, config.jwt.secret);
       const userId = typeof payload === "object" && payload !== null ? payload.sub : null;
       
       if (!userId) {
@@ -127,7 +135,7 @@ export class RolePermissionsMiddleware {
     }
   }
 
-  async checkEndpointPermission(cookie: any, endpoint: string) {
+  async checkEndpointPermission(cookie: CookieObject, endpoint: string): Promise<PermissionResult> {
     // First verify the user is authenticated
     const authResult = await this.verifyAuth(cookie);
     if (!authResult.success) {
@@ -170,13 +178,13 @@ export class RolePermissionsMiddleware {
   }
 
   // Specific permission checks for queue endpoints
-  async checkQueuePermission(cookie: any, station: string) {
+  async checkQueuePermission(cookie: CookieObject, station: string): Promise<PermissionResult> {
     const endpoint = `queue/${station}`;
     return await this.checkEndpointPermission(cookie, endpoint);
   }
 
   // Check if user can access any queue endpoint
-  async checkAnyQueuePermission(cookie: any) {
+  async checkAnyQueuePermission(cookie: CookieObject): Promise<PermissionResult> {
     const authResult = await this.verifyAuth(cookie);
     if (!authResult.success) {
       return authResult;
@@ -220,7 +228,7 @@ export class RolePermissionsMiddleware {
   }
 
   // Check admin rights (for user management, etc.)
-  async checkAdminRights(cookie: any) {
+  async checkAdminRights(cookie: CookieObject): Promise<PermissionResult> {
     const authResult = await this.verifyAuth(cookie);
     if (!authResult.success) {
       return authResult;
