@@ -110,7 +110,8 @@ export default function UserManagementPage() {
 
   // Cache context management for sensitive data
   const { currentContext } = useCacheContext();
-  useSensitiveDataCache(); // Automatically clear sensitive cache on mount/unmount
+  // Use optimized sensitive data cache - only clear on unmount, not on mount
+  useSensitiveDataCache({ clearOnMount: false, clearOnUnmount: true });
 
   // Ref for search input
   const searchInputRef = useRef<HTMLInputElement>(null)

@@ -67,16 +67,66 @@ export default function QueueManagementPage() {
 }
 ```
 
-### 2. Sensitive Data Page
+### 2. Sensitive Data Page (Optimized)
 
 ```typescript
 import { useCacheContext, useSensitiveDataCache } from '@/hooks/useCacheContext';
 
 export default function UserManagementPage() {
   const { currentContext } = useCacheContext();
-  useSensitiveDataCache(); // ล้าง sensitive cache อัตโนมัติ
   
-  // ข้อมูล user จะถูกล้างเมื่อเข้า/ออกจากหน้านี้
+  // Optimized: Only clear cache on unmount, not on mount
+  useSensitiveDataCache({ 
+    clearOnMount: false,    // Don't clear on mount (avoids redundant clearing)
+    clearOnUnmount: true    // Clear on unmount for security
+  });
+  
+  // Cache is automatically managed based on navigation patterns
+  return <div>...</div>;
+}
+```
+
+### 3. Form with Sensitive Data (Debounced Clearing)
+
+```typescript
+import { useFormDataCache } from '@/hooks/useCacheContext';
+
+export default function PatientForm({ patientData }) {
+  // Clear cache only when form data significantly changes
+  useFormDataCache(patientData, {
+    clearOnUnmount: true,
+    debounceMs: 2000  // Wait 2 seconds before clearing
+  });
+  
+  return <form>...</form>;
+}
+```
+
+### 4. User-Specific Data (Selective Clearing)
+
+```typescript
+import { useUserDataCache } from '@/hooks/useCacheContext';
+
+export default function UserProfile({ userId }) {
+  // Only clear cache when switching between different users
+  const { clearUserCache } = useUserDataCache(userId);
+  
+  return <div>...</div>;
+}
+```
+
+### 5. Manual Cache Control
+
+```typescript
+import { useManualCacheControl } from '@/hooks/useCacheContext';
+
+export default function AdminPanel() {
+  const { clearSensitiveCache, getCacheStats } = useManualCacheControl();
+  
+  const handleClearCache = () => {
+    clearSensitiveCache();
+  };
+  
   return <div>...</div>;
 }
 ```
@@ -161,10 +211,26 @@ GraphQLAPI.clearContextCache();
 GraphQLAPI.clearSensitiveCache();
 ```
 
+## Performance Optimizations
+
+### Cache Clearing Strategy
+- **Smart Navigation Detection**: Only clears cache when entering sensitive pages from non-sensitive pages
+- **Time-based Throttling**: Prevents excessive clearing with 5-minute cooldown periods
+- **Selective Clearing**: Different hooks for different use cases (forms, user data, manual control)
+- **Debounced Operations**: Form data changes are debounced to avoid excessive cache clearing
+
+### Performance Benefits
+- **Reduced Cache Thrashing**: Eliminates redundant cache clearing operations
+- **Better User Experience**: Faster page loads due to preserved cache when appropriate
+- **Memory Efficiency**: Prevents unnecessary cache rebuilds
+- **Network Optimization**: Reduces redundant API calls
+
 ## Best Practices
 
 1. **ใช้ `useCacheContext()` ในทุกหน้า** - ตั้งค่า context อัตโนมัติ
-2. **ใช้ `useSensitiveDataCache()` ในหน้าข้อมูลอ่อนไหว** - ล้าง cache อัตโนมัติ
-3. **ใช้ `useAuthCacheManager()` สำหรับ auth operations** - จัดการ auth cache
-4. **ไม่ต้องจัดการ cache manually** - ระบบจัดการให้อัตโนมัติ
+2. **ใช้ `useSensitiveDataCache()` อย่างระมัดระวัง** - กำหนด options ตามความเหมาะสม
+3. **ใช้ `useFormDataCache()` สำหรับฟอร์ม** - มี debouncing และ selective clearing
+4. **ใช้ `useUserDataCache()` สำหรับข้อมูลผู้ใช้** - clear เฉพาะเมื่อเปลี่ยน user
+5. **ใช้ `useManualCacheControl()` เมื่อต้องการควบคุมเอง** - สำหรับกรณีพิเศษ
+6. **หลีกเลี่ยงการ clear cache บ่อยเกินไป** - ใช้ time-based throttling
 5. **ใช้ TTL ที่เหมาะสม** - ข้อมูลเปลี่ยนแปลงบ่อยใช้ TTL สั้น
