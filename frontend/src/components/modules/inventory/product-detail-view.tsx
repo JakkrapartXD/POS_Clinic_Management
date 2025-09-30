@@ -17,6 +17,73 @@ import { API_CONFIG } from "@/config/api"
 import EditProductForm from "@/components/forms/EditProductForm"
 import { toast } from "sonner"
 
+// Define proper interfaces for stock items
+interface StockItem {
+  id: string;
+  productId: string;
+  product_name: string;
+  product_unit: string;
+  product_sale_price: number;
+  product_cost?: number;
+  product_sku?: string;
+  product_pack_size?: string;
+  product_stock_quantity?: number;
+  quantity: number;
+  quantity_in?: number;
+  production_date?: string;
+  expiration_date?: string;
+  note?: string;
+  created_at: string;
+  updated_at?: string;
+  is_outofstock: boolean;
+  // Stock status flags
+  stockStatus: {
+    hasStock: boolean;
+    isSynthetic: boolean; // Indicates if this is a synthetic entry for products without stock
+    originalProductId?: string; // For synthetic entries, reference to the original product
+  };
+}
+
+// Helper function to create stock items with proper structure
+const createStockItem = (data: any, isSynthetic: boolean = false): StockItem => {
+  return {
+    ...data,
+    stockStatus: {
+      hasStock: !isSynthetic,
+      isSynthetic,
+      originalProductId: isSynthetic ? data.productId : undefined
+    }
+  };
+};
+
+// Helper function to create synthetic stock entry for products without stock
+const createSyntheticStockEntry = (product: any): StockItem => {
+  return createStockItem({
+    id: `synthetic-${product.id}-${Date.now()}`, // Use timestamp to ensure uniqueness
+    productId: product.id,
+    product_name: product.product_name,
+    product_unit: product.unit,
+    product_sale_price: product.sale_price,
+    product_cost: product.cost,
+    product_sku: product.sku,
+    product_pack_size: product.pack_size,
+    product_stock_quantity: product.stock_quantity,
+    quantity: 0,
+    created_at: product.created_at,
+    is_outofstock: true
+  }, true);
+};
+
+// Helper function to check if a stock item is synthetic
+const isSyntheticStock = (stock: StockItem): boolean => {
+  return stock.stockStatus.isSynthetic;
+};
+
+// Helper function to get the original product ID for synthetic stocks
+const getOriginalProductId = (stock: StockItem): string => {
+  return stock.stockStatus.originalProductId || stock.productId;
+};
+
 interface ProductDetailViewProps {
   productId: string
   onBack: () => void
@@ -264,7 +331,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
             const stocksResponse = await GraphQLAPI.getStocks({ productId: prod.id })
             if (stocksResponse.stocks && stocksResponse.stocks.length > 0) {
               // Add product info to each stock record
-              const stocksWithProductInfo = stocksResponse.stocks.map(stock => ({
+              const stocksWithProductInfo = stocksResponse.stocks.map(stock => createStockItem({
                 ...stock,
                 productId: prod.id,
                 product_name: prod.product_name,
@@ -273,46 +340,19 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                 product_cost: prod.cost,
                 product_sku: prod.sku,
                 product_pack_size: prod.pack_size,
-                product_stock_quantity: prod.stock_quantity,
-                hasStock: true
-              }))
+                product_stock_quantity: prod.stock_quantity
+              }, false))
               allStocks.push(...stocksWithProductInfo)
             } else {
-              // No stock found, but product exists - add as "no stock" entry
-              productsWithoutStock.push({
-                productId: prod.id,
-                product_name: prod.product_name,
-                product_unit: prod.unit,
-                product_sale_price: prod.sale_price,
-                product_cost: prod.cost,
-                product_sku: prod.sku,
-                product_pack_size: prod.pack_size,
-                product_stock_quantity: prod.stock_quantity,
-                quantity: 0,
-                hasStock: false,
-                created_at: prod.created_at,
-                id: `no-stock-${prod.id}`,
-                is_outofstock: true
-              })
+              // No stock found, but product exists - add as synthetic stock entry
+              const syntheticStock = createSyntheticStockEntry(prod);
+              productsWithoutStock.push(syntheticStock);
             }
           } catch (stockErr) {
             logger.warn('Failed to get stocks for product', { productId: prod.id }, 'PRODUCT_DETAIL')
-            // Add as "no stock" entry if stock fetch fails
-            productsWithoutStock.push({
-              productId: prod.id,
-              product_name: prod.product_name,
-              product_unit: prod.unit,
-              product_sale_price: prod.sale_price,
-              product_cost: prod.cost,
-              product_sku: prod.sku,
-              product_pack_size: prod.pack_size,
-              product_stock_quantity: prod.stock_quantity,
-              quantity: 0,
-              hasStock: false,
-              created_at: prod.created_at,
-              id: `no-stock-${prod.id}`,
-              is_outofstock: true
-            })
+            // Add as synthetic stock entry if stock fetch fails
+            const syntheticStock = createSyntheticStockEntry(prod);
+            productsWithoutStock.push(syntheticStock);
           }
         }
         
@@ -385,7 +425,10 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
   }
 
   // Get status badge
-  const getStatusBadge = (stock: any) => {
+  const getStatusBadge = (stock: StockItem) => {
+    if (stock.stockStatus.isSynthetic) {
+      return <Badge variant="outline" className="text-orange-600 border-orange-200">ไม่มีสต๊อก</Badge>
+    }
     if (stock.is_outofstock) {
       return <Badge variant="destructive">หมดสต๊อก</Badge>
     }
@@ -1086,6 +1129,10 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
         quantity: parseInt(stockFormData.quantity),
         quantity_in: parseInt(stockFormData.quantity),
         is_outofstock: false,
+        stockStatus: {
+          hasStock: true,
+          isSynthetic: false
+        },
         production_date: stockFormData.production_date ? new Date(stockFormData.production_date).toISOString() : undefined,
         expiration_date: stockFormData.expiration_date ? new Date(stockFormData.expiration_date).toISOString() : undefined,
         note: `เพิ่มสต๊อก - ล็อต: ${stockFormData.production_lot || 'ไม่ระบุ'}`
@@ -1889,11 +1936,11 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                                 <td className="py-3 px-4 text-gray-500">{stock.product_cost ? `฿${stock.product_cost.toFixed(2)}` : '-'}</td>
                                 <td className="py-3 px-4 font-medium">฿{stock.product_sale_price?.toFixed(2) || '0.00'}</td>
                                 <td className="py-3 px-4 font-medium text-green-600">
-                                  {stock.hasStock === false ? '-' : `+${stock.quantity_in?.toLocaleString() || stock.quantity.toLocaleString()}`}
+                                  {stock.stockStatus.isSynthetic ? '-' : `+${stock.quantity_in?.toLocaleString() || stock.quantity.toLocaleString()}`}
                                 </td>
                                 <td className="py-3 px-4">
-                                  {stock.hasStock === false ? (
-                                    <span className="text-red-600 font-semibold">-</span>
+                                  {stock.stockStatus.isSynthetic ? (
+                                    <span className="text-orange-600 font-semibold">-</span>
                                   ) : (
                                     <div>
                                       <div className="font-medium">{stock.quantity.toLocaleString()}x</div>
@@ -1909,14 +1956,14 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                                   )}
                                 </td>
                                 <td className="py-3 px-4">
-                                  {stock.hasStock === false ? (
-                                    <Badge variant="destructive">-</Badge>
+                                  {stock.stockStatus.isSynthetic ? (
+                                    <Badge variant="outline" className="text-orange-600 border-orange-200">ไม่มีสต๊อก</Badge>
                                   ) : (
                                     getStatusBadge(stock)
                                   )}
                                 </td>
                                 <td className="py-3 px-4">
-                                  {stock.hasStock === false ? (
+                                  {stock.stockStatus.isSynthetic ? (
                                     <Button
                                       variant="outline"
                                       size="sm"
