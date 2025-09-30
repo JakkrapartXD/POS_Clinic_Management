@@ -342,13 +342,34 @@ class GraphQLClient {
     logger.info('Invalidated GraphQL cache', { cacheKey, namespace, context: this.currentContext }, 'GRAPHQL_CACHE');
   }
 
-  // Invalidate all cache entries matching a pattern
+  // Invalidate all cache entries matching a pattern (optimized)
   invalidateCachePattern(pattern: string): void {
-    const stats = cache.getStats();
-    const keysToDelete = stats.keys.filter(key => key.includes(pattern));
+    const beforeCount = cache.getStats().size;
+    cache.clearPattern(pattern);
+    const afterCount = cache.getStats().size;
+    const deletedCount = beforeCount - afterCount;
     
-    keysToDelete.forEach(key => cache.delete(key));
-    logger.info('Invalidated GraphQL cache pattern', { pattern, count: keysToDelete.length }, 'GRAPHQL_CACHE');
+    logger.info('Invalidated GraphQL cache pattern', { pattern, count: deletedCount }, 'GRAPHQL_CACHE');
+  }
+
+  // Invalidate cache by namespace (more efficient than pattern matching)
+  invalidateCacheByNamespace(namespace: string): void {
+    const beforeCount = cache.getStats().size;
+    cache.clearNamespace(namespace);
+    const afterCount = cache.getStats().size;
+    const deletedCount = beforeCount - afterCount;
+    
+    logger.info('Invalidated GraphQL cache by namespace', { namespace, count: deletedCount }, 'GRAPHQL_CACHE');
+  }
+
+  // Invalidate cache by namespace and context (most precise)
+  invalidateCacheByNamespaceContext(namespace: string, context?: string): void {
+    const beforeCount = cache.getStats().size;
+    cache.clearByNamespaceContext(namespace, context);
+    const afterCount = cache.getStats().size;
+    const deletedCount = beforeCount - afterCount;
+    
+    logger.info('Invalidated GraphQL cache by namespace:context', { namespace, context, count: deletedCount }, 'GRAPHQL_CACHE');
   }
 
   // Clear all cache
@@ -363,20 +384,49 @@ class GraphQLClient {
     logger.info('Cleared GraphQL cache for context', { context: this.currentContext }, 'GRAPHQL_CACHE');
   }
 
-  // Clear sensitive data cache (for navigation)
+  // Clear sensitive data cache (for navigation) - optimized
   clearSensitiveCache(): void {
+    const beforeCount = cache.getStats().size;
     SENSITIVE_NAMESPACES.forEach(namespace => {
       cache.clearNamespace(namespace);
     });
-    logger.info('Cleared sensitive GraphQL cache', { namespaces: SENSITIVE_NAMESPACES }, 'GRAPHQL_CACHE');
+    const afterCount = cache.getStats().size;
+    const deletedCount = beforeCount - afterCount;
+    
+    logger.info('Cleared sensitive GraphQL cache', { 
+      namespaces: SENSITIVE_NAMESPACES, 
+      count: deletedCount 
+    }, 'GRAPHQL_CACHE');
   }
 
-  // Clear auth scope cache (for auth changes)
+  // Clear auth scope cache (for auth changes) - optimized
   clearAuthScopeCache(): void {
+    const beforeCount = cache.getStats().size;
     AUTH_SCOPE_NAMESPACES.forEach(namespace => {
       cache.clearNamespace(namespace);
     });
-    logger.info('Cleared auth scope GraphQL cache', { namespaces: AUTH_SCOPE_NAMESPACES }, 'GRAPHQL_CACHE');
+    const afterCount = cache.getStats().size;
+    const deletedCount = beforeCount - afterCount;
+    
+    logger.info('Cleared auth scope GraphQL cache', { 
+      namespaces: AUTH_SCOPE_NAMESPACES, 
+      count: deletedCount 
+    }, 'GRAPHQL_CACHE');
+  }
+
+  // Clear cache for specific operation type (e.g., all queue operations)
+  clearOperationCache(operationPattern: string): void {
+    const beforeCount = cache.getStats().size;
+    // Use regex to match operation names more precisely
+    const regex = new RegExp(`:${operationPattern}`, 'i');
+    cache.clearByRegex(regex);
+    const afterCount = cache.getStats().size;
+    const deletedCount = beforeCount - afterCount;
+    
+    logger.info('Cleared operation cache', { 
+      operationPattern, 
+      count: deletedCount 
+    }, 'GRAPHQL_CACHE');
   }
 
   private async request<T>(
@@ -2085,18 +2135,18 @@ export const GraphQLAPI = {
   clearContextCache: () => graphqlClient.clearContextCache(),
   clearSensitiveCache: () => graphqlClient.clearSensitiveCache(),
   clearAuthScopeCache: () => graphqlClient.clearAuthScopeCache(),
+  clearOperationCache: (pattern: string) => graphqlClient.clearOperationCache(pattern),
+  invalidateCacheByNamespace: (namespace: string) => graphqlClient.invalidateCacheByNamespace(namespace),
+  invalidateCacheByNamespaceContext: (namespace: string, context?: string) => graphqlClient.invalidateCacheByNamespaceContext(namespace, context),
   
-  // Clear all queue-related cache and force refresh
+  // Clear all queue-related cache and force refresh (optimized)
   clearAllQueueCache: () => {
-    // Clear all cache entries that contain queue or triage operations
-    graphqlClient.invalidateCachePattern('GetQueueTickets');
-    graphqlClient.invalidateCachePattern('GetTriageQueue');
-    graphqlClient.invalidateCachePattern('queue:');
-    graphqlClient.invalidateCachePattern('triage:');
-    
-    // Clear cache by namespace to ensure complete cleanup
-    cache.clearNamespace('queue');
-    cache.clearNamespace('triage');
+    // Use more efficient operation-based clearing
+    graphqlClient.clearOperationCache('Queue');
+    graphqlClient.clearOperationCache('Triage');
+    // Also clear by namespace for queue-related data
+    graphqlClient.invalidateCacheByNamespace('queue');
+    graphqlClient.invalidateCacheByNamespace('triage');
     
     logger.info('Cleared all queue-related cache', {}, 'GRAPHQL_CACHE');
   },

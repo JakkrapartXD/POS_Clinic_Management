@@ -82,37 +82,58 @@ class SimpleCache {
     this.cache.clear()
   }
 
-  // Clear cache by namespace
+  // Clear cache by namespace (optimized with direct deletion)
   clearNamespace(namespace: string): void {
-    const keysToDelete: string[] = []
-    this.cache.forEach((entry, key) => {
+    for (const [key, entry] of this.cache.entries()) {
       if (entry.namespace === namespace) {
-        keysToDelete.push(key)
+        this.cache.delete(key)
       }
-    })
-    keysToDelete.forEach(key => this.cache.delete(key))
+    }
   }
 
-  // Clear cache by context
+  // Clear cache by context (optimized with direct deletion)
   clearContext(context: string): void {
-    const keysToDelete: string[] = []
-    this.cache.forEach((entry, key) => {
+    for (const [key, entry] of this.cache.entries()) {
       if (entry.context === context) {
-        keysToDelete.push(key)
+        this.cache.delete(key)
       }
-    })
-    keysToDelete.forEach(key => this.cache.delete(key))
+    }
   }
 
-  // Clear cache by pattern (supports wildcards)
-  clearPattern(pattern: string): void {
-    const keysToDelete: string[] = []
-    this.cache.forEach((entry, key) => {
-      if (key.includes(pattern)) {
-        keysToDelete.push(key)
+  // Clear cache by exact prefix match (more precise than includes)
+  clearByPrefix(prefix: string): void {
+    for (const key of this.cache.keys()) {
+      if (key.startsWith(prefix)) {
+        this.cache.delete(key)
       }
-    })
-    keysToDelete.forEach(key => this.cache.delete(key))
+    }
+  }
+
+  // Clear cache by regex pattern (supports complex patterns)
+  clearByRegex(pattern: RegExp): void {
+    for (const key of this.cache.keys()) {
+      if (pattern.test(key)) {
+        this.cache.delete(key)
+      }
+    }
+  }
+
+  // Clear cache by pattern with namespace:context structure
+  clearByNamespaceContext(namespace: string, context?: string): void {
+    const prefix = context ? `${namespace}:${context}:` : `${namespace}:`
+    this.clearByPrefix(prefix)
+  }
+
+  // Legacy method for backward compatibility (now uses prefix matching)
+  clearPattern(pattern: string): void {
+    // Convert simple pattern to prefix if it looks like a namespace:context pattern
+    if (pattern.includes(':') && !pattern.includes('*')) {
+      this.clearByPrefix(pattern)
+    } else {
+      // For complex patterns, use regex
+      const regexPattern = pattern.replace(/\*/g, '.*')
+      this.clearByRegex(new RegExp(regexPattern))
+    }
   }
 
   // Build full cache key with namespace and context
@@ -122,6 +143,31 @@ class SimpleCache {
     const variablesStr = options?.variables ? JSON.stringify(options.variables) : ''
     
     return `${namespace}:${context}:${key}:${variablesStr}`
+  }
+
+  // Parse cache key to extract components
+  parseCacheKey(fullKey: string): { namespace: string; context: string; operation: string; variables: string } | null {
+    const parts = fullKey.split(':')
+    if (parts.length < 3) return null
+    
+    return {
+      namespace: parts[0],
+      context: parts[1],
+      operation: parts[2],
+      variables: parts.slice(3).join(':') || ''
+    }
+  }
+
+  // Validate cache key structure
+  isValidCacheKey(key: string): boolean {
+    const parsed = this.parseCacheKey(key)
+    return parsed !== null && Boolean(parsed.namespace) && Boolean(parsed.context) && Boolean(parsed.operation)
+  }
+
+  // Get all keys matching a specific namespace and context
+  getKeysByNamespaceContext(namespace: string, context?: string): string[] {
+    const prefix = context ? `${namespace}:${context}:` : `${namespace}:`
+    return Array.from(this.cache.keys()).filter(key => key.startsWith(prefix))
   }
 
   // Generate cache key for GraphQL queries (backward compatibility)
@@ -215,3 +261,53 @@ export const AUTH_SCOPE_NAMESPACES = [
   'permissions',
   'roles'
 ]
+
+// Cache key patterns for common operations
+export const CACHE_KEY_PATTERNS = {
+  // Queue operations
+  QUEUE_OPERATIONS: /:GetQueue|:GetTriage|:GetDoctor|:GetCashier/i,
+  // Patient operations
+  PATIENT_OPERATIONS: /:GetPatient|:SearchPatient|:CreatePatient/i,
+  // Product operations
+  PRODUCT_OPERATIONS: /:GetProduct|:SearchProduct|:CreateProduct/i,
+  // Order operations
+  ORDER_OPERATIONS: /:GetOrder|:CreateOrder|:UpdateOrder/i,
+  // User operations
+  USER_OPERATIONS: /:GetUser|:UpdateUser|:GetProfile/i,
+} as const
+
+// Utility functions for cache management
+export const CacheUtils = {
+  // Check if a key matches a specific operation pattern
+  matchesOperation: (key: string, pattern: RegExp): boolean => {
+    return pattern.test(key)
+  },
+
+  // Get all keys matching a specific operation pattern
+  getKeysByOperation: (pattern: RegExp): string[] => {
+    return Array.from(cache.getStats().keys).filter(key => pattern.test(key))
+  },
+
+  // Clear cache by operation pattern
+  clearByOperation: (pattern: RegExp): number => {
+    const beforeCount = cache.getStats().size
+    cache.clearByRegex(pattern)
+    const afterCount = cache.getStats().size
+    return beforeCount - afterCount
+  },
+
+  // Validate and sanitize cache key
+  sanitizeKey: (key: string): string => {
+    return key.replace(/[^a-zA-Z0-9:_-]/g, '_')
+  },
+
+  // Build cache key with validation
+  buildValidatedKey: (namespace: string, context: string, operation: string, variables?: any): string => {
+    const sanitizedNamespace = CacheUtils.sanitizeKey(namespace)
+    const sanitizedContext = CacheUtils.sanitizeKey(context)
+    const sanitizedOperation = CacheUtils.sanitizeKey(operation)
+    const variablesStr = variables ? JSON.stringify(variables) : ''
+    
+    return `${sanitizedNamespace}:${sanitizedContext}:${sanitizedOperation}:${variablesStr}`
+  }
+}

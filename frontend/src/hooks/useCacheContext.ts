@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import { GraphQLAPI } from '@/clients/graphql';
 import { CACHE_CONTEXTS } from '@/lib/cache';
+import { getCacheContextFromPathname } from '@/utils/cacheManager';
 
 /**
  * Hook to manage cache context based on current page/route
@@ -12,29 +13,7 @@ export function useCacheContext() {
 
   useEffect(() => {
     // Determine cache context based on current path
-    let context = CACHE_CONTEXTS.DEFAULT;
-    
-    if (pathname.includes('/dashboard/queue')) {
-      context = CACHE_CONTEXTS.DASHBOARD_QUEUE;
-    } else if (pathname.includes('/queue/triage')) {
-      context = CACHE_CONTEXTS.QUEUE_TRIAGE;
-    } else if (pathname.includes('/queue/doctor')) {
-      context = CACHE_CONTEXTS.QUEUE_DOCTOR;
-    } else if (pathname.includes('/queue/cashier')) {
-      context = CACHE_CONTEXTS.QUEUE_CASHIER;
-    } else if (pathname.includes('/dashboard/patients')) {
-      context = CACHE_CONTEXTS.DASHBOARD_PATIENTS;
-    } else if (pathname.includes('/dashboard/orders')) {
-      context = CACHE_CONTEXTS.DASHBOARD_ORDERS;
-    } else if (pathname.includes('/dashboard/inventory')) {
-      context = CACHE_CONTEXTS.DASHBOARD_INVENTORY;
-    } else if (pathname.includes('/dashboard/pos')) {
-      context = CACHE_CONTEXTS.DASHBOARD_POS;
-    } else if (pathname.includes('/dashboard/reports')) {
-      context = CACHE_CONTEXTS.DASHBOARD_REPORTS;
-    } else if (pathname.includes('/dashboard/admin')) {
-      context = CACHE_CONTEXTS.DASHBOARD_ADMIN;
-    }
+    const context = getCacheContextFromPathname(pathname);
     
     // Set the context
     GraphQLAPI.setContext(context);
