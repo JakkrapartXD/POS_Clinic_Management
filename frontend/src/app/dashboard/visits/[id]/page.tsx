@@ -155,7 +155,7 @@ export default function VisitDetailPage() {
 
     } catch (error: any) {
       console.error('Error fetching visit data:', error);
-      toast.error(error.message || 'Failed to load visit data');
+      toast.error(error.message || 'ไม่สามารถโหลดข้อมูลการเยี่ยมได้');
     } finally {
       setIsLoading(false);
     }
@@ -171,7 +171,7 @@ export default function VisitDetailPage() {
 
     } catch (error: any) {
       console.error('Error saving SOAP notes:', error);
-      toast.error(error.message || 'Failed to save SOAP notes');
+      toast.error(error.message || 'ไม่สามารถบันทึกบันทึก SOAP ได้');
     } finally {
       setIsSaving(false);
     }
@@ -200,7 +200,7 @@ export default function VisitDetailPage() {
 
     } catch (error: any) {
       console.error('Error saving vitals:', error);
-      toast.error(error.message || 'Failed to save vitals');
+      toast.error(error.message || 'ไม่สามารถบันทึกสัญญาณชีพได้');
     } finally {
       setIsSaving(false);
     }
@@ -226,7 +226,7 @@ export default function VisitDetailPage() {
 
     } catch (error: any) {
       console.error('Error linking order:', error);
-      toast.error(error.message || 'Failed to link order');
+      toast.error(error.message || 'ไม่สามารถเชื่อมโยงคำสั่งซื้อได้');
     } finally {
       setIsLinkingOrder(false);
     }
@@ -245,7 +245,7 @@ export default function VisitDetailPage() {
 
     } catch (error: any) {
       console.error('Error creating queue ticket:', error);
-      toast.error(error.message || 'Failed to create queue ticket');
+      toast.error(error.message || 'ไม่สามารถสร้างตั๋วคิวได้');
     }
   };
 

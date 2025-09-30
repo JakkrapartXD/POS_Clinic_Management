@@ -145,7 +145,7 @@ export default function PatientDetailPage() {
           setIsFetching(false);
         }, 5000);
       } else {
-        toast.error(error.message || 'Failed to load patient data');
+        toast.error(error.message || 'ไม่สามารถโหลดข้อมูลผู้ป่วยได้');
         setIsFetching(false);
       }
     } finally {
