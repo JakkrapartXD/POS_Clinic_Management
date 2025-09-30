@@ -73,10 +73,19 @@ const app = new Elysia()
   )
   .use(
     cors({
-      origin: process.env.FRONTEND_URL || "http://localhost:3000",
+      origin: [
+        process.env.FRONTEND_URL || "http://localhost:3000",
+        "https://localhost",
+        "https://localhost:3000",
+        "https://localhost:443",
+        "http://localhost:3000",
+        ...(process.env.NODE_ENV === 'production' && process.env.DOMAIN ? [`https://${process.env.DOMAIN}`] : []),
+      ],
       credentials: true,
       methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-      allowedHeaders: ["Content-Type", "Authorization", "Cookie"],
+      allowedHeaders: ["Content-Type", "Authorization", "Cookie", "X-Requested-With"],
+      exposeHeaders: ["Set-Cookie"],
+      maxAge: 86400, // 24 hours
     })
   )
   .use(

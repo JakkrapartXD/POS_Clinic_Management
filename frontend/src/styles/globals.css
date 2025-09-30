@@ -1,18 +1,4 @@
-/* stylelint-disable at-rule-no-unknown */
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-/* stylelint-enable at-rule-no-unknown */
-
-body {
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-}
-
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
-}
+@import "tailwindcss";
 
 @layer base {
   :root {
@@ -87,26 +73,12 @@ body {
   }
 
   * {
-    @apply border;
+    border-color: hsl(var(--border));
   }
   
   body {
-    @apply bg-background text-foreground;
-  }
-
-  /* Force white background for dropdowns and forms */
-  [data-radix-popper-content-wrapper],
-  [data-radix-select-content],
-  [data-radix-dropdown-menu-content],
-  [data-radix-popover-content],
-  [data-radix-dialog-content] {
-    @apply bg-white !important;
-  }
-  
-  /* Ensure form elements have white background */
-  .bg-popover,
-  .bg-background {
-    @apply bg-white !important;
+    background: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   }
 }
-

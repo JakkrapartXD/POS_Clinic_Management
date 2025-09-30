@@ -5,7 +5,7 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ./nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./ssl:/etc/nginx/ssl:ro
     depends_on:
       - frontend
@@ -20,11 +20,11 @@ services:
       dockerfile: Dockerfile
     expose:
       - "3000"
-    restart: always
     env_file:
-      - .env.production
+      - .env.development
     networks:
       - app-network
+    restart: always
 
   backend:
     build:
@@ -32,42 +32,53 @@ services:
       dockerfile: Dockerfile
     expose:
       - "4000"
-    restart: always
     env_file:
-      - .env.production
-    environment:
-      - NODE_ENV=production
-    volumes:
-      - ./secrets/service-account.json:/app/secrets/service-account.json:ro
+      - .env.development
     networks:
       - app-network
+    restart: always
     depends_on:
       - postgres
-      - mongo
+      - redis
 
   postgres:
     image: postgres:16
     restart: always
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+    env_file:
+      - .env
+    ports:
+      - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     networks:
       - app-network
 
-  mongo:
-    image: mongo:6
+  redis:
+    image: redis:7
     restart: always
+    ports:
+      - "6379:6379"
     volumes:
-      - mongodata:/data/db
+      - redisdata:/data
+    networks:
+      - app-network
+
+  pgadmin:
+    image: dpage/pgadmin4
+    env_file:
+      - .env
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
     networks:
       - app-network
 
 networks:
   app-network:
+    driver: bridge
 
 volumes:
   pgdata:
-  mongodata:
+  redisdata:
+  pgadmin-data:

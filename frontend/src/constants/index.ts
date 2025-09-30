@@ -65,6 +65,14 @@ export const APP_CONSTANTS = {
       'image/webp'
     ],
     MAX_SIZE: 5 * 1024 * 1024 // 5MB
+  },
+  WEBSOCKET: {
+    ENDPOINTS: {
+      GRAPHQL_WS: '/graphql-ws'
+    },
+    RECONNECT_ATTEMPTS: 5,
+    RECONNECT_DELAY: 3000, // 3 seconds
+    HEARTBEAT_INTERVAL: 30000 // 30 seconds
   }
 } as const;
 
