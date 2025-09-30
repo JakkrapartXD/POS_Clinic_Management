@@ -224,6 +224,8 @@ GraphQLAPI.clearSensitiveCache();
 - **Better User Experience**: Faster page loads due to preserved cache when appropriate
 - **Memory Efficiency**: Prevents unnecessary cache rebuilds
 - **Network Optimization**: Reduces redundant API calls
+- **Optimized Logging**: Debug-level cache logging prevents production performance impact
+- **Performance Monitoring**: Built-in performance tracking for cache operations
 
 ## Best Practices
 
@@ -233,4 +235,39 @@ GraphQLAPI.clearSensitiveCache();
 4. **ใช้ `useUserDataCache()` สำหรับข้อมูลผู้ใช้** - clear เฉพาะเมื่อเปลี่ยน user
 5. **ใช้ `useManualCacheControl()` เมื่อต้องการควบคุมเอง** - สำหรับกรณีพิเศษ
 6. **หลีกเลี่ยงการ clear cache บ่อยเกินไป** - ใช้ time-based throttling
-5. **ใช้ TTL ที่เหมาะสม** - ข้อมูลเปลี่ยนแปลงบ่อยใช้ TTL สั้น
+7. **ใช้ TTL ที่เหมาะสม** - ข้อมูลเปลี่ยนแปลงบ่อยใช้ TTL สั้น
+
+## Logging Optimization
+
+### Environment-Aware Cache Logging
+The cache system now uses environment-aware logging to prevent performance impact in production:
+
+```typescript
+// Development: All cache operations logged
+logger.cache.keyGenerated(operation, key, ttl);  // Debug level
+logger.cache.hit(key, operation);                // Debug level
+logger.cache.performance('cacheHit', duration);  // Debug level
+
+// Production: Only important events logged
+logger.cache.cleared('sensitive', count, 'navigation');  // Info level
+logger.cache.invalidated(pattern, count);               // Info level
+```
+
+### Log Levels by Environment
+- **Development**: Debug, Info, Warn, Error (all cache operations visible)
+- **Production**: Warn, Error only (cache operations hidden for performance)
+- **Performance Logging**: Debug level only (development monitoring)
+
+### Specialized Cache Logging Methods
+```typescript
+// Debug-level operations (development only)
+logger.cache.keyGenerated(operation, key, ttl)
+logger.cache.hit(key, operation)
+logger.cache.miss(key, operation)
+logger.cache.set(key, operation, ttl)
+logger.cache.performance(operation, duration, size)
+
+// Info-level operations (important events)
+logger.cache.cleared(type, count, reason)
+logger.cache.invalidated(pattern, count)
+```
