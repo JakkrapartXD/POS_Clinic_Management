@@ -86,7 +86,7 @@ To regenerate favicon files, run:
 npm run generate-favicons
 ```
 
-This will run the script at `/scripts/generate-favicons.js` which creates all necessary favicon files.
+This will run the script at `/scripts/generate-favicons-sharp.js` which creates all necessary favicon files using Sharp for high-quality image generation.
 
 ### Production
 For production deployment, ensure all favicon files are included in the build output. Next.js will automatically serve them from the `/public` directory.
@@ -113,15 +113,16 @@ To verify the favicon is working correctly:
 
 ## 📝 Notes
 
-- The current PNG files are placeholder images. For production, consider using a tool like `sharp` or `imagemagick` to generate high-quality PNG files from the SVG source.
+- All PNG files are now high-quality images generated from the SVG source using Sharp.
 - The SVG favicon supports both light and dark themes through CSS media queries.
 - All favicon files are optimized for web delivery and follow modern web standards.
+- The Sharp-based generation ensures consistent quality across all favicon sizes.
 
 ## 🛠️ Customization
 
 To customize the favicon:
 
-1. Edit the SVG content in `/scripts/generate-favicons.js`
+1. Edit the SVG content in `/scripts/generate-favicons-sharp.js`
 2. Run `npm run generate-favicons` to regenerate all files
 3. Update the theme colors in `layout.tsx` if needed
 4. Modify the web app manifest for PWA customization
