@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { X, Plus, User, MapPin, Heart } from 'lucide-react'
-import { toast } from 'sonner'
+import toast from 'react-hot-toast'
 import { GraphQLAPI } from '@/clients/graphql'
 import PatientImageUpload from '@/components/common/PatientImageUpload'
 import ThailandAddressSelector from '@/components/forms/ThailandAddressSelector'
@@ -94,7 +94,12 @@ export default function AddPatientForm({ isOpen, onClose, onSuccess }: AddPatien
         try {
           const parsed = JSON.parse(saved)
           // Don't restore photo file, only other data
-          return { ...parsed, photo: null }
+          // Ensure drug_allergies is always an array
+          return { 
+            ...parsed, 
+            photo: null,
+            drug_allergies: Array.isArray(parsed.drug_allergies) ? parsed.drug_allergies : []
+          }
         } catch (e) {
           console.warn('Failed to parse saved form data:', e)
         }
@@ -160,19 +165,21 @@ export default function AddPatientForm({ isOpen, onClose, onSuccess }: AddPatien
   }
 
   const handleAddDrugAllergy = () => {
-    if (newDrugAllergy.trim() && !formData.drug_allergies.includes(newDrugAllergy.trim())) {
+    const currentAllergies = Array.isArray(formData.drug_allergies) ? formData.drug_allergies : []
+    if (newDrugAllergy.trim() && !currentAllergies.includes(newDrugAllergy.trim())) {
       setFormData(prev => ({
         ...prev,
-        drug_allergies: [...prev.drug_allergies, newDrugAllergy.trim()]
+        drug_allergies: [...currentAllergies, newDrugAllergy.trim()]
       }))
       setNewDrugAllergy('')
     }
   }
 
   const handleRemoveDrugAllergy = (drugToRemove: string) => {
+    const currentAllergies = Array.isArray(formData.drug_allergies) ? formData.drug_allergies : []
     setFormData(prev => ({
       ...prev,
-      drug_allergies: prev.drug_allergies.filter(drug => drug !== drugToRemove)
+      drug_allergies: currentAllergies.filter(drug => drug !== drugToRemove)
     }))
   }
 
@@ -201,7 +208,10 @@ export default function AddPatientForm({ isOpen, onClose, onSuccess }: AddPatien
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
+    console.log('🚀 Form submission started')
+    
     if (!formData.first_name || !formData.last_name) {
+      console.log('🚨 Validation error - missing name')
       toast.error('กรุณากรอกชื่อและนามสกุล')
       return
     }
@@ -244,7 +254,7 @@ export default function AddPatientForm({ isOpen, onClose, onSuccess }: AddPatien
         zip_code: formData.zip_code || undefined,
         latitude: formData.latitude ? parseFloat(formData.latitude) : undefined,
         longitude: formData.longitude ? parseFloat(formData.longitude) : undefined,
-        drug_allergies: serializeDrugAllergies(formData.drug_allergies),
+        drug_allergies: serializeDrugAllergies(Array.isArray(formData.drug_allergies) ? formData.drug_allergies : []),
         drug_allergies_other: formData.drug_allergies_other || undefined,
         medical_conditions: formData.medical_conditions || undefined,
         notes: formData.notes || undefined,
@@ -252,8 +262,6 @@ export default function AddPatientForm({ isOpen, onClose, onSuccess }: AddPatien
       }
 
       await GraphQLAPI.createPatient(patientData)
-      
-      toast.success('เพิ่มผู้ป่วยใหม่เรียบร้อยแล้ว')
       
       // Clear localStorage on successful submission
       if (typeof window !== 'undefined') {
@@ -292,7 +300,33 @@ export default function AddPatientForm({ isOpen, onClose, onSuccess }: AddPatien
 
     } catch (error: any) {
       console.error('Error creating patient:', error)
-      toast.error(error.message || 'เกิดข้อผิดพลาดในการเพิ่มผู้ป่วย')
+      
+      // Handle specific error messages
+      let errorMessage = 'เกิดข้อผิดพลาดในการเพิ่มผู้ป่วย'
+      
+      if (error.message) {
+        // Check for duplicate errors
+        if (error.message.includes('ผู้ป่วยที่มีเลขบัตรประชาชนนี้มีอยู่แล้ว')) {
+          errorMessage = 'ผู้ป่วยที่มีเลขบัตรประชาชนนี้มีอยู่แล้ว'
+        } else if (error.message.includes('ผู้ป่วยที่มีอีเมลนี้มีอยู่แล้ว')) {
+          errorMessage = 'ผู้ป่วยที่มีอีเมลนี้มีอยู่แล้ว'
+        } else if (error.message.includes('Invalid email format')) {
+          errorMessage = 'รูปแบบอีเมลไม่ถูกต้อง'
+        } else if (error.message.includes('Invalid phone number format')) {
+          errorMessage = 'รูปแบบเบอร์โทรศัพท์ไม่ถูกต้อง'
+        } else if (error.message.includes('Unexpected error')) {
+          // Check if it's a duplicate constraint error
+          if (error.message.includes('Unique constraint failed') || error.message.includes('national_id')) {
+            errorMessage = 'ผู้ป่วยที่มีเลขบัตรประชาชนนี้มีอยู่แล้ว'
+          } else {
+            errorMessage = 'เกิดข้อผิดพลาดที่ไม่คาดคิด กรุณาลองใหม่อีกครั้ง'
+          }
+        } else {
+          errorMessage = error.message
+        }
+      }
+      
+      toast.error(errorMessage)
     } finally {
       setIsSubmitting(false)
     }
@@ -323,7 +357,7 @@ export default function AddPatientForm({ isOpen, onClose, onSuccess }: AddPatien
           </Button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        <form onSubmit={handleSubmit} className="p-6 space-y-6" data-testid="patient-form">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Left Column - Photo */}
             <div className="lg:col-span-1">
@@ -354,6 +388,7 @@ export default function AddPatientForm({ isOpen, onClose, onSuccess }: AddPatien
                         value={formData.national_id}
                         onChange={(e) => handleInputChange('national_id', e.target.value)}
                         placeholder="1236555"
+                        data-testid="national-id-input"
                       />
                     </div>
                     
@@ -376,7 +411,7 @@ export default function AddPatientForm({ isOpen, onClose, onSuccess }: AddPatien
                     <div>
                       <Label htmlFor="gender">Sex</Label>
                       <Select value={formData.gender} onValueChange={(value) => handleInputChange('gender', value)}>
-                        <SelectTrigger>
+                        <SelectTrigger data-testid="gender-select">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -397,6 +432,7 @@ export default function AddPatientForm({ isOpen, onClose, onSuccess }: AddPatien
                         onChange={(e) => handleInputChange('first_name', e.target.value)}
                         placeholder="ชื่อ"
                         required
+                        data-testid="first-name-input"
                       />
                     </div>
                     
@@ -408,6 +444,7 @@ export default function AddPatientForm({ isOpen, onClose, onSuccess }: AddPatien
                         onChange={(e) => handleInputChange('last_name', e.target.value)}
                         placeholder="นามสกุล"
                         required
+                        data-testid="last-name-input"
                       />
                     </div>
                     
@@ -428,6 +465,7 @@ export default function AddPatientForm({ isOpen, onClose, onSuccess }: AddPatien
                         type="date"
                         value={formData.date_of_birth}
                         onChange={(e) => handleDateOfBirthChange(e.target.value)}
+                        data-testid="date-of-birth-input"
                       />
                     </div>
                     
@@ -445,7 +483,7 @@ export default function AddPatientForm({ isOpen, onClose, onSuccess }: AddPatien
                     <div>
                       <Label htmlFor="blood_group">Blood group</Label>
                       <Select value={formData.blood_group} onValueChange={(value) => handleInputChange('blood_group', value)}>
-                        <SelectTrigger>
+                        <SelectTrigger data-testid="blood-group-select">
                           <SelectValue placeholder="เลือกหมู่เลือด" />
                         </SelectTrigger>
                         <SelectContent>
@@ -466,6 +504,7 @@ export default function AddPatientForm({ isOpen, onClose, onSuccess }: AddPatien
                         value={formData.email}
                         onChange={(e) => handleInputChange('email', e.target.value)}
                         placeholder="อีเมล"
+                        data-testid="email-input"
                       />
                     </div>
                   </div>
@@ -489,6 +528,7 @@ export default function AddPatientForm({ isOpen, onClose, onSuccess }: AddPatien
                         value={formData.phone}
                         onChange={(e) => handleInputChange('phone', e.target.value)}
                         placeholder="เบอร์โทรศัพท์"
+                        data-testid="phone-input"
                       />
                     </div>
                     
@@ -500,6 +540,7 @@ export default function AddPatientForm({ isOpen, onClose, onSuccess }: AddPatien
                         onChange={(e) => handleInputChange('address', e.target.value)}
                         placeholder="ที่อยู่"
                         rows={2}
+                        data-testid="address-input"
                       />
                     </div>
                     
@@ -572,6 +613,7 @@ export default function AddPatientForm({ isOpen, onClose, onSuccess }: AddPatien
                           value={newDrugAllergy}
                           onChange={(e) => setNewDrugAllergy(e.target.value)}
                           placeholder="ระบุยาที่แพ้ (เช่น Aspirin, Penicillin)"
+                          data-testid="drug-allergies-input"
                           onKeyPress={(e) => {
                             if (e.key === 'Enter') {
                               e.preventDefault()
@@ -584,6 +626,7 @@ export default function AddPatientForm({ isOpen, onClose, onSuccess }: AddPatien
                           onClick={handleAddDrugAllergy}
                           disabled={!newDrugAllergy.trim()}
                           size="sm"
+                          data-testid="add-drug-allergy-button"
                         >
                           <Plus className="w-4 h-4" />
                         </Button>
@@ -592,7 +635,7 @@ export default function AddPatientForm({ isOpen, onClose, onSuccess }: AddPatien
                     
                     <div>
                       <Label>รายการยาที่แพ้:</Label>
-                      {formData.drug_allergies.length > 0 ? (
+                      {Array.isArray(formData.drug_allergies) && formData.drug_allergies.length > 0 ? (
                         <div className="flex flex-wrap gap-2 mt-2">
                           {formData.drug_allergies.map((drug, index) => (
                             <div
@@ -689,10 +732,10 @@ export default function AddPatientForm({ isOpen, onClose, onSuccess }: AddPatien
             </Button>
             
             <div className="flex space-x-3">
-              <Button type="button" variant="outline" onClick={onClose}>
+              <Button type="button" variant="outline" onClick={onClose} data-testid="cancel-button">
                 ยกเลิก
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
+              <Button type="submit" disabled={isSubmitting} data-testid="save-patient-button">
                 {isSubmitting ? 'กำลังบันทึก...' : 'บันทึก'}
               </Button>
             </div>

@@ -142,17 +142,23 @@ export default function Sidebar() {
     }, 'SIDEBAR')
   }
 
-  // Show loading state
+  // Show loading state with minimal delay
   if (loading) {
     return (
       <div className="w-20 bg-white border-r flex flex-col items-center py-4">
         <div className="mb-8">
-          <div className="w-12 h-12 rounded-full bg-gray-200 animate-pulse"></div>
+          <div className="w-12 h-12 rounded-full bg-teal-100 animate-pulse"></div>
         </div>
         <div className="flex flex-col items-center space-y-4">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="w-12 h-12 bg-gray-200 rounded-lg animate-pulse"></div>
+            <div key={i} className="w-12 h-12 bg-gray-100 rounded-lg animate-pulse"></div>
           ))}
+        </div>
+        <div className="mt-auto text-xs text-gray-400 animate-pulse">
+          <div className="text-center">
+            <div className="h-4 bg-gray-200 rounded mb-1"></div>
+            <div className="h-3 bg-gray-200 rounded w-12"></div>
+          </div>
         </div>
       </div>
     )
@@ -202,6 +208,7 @@ export default function Sidebar() {
               <Link
                 href={item.href}
                 onClick={() => setActiveItem(item.id)}
+                data-testid={`${item.id}-menu`}
                 className={cn(
                   "w-12 h-12 flex items-center justify-center rounded-lg transition-colors relative",
                   activeItem === item.id || (item.submenu && item.submenu.some((sub: any) => activeItem === sub.id))

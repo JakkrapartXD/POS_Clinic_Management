@@ -33,3 +33,5 @@ backend/public/**/*.webp
 backend/public/**/*.svg
 backend/public/**/*.bmp
 backend/public/**/*.ico
+tests/automation/test-results/
+tests/automation/playwright-report/

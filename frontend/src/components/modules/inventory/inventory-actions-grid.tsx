@@ -37,35 +37,35 @@ export default function InventoryActionsGrid({
       id: 'add-product',
       icon: Plus,
       title: 'เพิ่มสินค้าใหม่',
-      subtitle: 'Create New Item',
+      subtitle: 'สร้างสินค้าใหม่',
       onClick: onAddProduct
     },
     {
       id: 'import-products',
       icon: FileImport,
       title: 'เพิ่มชุดสินค้า/นำเข้า/แก้ไข',
-      subtitle: 'Import',
+      subtitle: 'นำเข้าข้อมูล',
       onClick: onImportProducts
     },
     {
       id: 'export-products',
       icon: FileExport,
       title: 'ส่งออกยอดสินค้า',
-      subtitle: 'Export',
+      subtitle: 'ส่งออกข้อมูล',
       onClick: onExportProducts
     },
     {
       id: 'delete-product',
       icon: Trash2,
       title: 'ลบสินค้า',
-      subtitle: 'Remove Product',
+      subtitle: 'ลบสินค้าออกจากระบบ',
       onClick: onDeleteProduct
     },
     {
       id: 'print-barcode',
       icon: Barcode,
       title: 'พิมพ์บาร์โค้ด',
-      subtitle: 'Barcode',
+      subtitle: 'พิมพ์บาร์โค้ดสินค้า',
       onClick: onPrintBarcode,
       disabled: true // Disabled as requested
     },
@@ -73,7 +73,7 @@ export default function InventoryActionsGrid({
       id: 'print-price-tag',
       icon: Tag,
       title: 'พิมพ์ป้ายราคาสินค้า',
-      subtitle: 'Price Tag',
+      subtitle: 'พิมพ์ป้ายราคา',
       onClick: onPrintPriceTag,
       disabled: true // Disabled as requested
     },
@@ -81,7 +81,7 @@ export default function InventoryActionsGrid({
       id: 'print-medicine-label',
       icon: Tag,
       title: 'พิมพ์ฉลากยา',
-      subtitle: 'Label',
+      subtitle: 'พิมพ์ฉลากยา',
       onClick: onPrintMedicineLabel,
       disabled: true // Disabled as requested
     },
@@ -89,7 +89,7 @@ export default function InventoryActionsGrid({
       id: 'product-report',
       icon: Clipboard,
       title: 'รายงานรับเข้า/ออกของสินค้า',
-      subtitle: 'Product IN/OUT Report',
+      subtitle: 'รายงานการรับเข้า-ออก',
       onClick: onProductReport,
       disabled: true // Disabled as requested
     }

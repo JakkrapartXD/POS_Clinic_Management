@@ -17,7 +17,7 @@ import { useAuth } from "@/components/providers/auth-provider"
 import toast from "react-hot-toast"
 
 type AlphabetMode = 'english' | 'thai' | 'numbers'
-type ViewMode = 'list' | 'add-product' | 'product-detail' | 'import-products' | 'delete-products' | 'export-products'
+type ViewMode = 'list' | 'add-product' | 'product-detail' | 'import-products' | 'delete-products' | 'export-products' | 'pharmacy'
 
 interface TransformedProduct {
   id: string
@@ -585,6 +585,10 @@ function InventoryPage() {
     setViewMode('list')
   }, [loadProducts])
 
+  const handlePharmacy = useCallback(() => {
+    setViewMode('pharmacy')
+  }, [])
+
   const handleExportSubmit = useCallback(async (exportData: any) => {
     try {
       logger.info('Exporting products with complete data', { exportData }, 'INVENTORY')
@@ -744,6 +748,7 @@ function InventoryPage() {
               onPrintPriceTag={() => {}} // Disabled
               onPrintMedicineLabel={() => {}} // Disabled
               onProductReport={() => {}} // Disabled
+              onPharmacy={handlePharmacy}
             />
           )}
 
@@ -792,6 +797,145 @@ function InventoryPage() {
               onBack={handleBackToList}
               onDelete={handleDeleteSubmit}
             />
+          )}
+
+          {viewMode === 'pharmacy' && (
+            <div className="p-6">
+              <div className="mb-6">
+                <Button 
+                  onClick={handleBackToList}
+                  variant="outline"
+                  className="mb-4"
+                >
+                  ← กลับไปหน้าหลัก
+                </Button>
+                <h1 className="text-2xl font-bold text-gray-900">เภสัชกรรม</h1>
+                <p className="text-gray-600 mt-2">จัดการการจ่ายยาและติดตามใบสั่งยา</p>
+              </div>
+              
+              {/* Pharmacy Tabs */}
+              <div className="border-b border-gray-200 mb-6">
+                <nav className="-mb-px flex space-x-8">
+                  <button
+                    data-testid="pending-prescriptions-tab"
+                    className="py-2 px-1 border-b-2 border-teal-500 text-teal-600 font-medium text-sm"
+                  >
+                    ใบสั่งยาที่รอจ่าย
+                  </button>
+                  <button
+                    data-testid="dispensing-history-tab"
+                    className="py-2 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 font-medium text-sm"
+                  >
+                    ประวัติการจ่ายยา
+                  </button>
+                  <button
+                    data-testid="stock-alerts-tab"
+                    className="py-2 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 font-medium text-sm"
+                  >
+                    แจ้งเตือนสต๊อก
+                  </button>
+                  <button
+                    data-testid="expiry-alerts-tab"
+                    className="py-2 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 font-medium text-sm"
+                  >
+                    แจ้งเตือนหมดอายุ
+                  </button>
+                </nav>
+              </div>
+
+              {/* Mock Pharmacy Content */}
+              <div className="space-y-6">
+                <div 
+                  data-testid="prescription-list"
+                  className="bg-white border border-gray-200 rounded-lg p-6"
+                >
+                  <h3 className="text-lg font-semibold mb-4">รายการใบสั่งยา</h3>
+                  <div className="space-y-4">
+                    <div 
+                      data-testid="prescription-row"
+                      className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 cursor-pointer"
+                    >
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h4 className="font-medium">ใบสั่งยา #RX001</h4>
+                          <p className="text-sm text-gray-600">ผู้ป่วย: สมชาย ใจดี</p>
+                          <p className="text-sm text-gray-600">วันที่: 2024-01-15</p>
+                        </div>
+                        <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full">
+                          รอจ่าย
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div 
+                  data-testid="dispensing-history-list"
+                  className="bg-white border border-gray-200 rounded-lg p-6"
+                >
+                  <h3 className="text-lg font-semibold mb-4">ประวัติการจ่ายยา</h3>
+                  <div className="space-y-4">
+                    <div 
+                      data-testid="dispensing-history-item"
+                      className="border border-gray-200 rounded-lg p-4"
+                    >
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h4 className="font-medium">ใบสั่งยา #RX002</h4>
+                          <p className="text-sm text-gray-600">ผู้ป่วย: สมหญิง ใจงาม</p>
+                          <p className="text-sm text-gray-600">วันที่จ่าย: 2024-01-14</p>
+                        </div>
+                        <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
+                          จ่ายแล้ว
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div 
+                  data-testid="stock-alerts-list"
+                  className="bg-white border border-gray-200 rounded-lg p-6"
+                >
+                  <h3 className="text-lg font-semibold mb-4">แจ้งเตือนสต๊อก</h3>
+                  <div className="space-y-4">
+                    <div 
+                      data-testid="stock-alert-item"
+                      className="border border-red-200 rounded-lg p-4 bg-red-50"
+                    >
+                      <div className="flex items-center">
+                        <span className="text-red-500 mr-2">⚠️</span>
+                        <div>
+                          <p className="font-medium text-red-800">สต๊อกต่ำ</p>
+                          <p className="text-sm text-red-600">พาราเซตามอล 500mg - เหลือ 5 เม็ด</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div 
+                  data-testid="expiry-alerts-list"
+                  className="bg-white border border-gray-200 rounded-lg p-6"
+                >
+                  <h3 className="text-lg font-semibold mb-4">แจ้งเตือนหมดอายุ</h3>
+                  <div className="space-y-4">
+                    <div 
+                      data-testid="expiry-alert-item"
+                      className="border border-orange-200 rounded-lg p-4 bg-orange-50"
+                    >
+                      <div className="flex items-center">
+                        <span className="text-orange-500 mr-2">⏰</span>
+                        <div>
+                          <p className="font-medium text-orange-800">ใกล้หมดอายุ</p>
+                          <p className="text-sm text-orange-600">แอสไพริน 300mg - หมดอายุใน 15 วัน</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           )}
         </div>
       </div>

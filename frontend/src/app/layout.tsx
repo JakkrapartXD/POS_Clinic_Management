@@ -1,7 +1,14 @@
 import type { Metadata, Viewport } from "next";
+import { Noto_Sans_Thai } from "next/font/google";
 import "./globals1.css";
 import { ClientProviders } from "@/components/ClientProviders";
 import { ThemeProvider } from "@/providers/theme-provider";
+
+const notoSansThai = Noto_Sans_Thai({ 
+  subsets: ["thai", "latin"],
+  variable: "--font-noto-sans-thai",
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   title: "SN Clinic | คลินิกบริหารยาผู้ป่วยรักษายา",
@@ -74,8 +81,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className="antialiased">
+    <html lang="th" suppressHydrationWarning>
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link 
+          href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@100;200;300;400;500;600;700;800;900&display=swap" 
+          rel="stylesheet" 
+        />
+      </head>
+      <body className={`antialiased ${notoSansThai.variable}`}>
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
           <ClientProviders>
             {children}

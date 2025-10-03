@@ -425,7 +425,7 @@ export default function PatientDetailPage() {
 
   return (
     <PageGuard requiredPermission="patients:read">
-      <div className="container mx-auto p-6">
+      <div className="container mx-auto p-6" data-testid="patient-details">
       <div className="flex justify-between items-start mb-6">
         <div className="flex items-center gap-4">
           {/* Patient Photo */}
@@ -449,10 +449,10 @@ export default function PatientDetailPage() {
           
           {/* Patient Info */}
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">
+            <h1 className="text-3xl font-bold text-gray-900" data-testid="patient-detail-name">
               {patient.first_name} {patient.last_name}
             </h1>
-            <p className="text-gray-600 mt-1">Patient ID: {patient.id}</p>
+            <p className="text-gray-600 mt-1" data-testid="patient-detail-id">Patient ID: {patient.id}</p>
           </div>
         </div>
         
@@ -512,7 +512,7 @@ export default function PatientDetailPage() {
                     <label className="text-sm font-medium text-gray-500">เลขบัตรประชาชน</label>
                     <p className="flex items-center gap-2">
                       <CreditCard className="w-4 h-4 text-gray-400" />
-                      {patient.national_id}
+                      <span data-testid="patient-detail-national-id">{patient.national_id}</span>
                     </p>
                   </div>
                 )}
@@ -559,7 +559,7 @@ export default function PatientDetailPage() {
                     <label className="text-sm font-medium text-gray-500">Phone</label>
                     <p className="flex items-center gap-2">
                       <Phone className="w-4 h-4 text-gray-400" />
-                      {patient.phone}
+                      <span data-testid="patient-detail-phone">{patient.phone}</span>
                     </p>
                   </div>
                 )}

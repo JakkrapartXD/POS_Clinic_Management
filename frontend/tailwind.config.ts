@@ -19,6 +19,10 @@ const config = {
       },
     },
     extend: {
+      fontFamily: {
+        'thai': ['var(--font-noto-sans-thai)', 'Noto Sans Thai', 'Sarabun', 'Kanit', 'sans-serif'],
+        'sans': ['var(--font-noto-sans-thai)', 'Noto Sans Thai', 'Sarabun', 'Kanit', 'system-ui', 'sans-serif'],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",

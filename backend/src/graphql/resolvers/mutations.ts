@@ -221,6 +221,32 @@ export const mutations = {
       throw new GraphQLError('Invalid phone number format');
     }
     
+    // Check for duplicate national_id
+    if (sanitizedInput.national_id) {
+      const existingPatient = await context.prisma.patient.findFirst({
+        where: {
+          national_id: sanitizedInput.national_id
+        }
+      });
+      
+      if (existingPatient) {
+        throw new GraphQLError('ผู้ป่วยที่มีเลขบัตรประชาชนนี้มีอยู่แล้ว');
+      }
+    }
+    
+    // Check for duplicate email
+    if (sanitizedInput.email) {
+      const existingPatient = await context.prisma.patient.findFirst({
+        where: {
+          email: sanitizedInput.email
+        }
+      });
+      
+      if (existingPatient) {
+        throw new GraphQLError('ผู้ป่วยที่มีอีเมลนี้มีอยู่แล้ว');
+      }
+    }
+    
     const patient = await context.prisma.patient.create({
       data: sanitizedInput
     });

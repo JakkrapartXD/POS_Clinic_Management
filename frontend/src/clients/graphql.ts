@@ -437,13 +437,17 @@ class GraphQLClient {
       return this.pendingRequests.get(requestKey)!;
     }
 
-    // Check if we've made this request recently (within 1 second)
+    // Check if we've made this request recently (within 500ms for refresh operations)
     const now = Date.now();
     const lastTime = this.lastRequestTime.get(requestKey) || 0;
     const timeSinceLastRequest = now - lastTime;
     
-    if (timeSinceLastRequest < 1000) {
-      logger.info('Rate limiting GraphQL request', { requestKey, timeSinceLastRequest }, 'GRAPHQL_RATE_LIMIT');
+    // Allow refresh operations to bypass rate limiting
+    const isRefreshOperation = options.skipCache || requestKey.includes('AllPatients');
+    const rateLimitThreshold = isRefreshOperation ? 500 : 1000;
+    
+    if (timeSinceLastRequest < rateLimitThreshold) {
+      logger.info('Rate limiting GraphQL request', { requestKey, timeSinceLastRequest, isRefreshOperation }, 'GRAPHQL_RATE_LIMIT');
       throw new Error('Request too frequent. Please wait a moment.');
     }
 
