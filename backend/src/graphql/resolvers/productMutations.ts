@@ -625,17 +625,21 @@ export const productMutations = {
     
     try {
       // Calculate quantity difference before transaction
-      const quantityDifference = input.quantity ? input.quantity - existingStock.quantity : 0;
+      const quantityDifference = input.quantity !== undefined ? input.quantity - existingStock.quantity : 0;
       
       // Use transaction to ensure data consistency
       const result = await context.prisma.$transaction(async (tx: any) => {
+        // Determine final quantity and out of stock status
+        const finalQuantity = input.quantity !== undefined ? input.quantity : existingStock.quantity;
+        const shouldBeOutOfStock = finalQuantity <= 0;
+        
         // Update stock record
         const updatedStock = await tx.stock.update({
           where: { id },
           data: {
-            quantity: input.quantity || existingStock.quantity,
+            quantity: finalQuantity,
             quantity_in: input.quantity_in !== undefined ? input.quantity_in : existingStock.quantity_in,
-            is_outofstock: input.is_outofstock !== undefined ? input.is_outofstock : existingStock.is_outofstock,
+            is_outofstock: input.is_outofstock !== undefined ? input.is_outofstock : shouldBeOutOfStock,
             production_date: input.production_date !== undefined ? input.production_date : existingStock.production_date,
             expiration_date: input.expiration_date !== undefined ? input.expiration_date : existingStock.expiration_date,
             reference_table: input.reference_table !== undefined ? input.reference_table : existingStock.reference_table,

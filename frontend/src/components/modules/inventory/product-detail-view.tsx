@@ -206,7 +206,9 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
   const [adjustFormData, setAdjustFormData] = useState({
     quantity: '',
     note: '',
-    operation: 'add' // 'add' or 'subtract'
+    operation: 'add', // 'add', 'subtract', or 'transfer'
+    transferToUnit: '', // For transfer operation
+    transferQuantity: '' // For transfer operation
   })
   const [adjustLoading, setAdjustLoading] = useState(false)
 
@@ -401,7 +403,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
         sku: firstStock.product_sku || '',
         salePrice: firstStock.product_sale_price || 0,
         cost: firstStock.product_cost || 0,
-        totalQuantity: unitStocks.reduce((sum, stock) => sum + stock.quantity, 0),
+        totalQuantity: unitStocks.filter(stock => !stock.is_outofstock).reduce((sum, stock) => sum + stock.quantity, 0),
         productId: firstStock.productId,
         productName: firstStock.product_name,
         stockQuantity: firstStock.product_stock_quantity || 0,
@@ -1211,7 +1213,9 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
     setAdjustFormData({
       quantity: '',
       note: '',
-      operation: 'add'
+      operation: 'add',
+      transferToUnit: '',
+      transferQuantity: ''
     })
     setShowAdjustStockModal(true)
   }
@@ -1235,13 +1239,167 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
       return
     }
 
+    // For transfer operation, validate required fields
+    if (adjustFormData.operation === 'transfer') {
+      if (!adjustFormData.transferToUnit) {
+        toast.error('กรุณาเลือกหน่วยนับปลายทาง')
+        return
+      }
+    }
+
     try {
       setAdjustLoading(true)
       
       const { unitData, stock } = selectedStockData
       const operation = adjustFormData.operation
       
-      // Calculate new quantity based on operation
+      if (operation === 'transfer') {
+        // Handle transfer operation
+        const fromVariant = productVariants.find(v => v.id === unitData.productId)
+        const toVariant = productVariants.find(v => v.id === adjustFormData.transferToUnit)
+        
+        if (!fromVariant || !toVariant) {
+          toast.error('ไม่พบข้อมูลหน่วยนับ')
+          return
+        }
+        
+        // Check if there's enough stock to transfer
+        if (stock.quantity < adjustQuantity) {
+          toast.error(`สินค้าไม่เพียงพอ (มีเพียง ${stock.quantity} ${fromVariant.unit})`)
+          return
+        }
+        
+        const fromPackSize = parseInt(fromVariant.pack_size || '1')
+        const toPackSize = parseInt(toVariant.pack_size || '1')
+        
+        // Calculate how many units we can get from the transfer
+        const totalFromUnits = adjustQuantity * fromPackSize
+        const resultingToUnits = Math.floor(totalFromUnits / toPackSize)
+        const remainingFromUnits = totalFromUnits % toPackSize
+        
+        if (resultingToUnits === 0) {
+          toast.error('ไม่สามารถย้ายได้ เนื่องจากขนาดบรรจุไม่เหมาะสม')
+          return
+        }
+        
+        logger.info('Transferring stock', { 
+          fromStockId: stock.id,
+          fromVariant: fromVariant.unit,
+          toVariant: toVariant.unit,
+          transferQuantity: adjustQuantity,
+          resultingQuantity: resultingToUnits,
+          remainingUnits: remainingFromUnits
+        }, 'INVENTORY')
+
+        // Reduce stock from source
+        const newSourceQuantity = stock.quantity - adjustQuantity
+        
+        // Ensure newSourceQuantity is not negative
+        if (newSourceQuantity < 0) {
+          toast.error(`ไม่สามารถย้ายได้ เนื่องจากสต๊อกไม่เพียงพอ (มีเพียง ${stock.quantity} ${fromVariant.unit})`)
+          return
+        }
+        
+        const sourceStockInput = {
+          quantity: newSourceQuantity,
+          note: `${stock.note || ''}\nย้ายสต๊อก ${adjustQuantity} ${fromVariant.unit} ไปยัง ${toVariant.unit} - ${adjustFormData.note || 'ไม่ระบุเหตุผล'}`
+        }
+
+        logger.info('Updating source stock', {
+          stockId: stock.id,
+          currentQuantity: stock.quantity,
+          transferQuantity: adjustQuantity,
+          newQuantity: newSourceQuantity,
+          sourceStockInput
+        }, 'INVENTORY')
+
+        const updateStockResponse = await GraphQLAPI.updateStock(stock.id, sourceStockInput)
+        
+        // Verify the update was successful
+        if (!updateStockResponse.updateStock) {
+          toast.error('ไม่สามารถอัปเดตสต๊อกต้นทางได้')
+          return
+        }
+        
+        logger.info('Source stock updated successfully', {
+          stockId: stock.id,
+          updatedQuantity: updateStockResponse.updateStock.quantity
+        }, 'INVENTORY')
+        
+        // Add stock to destination with transferred data
+        const destinationStockInput = {
+          productId: toVariant.id,
+          quantity: resultingToUnits,
+          quantity_in: resultingToUnits,
+          is_outofstock: false,
+          production_date: stock.production_date, // Transfer production date
+          expiration_date: stock.expiration_date, // Transfer expiration date
+          note: `ย้ายสต๊อกจาก ${fromVariant.unit} (${adjustQuantity} ${fromVariant.unit}) - ${adjustFormData.note || 'ไม่ระบุเหตุผล'}`
+        }
+
+        await GraphQLAPI.createStock(destinationStockInput)
+        
+        // Update product stock quantities based on actual stock records
+        // For source: reduce by the transferred quantity
+        const newFromStockQuantity = fromVariant.stock_quantity - adjustQuantity
+        // For destination: add the resulting quantity
+        const newToStockQuantity = toVariant.stock_quantity + resultingToUnits
+        
+        logger.info('Updating product stock quantities', {
+          fromVariantId: fromVariant.id,
+          fromVariantUnit: fromVariant.unit,
+          fromOldStockQuantity: fromVariant.stock_quantity,
+          fromNewStockQuantity: newFromStockQuantity,
+          toVariantId: toVariant.id,
+          toVariantUnit: toVariant.unit,
+          toOldStockQuantity: toVariant.stock_quantity,
+          toNewStockQuantity: newToStockQuantity
+        }, 'INVENTORY')
+        
+        await Promise.all([
+          GraphQLAPI.updateProduct(fromVariant.id, { stock_quantity: newFromStockQuantity }),
+          GraphQLAPI.updateProduct(toVariant.id, { stock_quantity: newToStockQuantity })
+        ])
+        
+        // Refresh data
+        await Promise.all([
+          loadProduct(),
+          loadStocks()
+        ])
+        
+        // Force refresh product variants to show updated stock quantities
+        if (product?.product_name) {
+          try {
+            const updatedProductsResponse = await GraphQLAPI.searchProducts(product.product_name)
+            if (updatedProductsResponse.searchProducts) {
+              const sameNameProducts = updatedProductsResponse.searchProducts.filter(
+                (prod: any) => prod.product_name === product.product_name
+              )
+              setProductVariants(sameNameProducts)
+              logger.info('Product variants refreshed after transfer', { 
+                variantsCount: sameNameProducts.length 
+              }, 'INVENTORY')
+            }
+          } catch (error) {
+            logger.error('Failed to refresh product variants after transfer', error, 'INVENTORY')
+          }
+        }
+        
+        // Close modal and reset form
+        setShowAdjustStockModal(false)
+        setSelectedStockData(null)
+        setAdjustFormData({
+          quantity: '',
+          note: '',
+          operation: 'add',
+          transferToUnit: '',
+          transferQuantity: ''
+        })
+        
+        toast.success(`ย้ายสต๊อกสำเร็จ: ${adjustQuantity} ${fromVariant.unit} → ${resultingToUnits} ${toVariant.unit}`)
+        
+      } else {
+        // Handle add/subtract operations (existing logic)
       const newQuantity = operation === 'add' 
         ? stock.quantity + adjustQuantity 
         : stock.quantity - adjustQuantity
@@ -1279,10 +1437,13 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
         setAdjustFormData({
           quantity: '',
           note: '',
-          operation: 'add'
+            operation: 'add',
+            transferToUnit: '',
+            transferQuantity: ''
         })
         
         toast.success(`ปรับสต๊อกสำเร็จ (${operation === 'add' ? 'เพิ่ม' : 'ลด'} ${adjustQuantity} หน่วย)`)
+        }
       }
     } catch (error) {
       logger.error('Failed to adjust stock', error, 'INVENTORY')
@@ -1299,7 +1460,9 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
     setAdjustFormData({
       quantity: '',
       note: '',
-      operation: 'add'
+      operation: 'add',
+      transferToUnit: '',
+      transferQuantity: ''
     })
   }
 
@@ -1913,8 +2076,8 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                           </tr>
                         </thead>
                         <tbody>
-                          {unitData.stocks.length > 0 ? (
-                            unitData.stocks.map((stock) => (
+                          {unitData.stocks.filter(stock => !stock.is_outofstock).length > 0 ? (
+                            unitData.stocks.filter(stock => !stock.is_outofstock).map((stock) => (
                               <tr key={stock.id} className="border-b hover:bg-gray-50">
                                 <td className="py-3 px-4">
                     <div>
@@ -1945,7 +2108,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                                           className="hover:underline"
                                           onClick={() => handleAdjustStockClick(unitData, stock)}
                                         >
-                                          ปรับเพิ่ม/ลดสต๊อก
+                                          ปรับเพิ่ม/ลดสต๊อก/ย้ายหน่วย
                                         </button>
                                       </div>
                                     </div>
@@ -1998,7 +2161,12 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                               <td colSpan={10} className="py-8 px-4 text-center text-gray-500">
                                 <div className="flex flex-col items-center space-y-3">
                                   <div className="text-lg">📦</div>
-                                  <div className="font-medium">ไม่มีข้อมูลสินค้าในหน่วยนับนี้</div>
+                                  <div className="font-medium">
+                                    {unitData.stocks.length === 0 
+                                      ? 'ไม่มีข้อมูลสินค้าในหน่วยนับนี้' 
+                                      : 'สต๊อกหมดแล้ว (ถูกซ่อนเนื่องจากจำนวนเป็น 0)'
+                                    }
+                                  </div>
                                   <Button
                                     onClick={() => handleAddStockClick(unitData)}
                                     className="mt-2 bg-teal-600 hover:bg-teal-700 text-white"
@@ -2476,12 +2644,15 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                   <ArrowLeft className="h-4 w-4" />
                 </Button>
                 <DialogTitle className="text-lg font-semibold">
-                  ปรับเพิ่ม/ลดสต๊อก
+                  ปรับเพิ่ม/ลดสต๊อก/ย้ายหน่วย
                 </DialogTitle>
               </div>
             </div>
             <p className="text-sm text-gray-600">
               สต๊อกปัจจุบัน: {selectedStockData?.stock?.quantity?.toLocaleString() || 0} หน่วย
+              {selectedStockData?.stock?.is_outofstock && (
+                <span className="text-red-600 ml-2">(หมดสต๊อก)</span>
+              )}
             </p>
           </DialogHeader>
           
@@ -2512,12 +2683,25 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                   />
                   <span className="text-red-600 font-medium">ลดสต๊อก</span>
                 </label>
+                <label className="flex items-center space-x-2">
+                  <input
+                    type="radio"
+                    name="operation"
+                    value="transfer"
+                    checked={adjustFormData.operation === 'transfer'}
+                    onChange={(e) => handleAdjustFormChange('operation', e.target.value)}
+                    className="text-blue-600"
+                  />
+                  <span className="text-blue-600 font-medium">ย้ายหน่วย</span>
+                </label>
               </div>
             </div>
 
             {/* Quantity Input */}
             <div>
-              <Label htmlFor="adjust_quantity">จำนวนที่ต้องการ{adjustFormData.operation === 'add' ? 'เพิ่ม' : 'ลด'}</Label>
+              <Label htmlFor="adjust_quantity">
+                {adjustFormData.operation === 'transfer' ? 'จำนวนที่ต้องการย้าย' : `จำนวนที่ต้องการ${adjustFormData.operation === 'add' ? 'เพิ่ม' : 'ลด'}`}
+              </Label>
               <Input
                 id="adjust_quantity"
                 type="number"
@@ -2528,6 +2712,28 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                 className="border-purple-300 focus:border-teal-500"
               />
             </div>
+
+            {/* Transfer Unit Selection - Only show when transfer is selected */}
+            {adjustFormData.operation === 'transfer' && (
+              <div>
+                <Label htmlFor="transfer_to_unit">ย้ายไปยังหน่วยนับ</Label>
+                <select
+                  id="transfer_to_unit"
+                  value={adjustFormData.transferToUnit}
+                  onChange={(e) => handleAdjustFormChange('transferToUnit', e.target.value)}
+                  className="w-full mt-2 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                >
+                  <option value="">เลือกหน่วยนับปลายทาง</option>
+                  {productVariants
+                    .filter(variant => variant.id !== selectedStockData?.unitData?.productId)
+                    .map((variant) => (
+                      <option key={variant.id} value={variant.id}>
+                        {variant.unit} (ขนาดบรรจุ: {variant.pack_size})
+                      </option>
+                    ))}
+                </select>
+              </div>
+            )}
 
             {/* Note Input */}
             <div>
@@ -2540,11 +2746,88 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
               />
             </div>
 
-            {/* Preview */}
-            {adjustFormData.quantity && (
+            {/* Transfer Calculation Display */}
+            {adjustFormData.operation === 'transfer' && adjustFormData.quantity && adjustFormData.transferToUnit && (
+              <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                {(() => {
+                  const fromVariant = productVariants.find(v => v.id === selectedStockData?.unitData?.productId)
+                  const toVariant = productVariants.find(v => v.id === adjustFormData.transferToUnit)
+                  
+                  if (!fromVariant || !toVariant) return null
+                  
+                  const fromPackSize = parseInt(fromVariant.pack_size || '1')
+                  const toPackSize = parseInt(toVariant.pack_size || '1')
+                  const transferQuantity = parseInt(adjustFormData.quantity) || 0
+                  
+                  // Calculate how many units we can get from the transfer
+                  const totalFromUnits = transferQuantity * fromPackSize
+                  const resultingToUnits = Math.floor(totalFromUnits / toPackSize)
+                  const remainingFromUnits = totalFromUnits % toPackSize
+                  
+                  const hasEnoughStock = (selectedStockData?.stock?.quantity || 0) >= transferQuantity
+                  
+                  return (
+                    <div>
+                      <h4 className="font-medium text-blue-800 mb-2">การคำนวณย้ายหน่วย</h4>
+                      <div className="text-sm text-blue-700 space-y-1">
+                        <p>
+                          <strong>จาก:</strong> {transferQuantity} {fromVariant.unit} (ขนาดบรรจุ: {fromPackSize})
+                        </p>
+                        <p>
+                          <strong>เป็น:</strong> {resultingToUnits} {toVariant.unit} (ขนาดบรรจุ: {toPackSize})
+                        </p>
+                        {remainingFromUnits > 0 && (
+                          <p className="text-orange-600">
+                            <strong>เศษ:</strong> {remainingFromUnits} หน่วย (ไม่สามารถแปลงเป็น {toVariant.unit} ได้)
+                          </p>
+                        )}
+                        <div className="mt-2 p-2 bg-white rounded border">
+                          <p className="font-medium text-gray-800">
+                            {transferQuantity} {fromVariant.unit} → {resultingToUnits} {toVariant.unit}
+                          </p>
+                        </div>
+                        
+                        {/* Show additional data that will be transferred */}
+                        <div className="mt-3 p-3 bg-gray-50 rounded border">
+                          <h5 className="font-medium text-gray-700 mb-2">ข้อมูลที่จะย้ายไปด้วย:</h5>
+                          <div className="text-sm text-gray-600 space-y-1">
+                            {selectedStockData?.stock?.production_date && (
+                              <p><strong>วันที่ผลิต:</strong> {formatDate(selectedStockData.stock.production_date)}</p>
+                            )}
+                            {selectedStockData?.stock?.expiration_date && (
+                              <p><strong>วันหมดอายุ:</strong> {formatDate(selectedStockData.stock.expiration_date)}</p>
+                            )}
+                            {selectedStockData?.stock?.product_cost && (
+                              <p><strong>ต้นทุนต่อหน่วย:</strong> ฿{selectedStockData.stock.product_cost.toFixed(2)}</p>
+                            )}
+                            {selectedStockData?.stock?.note && (
+                              <p><strong>หมายเหตุเดิม:</strong> {selectedStockData.stock.note}</p>
+                            )}
+                          </div>
+                        </div>
+                        {!hasEnoughStock && (
+                          <p className="text-red-600 font-medium mt-2">
+                            ⚠️ สินค้าไม่เพียงพอ (มีเพียง {selectedStockData?.stock?.quantity || 0} {fromVariant.unit})
+                            {selectedStockData?.stock?.is_outofstock && (
+                              <span className="ml-1">(หมดสต๊อก)</span>
+                            )}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })()}
+              </div>
+            )}
+
+            {/* Preview for Add/Subtract */}
+            {adjustFormData.quantity && adjustFormData.operation !== 'transfer' && (
               <div className="bg-gray-50 p-3 rounded-lg">
                 <p className="text-sm text-gray-600">
                   สต๊อกปัจจุบัน: {selectedStockData?.stock?.quantity?.toLocaleString() || 0} หน่วย
+                  {selectedStockData?.stock?.is_outofstock && (
+                    <span className="text-red-600 ml-2">(หมดสต๊อก)</span>
+                  )}
                 </p>
                 <p className="text-sm text-gray-600">
                   {adjustFormData.operation === 'add' ? 'เพิ่ม' : 'ลด'}: {parseInt(adjustFormData.quantity) || 0} หน่วย
@@ -2560,6 +2843,9 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                   (selectedStockData?.stock?.quantity || 0) - (parseInt(adjustFormData.quantity) || 0) < 0) && (
                   <p className="text-sm text-red-600 font-medium">
                     ⚠️ ไม่สามารถลดสต๊อกได้มากกว่าจำนวนที่มี
+                    {selectedStockData?.stock?.is_outofstock && (
+                      <span className="ml-1">(หมดสต๊อก)</span>
+                    )}
                   </p>
                 )}
               </div>
@@ -2578,15 +2864,20 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
               </Button>
               <Button
                 onClick={handleAdjustStockSubmit}
-                disabled={adjustLoading || !adjustFormData.quantity}
+                disabled={adjustLoading || !adjustFormData.quantity || (adjustFormData.operation === 'transfer' && !adjustFormData.transferToUnit)}
                 className={`${
                   adjustFormData.operation === 'add' 
                     ? 'bg-green-600 hover:bg-green-700' 
-                    : 'bg-red-600 hover:bg-red-700'
+                    : adjustFormData.operation === 'subtract'
+                    ? 'bg-red-600 hover:bg-red-700'
+                    : 'bg-blue-600 hover:bg-blue-700'
                 }`}
               >
                 <Check className="h-4 w-4 mr-2" />
-                {adjustLoading ? 'กำลังปรับ...' : `ปรับสต๊อก (${adjustFormData.operation === 'add' ? 'เพิ่ม' : 'ลด'})`}
+                {adjustLoading ? 'กำลังปรับ...' : 
+                  adjustFormData.operation === 'transfer' ? 'ย้ายสต๊อก' :
+                  `ปรับสต๊อก (${adjustFormData.operation === 'add' ? 'เพิ่ม' : 'ลด'})`
+                }
               </Button>
             </div>
           </DialogFooter>
