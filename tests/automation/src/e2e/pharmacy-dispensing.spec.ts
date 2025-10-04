@@ -1,380 +1,407 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('การทดสอบการจ่ายยา E2E', () => {
+test.describe('การทดสอบการสั่งยาใน POS E2E', () => {
   test.beforeEach(async ({ page }) => {
     // ไปที่หน้า login
     await page.goto('/login');
     
     // เข้าสู่ระบบด้วยผู้ใช้เภสัชกร
-    await page.fill('[data-testid="username-input"]', 'pharmacist01');
-    await page.fill('[data-testid="password-input"]', 'pharmacist123');
+    await page.fill('[data-testid="username-input"]', 'doctor01');
+    await page.fill('[data-testid="password-input"]', 'doctor123');
     await page.click('[data-testid="login-button"]');
     
     // รอให้ redirect ไปหน้า dashboard
-    await page.waitForURL('/dashboard');
-    
-    // ไปที่หน้า inventory (ฟังก์ชันเภสัชกรรมอยู่ใน inventory)
-    await page.click('[data-testid="inventory-menu"]');
-    await page.waitForURL('/dashboard/inventory');
+    await page.waitForURL('/dashboard/pos');
   });
 
-  test('UAT-003: จ่ายยาที่มีสต๊อกเพียงพอ', async ({ page }) => {
-    // ไปที่หน้าเภสัชกรรมใน inventory
-    await page.click('[data-testid="pharmacy"]');
-    await page.waitForSelector('[data-testid="prescription-list"]');
+  test('UAT-003: สั่งยาที่มีสต๊อกเพียงพอใน POS', async ({ page }) => {
+    // รอให้หน้า POS โหลดเสร็จ
+    await page.waitForSelector('[data-testid="product-grid"]');
     
-    // เลือกใบสั่งยาแรก
-    const prescriptionRow = page.locator('[data-testid="prescription-row"]').first();
-    await expect(prescriptionRow).toBeVisible();
-    await prescriptionRow.click();
+    // ค้นหาสินค้า
+    await page.fill('[data-testid="search-input"]', 'ยา');
+    await page.waitForTimeout(1000);
     
-    // ดูรายละเอียดใบสั่งยา
-    await page.waitForSelector('[data-testid="prescription-details"]');
+    // เลือกสินค้าแรกที่มีสต๊อก
+    const productCards = page.locator('[data-testid="product-card"]');
+    await expect(productCards.first()).toBeVisible();
     
-    // ตรวจสอบรายการยาและระดับสต๊อก
-    const prescriptionItems = page.locator('[data-testid="prescription-item"]');
-    await expect(prescriptionItems).toHaveCount(1);
-    
-    // ตรวจสอบระดับสต๊อกของแต่ละรายการ
-    for (let i = 0; i < await prescriptionItems.count(); i++) {
-      const item = prescriptionItems.nth(i);
-      const stockLevel = await item.locator('[data-testid="stock-quantity"]').textContent();
-      const prescribedQuantity = await item.locator('[data-testid="prescribed-quantity"]').textContent();
+    // หาสินค้าที่มีสต๊อกเพียงพอ
+    let selectedProduct = null;
+    for (let i = 0; i < await productCards.count(); i++) {
+      const card = productCards.nth(i);
+      const stockText = await card.locator('[data-testid="stock-quantity"]').textContent();
+      const stock = parseInt(stockText?.replace('สต๊อก: ', '') || '0');
       
-      // ตรวจสอบว่าสต๊อกเพียงพอ
-      const stock = parseInt(stockLevel || '0');
-      const prescribed = parseInt(prescribedQuantity || '0');
-      expect(stock).toBeGreaterThanOrEqual(prescribed);
+      if (stock > 0) {
+        selectedProduct = card;
+        break;
+      }
     }
     
-    // ยืนยันการจ่ายยา
-    await page.click('[data-testid="confirm-dispensing-button"]');
+    expect(selectedProduct).not.toBeNull();
     
-    // รอ dialog ยืนยัน
-    await page.waitForSelector('[data-testid="dispensing-confirmation-dialog"]');
-    await page.click('[data-testid="confirm-dispense-button"]');
+    // คลิกเพิ่มสินค้าเข้าตระกร้า
+    await selectedProduct!.click();
+    
+    // ตรวจสอบว่าสินค้าถูกเพิ่มเข้าตระกร้า
+    await expect(page.locator('[data-testid="cart-item"]')).toHaveCount(1);
+    
+    // ตรวจสอบการแจ้งเตือนสต๊อก (ถ้ามี)
+    const stockWarning = page.locator('[data-testid="stock-warning-toast"]');
+    if (await stockWarning.isVisible()) {
+      await expect(stockWarning).toContainText('สต๊อกต่ำ');
+    }
+    
+    // คลิกชำระเงิน
+    await page.click('[data-testid="checkout-button"]');
+    
+    // รอ dialog การชำระเงิน
+    await page.waitForSelector('[data-testid="payment-dialog"]');
+    
+    // เลือกวิธีการชำระเงิน
+    await page.click('[data-testid="payment-method-cash"]');
+    
+    // ยืนยันการชำระเงิน
+    await page.click('[data-testid="confirm-payment-button"]');
     
     // รอข้อความสำเร็จ
-    await expect(page.locator('[data-testid="success-message"]')).toBeVisible();
-    await expect(page.locator('[data-testid="success-message"]')).toContainText('จ่ายยาสำเร็จ');
+    await expect(page.locator('[data-testid="payment-success-dialog"]')).toBeVisible();
+    await expect(page.locator('[data-testid="success-message"]')).toContainText('รับชำระ');
     
-    // ตรวจสอบสถานะใบสั่งยาที่อัปเดต
-    await page.waitForSelector('[data-testid="prescription-status"]');
-    await expect(page.locator('[data-testid="prescription-status"]')).toContainText('จ่ายแล้ว');
+    // ปิด dialog สำเร็จด้วยปุ่ม "รับชำระ"
+    await page.click('[data-testid="close-success-dialog"]');
     
-    // ตรวจสอบระดับสต๊อกที่อัปเดต
-    for (let i = 0; i < await prescriptionItems.count(); i++) {
-      const item = prescriptionItems.nth(i);
-      const newStockLevel = await item.locator('[data-testid="stock-quantity"]').textContent();
-      const prescribedQuantity = await item.locator('[data-testid="prescribed-quantity"]').textContent();
-      
-      const newStock = parseInt(newStockLevel || '0');
-      const prescribed = parseInt(prescribedQuantity || '0');
-      
-      // สต๊อกควรลดลงตามจำนวนที่สั่ง
-      expect(newStock).toBeLessThan(parseInt(await item.locator('[data-testid="original-stock"]').textContent() || '0'));
-    }
+    // รอให้ dialog ปิด
+    await page.waitForTimeout(1000);
+    
+    // ตรวจสอบว่าตระกร้าว่าง
+    await expect(page.locator('[data-testid="cart-item"]')).toHaveCount(0);
   });
 
-  test('UAT-003: จัดการสต๊อกไม่เพียงพอระหว่างการจ่ายยา', async ({ page }) => {
-    // ไปที่ใบสั่งยาที่รอจ่าย
-    await page.click('[data-testid="pending-prescriptions-tab"]');
-    await page.waitForSelector('[data-testid="prescription-list"]');
+  test('UAT-003: จัดการสต๊อกไม่เพียงพอใน POS', async ({ page }) => {
+    // รอให้หน้า POS โหลดเสร็จ
+    await page.waitForSelector('[data-testid="product-grid"]');
     
-    // หาใบสั่งยาที่มีสต๊อกต่ำ
-    const prescriptionRows = page.locator('[data-testid="prescription-row"]');
+    // ค้นหาสินค้าที่มีสต๊อกต่ำ
+    await page.fill('[data-testid="search-input"]', 'ยา');
+    await page.waitForTimeout(1000);
     
-    for (let i = 0; i < await prescriptionRows.count(); i++) {
-      const row = prescriptionRows.nth(i);
-      const hasLowStock = await row.locator('[data-testid="low-stock-warning"]').isVisible();
+    // หาสินค้าที่มีสต๊อกต่ำหรือหมด
+    const productCards = page.locator('[data-testid="product-card"]');
+    let lowStockProduct = null;
+    
+    for (let i = 0; i < await productCards.count(); i++) {
+      const card = productCards.nth(i);
+      const stockText = await card.locator('[data-testid="stock-quantity"]').textContent();
+      const stock = parseInt(stockText?.replace('สต๊อก: ', '') || '0');
       
-      if (hasLowStock) {
-        await row.click();
-        await page.waitForSelector('[data-testid="prescription-details"]');
-        
-        // ตรวจสอบการแจ้งเตือนสต๊อกต่ำ
-        await expect(page.locator('[data-testid="low-stock-alert"]')).toBeVisible();
-        await expect(page.locator('[data-testid="low-stock-alert"]')).toContainText('สต๊อกไม่เพียงพอ');
-        
-        // ตรวจสอบรายการที่มีสต๊อกไม่เพียงพอ
-        const prescriptionItems = page.locator('[data-testid="prescription-item"]');
-        
-        for (let j = 0; j < await prescriptionItems.count(); j++) {
-          const item = prescriptionItems.nth(j);
-          const stockLevel = await item.locator('[data-testid="stock-quantity"]').textContent();
-          const prescribedQuantity = await item.locator('[data-testid="prescribed-quantity"]').textContent();
-          
-          const stock = parseInt(stockLevel || '0');
-          const prescribed = parseInt(prescribedQuantity || '0');
-          
-          if (stock < prescribed) {
-            // รายการนี้มีสต๊อกไม่เพียงพอ
-            await expect(item.locator('[data-testid="insufficient-stock-warning"]')).toBeVisible();
-            await expect(item.locator('[data-testid="insufficient-stock-warning"]')).toContainText('จำนวนยาไม่เพียงพอ');
-          }
-        }
-        
-        // ลองยืนยันการจ่ายยา (ควรถูกปิดใช้งานหรือแสดงข้อผิดพลาด)
-        const confirmButton = page.locator('[data-testid="confirm-dispensing-button"]');
-        const isDisabled = await confirmButton.isDisabled();
-        
-        if (!isDisabled) {
-          await confirmButton.click();
-          await expect(page.locator('[data-testid="error-message"]')).toBeVisible();
-          await expect(page.locator('[data-testid="error-message"]')).toContainText('ไม่สามารถจ่ายยาได้เนื่องจากสต๊อกไม่เพียงพอ');
-        }
-        
+      if (stock <= 0) {
+        lowStockProduct = card;
         break;
       }
     }
-  });
-
-  test('UAT-003: การติดตามระดับสต๊อกและการแจ้งเตือน', async ({ page }) => {
-    // ไปที่การจัดการ inventory/สต๊อก
-    await page.click('[data-testid="inventory-menu"]');
-    await page.waitForURL('/dashboard/inventory');
     
-    // ตรวจสอบการแจ้งเตือนสต๊อก
-    await page.click('[data-testid="stock-alerts-tab"]');
-    await page.waitForSelector('[data-testid="stock-alerts-list"]');
-    
-    // ตรวจสอบการแจ้งเตือนสต๊อกต่ำ
-    const stockAlerts = page.locator('[data-testid="stock-alert-item"]');
-    
-    if (await stockAlerts.count() > 0) {
-      const firstAlert = stockAlerts.first();
-      await expect(firstAlert.locator('[data-testid="alert-type"]')).toContainText('สต๊อกต่ำ');
-      await expect(firstAlert.locator('[data-testid="product-name"]')).toBeVisible();
-      await expect(firstAlert.locator('[data-testid="current-stock"]')).toBeVisible();
-      await expect(firstAlert.locator('[data-testid="reorder-point"]')).toBeVisible();
+    if (lowStockProduct) {
+      // ลองคลิกสินค้าที่หมดสต๊อก
+      await lowStockProduct.click();
+      
+      // ตรวจสอบการแจ้งเตือนสินค้าหมดสต๊อก
+      await expect(page.locator('[data-testid="out-of-stock-toast"]')).toBeVisible();
+      await expect(page.locator('[data-testid="out-of-stock-toast"]')).toContainText('สินค้าหมดสต๊อก');
+      
+      // ตรวจสอบว่าสินค้าไม่ถูกเพิ่มเข้าตระกร้า
+      await expect(page.locator('[data-testid="cart-item"]')).toHaveCount(0);
     }
     
-    // ตรวจสอบการแจ้งเตือนหมดอายุ
-    await page.click('[data-testid="expiry-alerts-tab"]');
-    await page.waitForSelector('[data-testid="expiry-alerts-list"]');
+    // ทดสอบการเพิ่มสินค้าที่มีสต๊อกต่ำ
+    const normalStockProduct = productCards.first();
+    await normalStockProduct.click();
     
-    const expiryAlerts = page.locator('[data-testid="expiry-alert-item"]');
-    
-    if (await expiryAlerts.count() > 0) {
-      const firstExpiryAlert = expiryAlerts.first();
-      await expect(firstExpiryAlert.locator('[data-testid="alert-type"]')).toContainText('ใกล้หมดอายุ');
-      await expect(firstExpiryAlert.locator('[data-testid="product-name"]')).toBeVisible();
-      await expect(firstExpiryAlert.locator('[data-testid="expiry-date"]')).toBeVisible();
-      await expect(firstExpiryAlert.locator('[data-testid="days-remaining"]')).toBeVisible();
+    // ตรวจสอบการแจ้งเตือนสต๊อกต่ำ (ถ้ามี)
+    const stockWarning = page.locator('[data-testid="stock-warning-toast"]');
+    if (await stockWarning.isVisible()) {
+      await expect(stockWarning).toContainText('สต๊อกต่ำ');
     }
-  });
-
-  test('UAT-003: จ่ายยาบางส่วนเมื่อบางรายการหมดสต๊อก', async ({ page }) => {
-    // ไปที่ใบสั่งยาที่รอจ่าย
-    await page.click('[data-testid="pending-prescriptions-tab"]');
-    await page.waitForSelector('[data-testid="prescription-list"]');
     
-    // หาใบสั่งยาที่มีระดับสต๊อกผสม
-    const prescriptionRows = page.locator('[data-testid="prescription-row"]');
+    // ตรวจสอบการแจ้งเตือนสินค้าใกล้หมดอายุ (ถ้ามี)
+    const expiryWarning = page.locator('[data-testid="expiry-warning-toast"]');
+    if (await expiryWarning.isVisible()) {
+      await expect(expiryWarning).toContainText('ใกล้หมดอายุ');
+    }
     
-    for (let i = 0; i < await prescriptionRows.count(); i++) {
-      const row = prescriptionRows.nth(i);
-      await row.click();
-      await page.waitForSelector('[data-testid="prescription-details"]');
-      
-      const prescriptionItems = page.locator('[data-testid="prescription-item"]');
-      let hasSufficientStock = false;
-      let hasInsufficientStock = false;
-      
-      // ตรวจสอบระดับสต๊อกของแต่ละรายการ
-      for (let j = 0; j < await prescriptionItems.count(); j++) {
-        const item = prescriptionItems.nth(j);
-        const stockLevel = await item.locator('[data-testid="stock-quantity"]').textContent();
-        const prescribedQuantity = await item.locator('[data-testid="prescribed-quantity"]').textContent();
-        
-        const stock = parseInt(stockLevel || '0');
-        const prescribed = parseInt(prescribedQuantity || '0');
-        
-        if (stock >= prescribed) {
-          hasSufficientStock = true;
-        } else {
-          hasInsufficientStock = true;
-        }
-      }
-      
-      // หากพบใบสั่งยาที่มีระดับสต๊อกผสม
-      if (hasSufficientStock && hasInsufficientStock) {
-        // ทดสอบการจ่ายยาบางส่วน
-        await page.click('[data-testid="partial-dispensing-button"]');
-        await page.waitForSelector('[data-testid="partial-dispensing-dialog"]');
-        
-        // เลือกรายการที่มีสต๊อกเพียงพอ
-        const prescriptionItems = page.locator('[data-testid="prescription-item"]');
-        
-        for (let j = 0; j < await prescriptionItems.count(); j++) {
-          const item = prescriptionItems.nth(j);
-          const stockLevel = await item.locator('[data-testid="stock-quantity"]').textContent();
-          const prescribedQuantity = await item.locator('[data-testid="prescribed-quantity"]').textContent();
-          
-          const stock = parseInt(stockLevel || '0');
-          const prescribed = parseInt(prescribedQuantity || '0');
-          
-          if (stock >= prescribed) {
-            // เลือกรายการนี้สำหรับการจ่ายยา
-            await item.locator('[data-testid="select-for-dispensing"]').check();
-          }
-        }
-        
-        // ยืนยันการจ่ายยาบางส่วน
-        await page.click('[data-testid="confirm-partial-dispensing-button"]');
-        
-        // รอข้อความสำเร็จ
-        await expect(page.locator('[data-testid="success-message"]')).toBeVisible();
-        await expect(page.locator('[data-testid="success-message"]')).toContainText('จ่ายยาบางส่วนสำเร็จ');
-        
-        // ตรวจสอบสถานะใบสั่งยาที่อัปเดตเป็นการจ่ายบางส่วน
-        await expect(page.locator('[data-testid="prescription-status"]')).toContainText('จ่ายบางส่วน');
-        
-        break;
-      }
+    // ตรวจสอบการแจ้งเตือนสินค้าหมดอายุ (ถ้ามี)
+    const expiredWarning = page.locator('[data-testid="expired-warning-toast"]');
+    if (await expiredWarning.isVisible()) {
+      await expect(expiredWarning).toContainText('หมดอายุ');
     }
   });
 
-  test('UAT-003: ประวัติการจ่ายยาและการติดตาม', async ({ page }) => {
-    // ไปที่ประวัติการจ่ายยา
-    await page.click('[data-testid="dispensing-history-tab"]');
-    await page.waitForSelector('[data-testid="dispensing-history-list"]');
+  test('UAT-003: การติดตามระดับสต๊อกและการแจ้งเตือนใน POS', async ({ page }) => {
+    // รอให้หน้า POS โหลดเสร็จ
+    await page.waitForSelector('[data-testid="product-grid"]');
     
-    // ตรวจสอบประวัติการจ่ายยา
-    const historyItems = page.locator('[data-testid="dispensing-history-item"]');
+    // ค้นหาสินค้า
+    await page.fill('[data-testid="search-input"]', 'ยา');
+    await page.waitForTimeout(1000);
     
-    if (await historyItems.count() > 0) {
-      const firstItem = historyItems.first();
-      
-      // ตรวจสอบข้อมูลที่จำเป็น
-      await expect(firstItem.locator('[data-testid="patient-name"]')).toBeVisible();
-      await expect(firstItem.locator('[data-testid="prescription-date"]')).toBeVisible();
-      await expect(firstItem.locator('[data-testid="dispensing-date"]')).toBeVisible();
-      await expect(firstItem.locator('[data-testid="dispensed-by"]')).toBeVisible();
-      await expect(firstItem.locator('[data-testid="dispensing-status"]')).toBeVisible();
-      
-      // คลิกเพื่อดูรายละเอียด
-      await firstItem.click();
-      await page.waitForSelector('[data-testid="dispensing-details"]');
-      
-      // ตรวจสอบข้อมูลรายละเอียด
-      await expect(page.locator('[data-testid="patient-info"]')).toBeVisible();
-      await expect(page.locator('[data-testid="prescription-items"]')).toBeVisible();
-      await expect(page.locator('[data-testid="dispensing-info"]')).toBeVisible();
+    // ตรวจสอบการแสดงข้อมูลสต๊อกในแต่ละสินค้า
+    const productCards = page.locator('[data-testid="product-card"]');
+    await expect(productCards.first()).toBeVisible();
+    
+    // ตรวจสอบข้อมูลสต๊อกในสินค้าแรก
+    const firstProduct = productCards.first();
+    await expect(firstProduct.locator('[data-testid="product-name"]')).toBeVisible();
+    await expect(firstProduct.locator('[data-testid="stock-quantity"]')).toBeVisible();
+    await expect(firstProduct.locator('[data-testid="product-price"]')).toBeVisible();
+    
+    // ตรวจสอบการแสดงสถานะสินค้าหมด
+    const outOfStockProducts = page.locator('[data-testid="out-of-stock-badge"]');
+    if (await outOfStockProducts.count() > 0) {
+      await expect(outOfStockProducts.first()).toContainText('สินค้าหมด');
+    }
+    
+    // ทดสอบการเพิ่มสินค้าและตรวจสอบการแจ้งเตือน
+    await firstProduct.click();
+    
+    // ตรวจสอบการแจ้งเตือนต่างๆ ที่อาจปรากฏ
+    const stockWarning = page.locator('[data-testid="stock-warning-toast"]');
+    const expiryWarning = page.locator('[data-testid="expiry-warning-toast"]');
+    const expiredWarning = page.locator('[data-testid="expired-warning-toast"]');
+    
+    // รอสักครู่เพื่อให้ toast แสดง (ถ้ามี)
+    await page.waitForTimeout(2000);
+    
+    // ตรวจสอบ toast ที่แสดง (ถ้ามี)
+    if (await stockWarning.isVisible()) {
+      await expect(stockWarning).toContainText('สต๊อกต่ำ');
+    }
+    
+    if (await expiryWarning.isVisible()) {
+      await expect(expiryWarning).toContainText('ใกล้หมดอายุ');
+    }
+    
+    if (await expiredWarning.isVisible()) {
+      await expect(expiredWarning).toContainText('หมดอายุ');
     }
   });
 
-  test('UAT-003: การปรับสต๊อกหลังการจ่ายยา', async ({ page }) => {
-    // ไปที่ inventory
-    await page.click('[data-testid="inventory-menu"]');
-    await page.waitForURL('/dashboard/inventory');
+  test('UAT-003: การจัดการตระกร้าและจำนวนสินค้าใน POS', async ({ page }) => {
+    // รอให้หน้า POS โหลดเสร็จ
+    await page.waitForSelector('[data-testid="product-grid"]');
     
-    // รับระดับสต๊อกเริ่มต้นของสินค้า
-    const productRow = page.locator('[data-testid="product-row"]').first();
-    await expect(productRow).toBeVisible();
+    // ค้นหาสินค้า
+    await page.fill('[data-testid="search-input"]', 'ยา');
+    await page.waitForTimeout(1000);
     
-    const initialStock = await productRow.locator('[data-testid="stock-quantity"]').textContent();
-    const productName = await productRow.locator('[data-testid="product-name"]').textContent();
+    // เลือกสินค้าสองรายการ
+    const productCards = page.locator('[data-testid="product-card"]');
+    await expect(productCards.first()).toBeVisible();
     
-    // กลับไปที่ inventory (ฟังก์ชันเภสัชกรรมอยู่ใน inventory)
-    await page.click('[data-testid="inventory-menu"]');
-    await page.waitForURL('/dashboard/inventory');
+    // เพิ่มสินค้ารายการแรก
+    await productCards.first().click();
+    await expect(page.locator('[data-testid="cart-item"]')).toHaveCount(1);
     
-    // จ่ายยาสำหรับสินค้านี้
-    await page.click('[data-testid="pending-prescriptions-tab"]');
-    await page.waitForSelector('[data-testid="prescription-list"]');
-    
-    // หาใบสั่งยาที่มีสินค้านี้
-    const prescriptionRows = page.locator('[data-testid="prescription-row"]');
-    
-    for (let i = 0; i < await prescriptionRows.count(); i++) {
-      const row = prescriptionRows.nth(i);
-      await row.click();
-      await page.waitForSelector('[data-testid="prescription-details"]');
-      
-      const prescriptionItems = page.locator('[data-testid="prescription-item"]');
-      
-      for (let j = 0; j < await prescriptionItems.count(); j++) {
-        const item = prescriptionItems.nth(j);
-        const itemProductName = await item.locator('[data-testid="product-name"]').textContent();
-        
-        if (itemProductName === productName) {
-          // ใบสั่งยานี้มีสินค้าของเรา
-          await page.click('[data-testid="confirm-dispensing-button"]');
-          await page.waitForSelector('[data-testid="dispensing-confirmation-dialog"]');
-          await page.click('[data-testid="confirm-dispense-button"]');
-          
-          await expect(page.locator('[data-testid="success-message"]')).toBeVisible();
-          
-          // กลับไปที่ inventory เพื่อตรวจสอบการปรับสต๊อก
-          await page.click('[data-testid="inventory-menu"]');
-          await page.waitForURL('/dashboard/inventory');
-          
-          // หาสินค้าเดียวกัน
-          const updatedProductRow = page.locator(`[data-testid="product-row-${productName}"]`);
-          await expect(updatedProductRow).toBeVisible();
-          
-          const updatedStock = await updatedProductRow.locator('[data-testid="stock-quantity"]').textContent();
-          const dispensedQuantity = await item.locator('[data-testid="prescribed-quantity"]').textContent();
-          
-          // ตรวจสอบว่าสต๊อกลดลงอย่างถูกต้อง
-          const initial = parseInt(initialStock || '0');
-          const updated = parseInt(updatedStock || '0');
-          const dispensed = parseInt(dispensedQuantity || '0');
-          
-          expect(updated).toBe(initial - dispensed);
-          
-          return;
-        }
-      }
+    // เพิ่มสินค้ารายการที่สอง (ถ้ามี)
+    if (await productCards.count() > 1) {
+      await productCards.nth(1).click();
+      await expect(page.locator('[data-testid="cart-item"]')).toHaveCount(2);
     }
+    
+    // ทดสอบการเพิ่มจำนวนสินค้าในตระกร้า
+    const firstCartItem = page.locator('[data-testid="cart-item"]').first();
+    const increaseButton = firstCartItem.locator('[data-testid="increase-quantity-button"]');
+    const quantityDisplay = firstCartItem.locator('[data-testid="quantity-display"]');
+    
+    // ตรวจสอบจำนวนเริ่มต้น
+    await expect(quantityDisplay).toContainText('1');
+    
+    // เพิ่มจำนวน
+    await increaseButton.click();
+    await expect(quantityDisplay).toContainText('2');
+    
+    // ทดสอบการลดจำนวนสินค้า
+    const decreaseButton = firstCartItem.locator('[data-testid="decrease-quantity-button"]');
+    await decreaseButton.click();
+    await expect(quantityDisplay).toContainText('1');
+    
+    // ทดสอบการลบสินค้าออกจากตระกร้า
+    await decreaseButton.click();
+    await expect(page.locator('[data-testid="cart-item"]')).toHaveCount(1);
+    
+    // ตรวจสอบการคำนวณยอดรวม
+    await expect(page.locator('[data-testid="total-amount"]')).toBeVisible();
+    await expect(page.locator('[data-testid="vat-amount"]')).toBeVisible();
+    await expect(page.locator('[data-testid="grand-total"]')).toBeVisible();
   });
 
-  test('UAT-003: การตรวจสอบวันหมดอายุระหว่างการจ่ายยา', async ({ page }) => {
-    // ไปที่ใบสั่งยาที่รอจ่าย
-    await page.click('[data-testid="pending-prescriptions-tab"]');
-    await page.waitForSelector('[data-testid="prescription-list"]');
+  test('UAT-003: การชำระเงินและใบเสร็จใน POS', async ({ page }) => {
+    // รอให้หน้า POS โหลดเสร็จ
+    await page.waitForSelector('[data-testid="product-grid"]');
     
-    // เลือกใบสั่งยา
-    const prescriptionRow = page.locator('[data-testid="prescription-row"]').first();
-    await prescriptionRow.click();
-    await page.waitForSelector('[data-testid="prescription-details"]');
+    // ค้นหาสินค้า
+    await page.fill('[data-testid="search-input"]', 'ยา');
+    await page.waitForTimeout(1000);
     
-    // ตรวจสอบการแจ้งเตือนหมดอายุ
-    const prescriptionItems = page.locator('[data-testid="prescription-item"]');
+    // เลือกสินค้า
+    const productCards = page.locator('[data-testid="product-card"]');
+    await expect(productCards.first()).toBeVisible();
+    await productCards.first().click();
     
-    for (let i = 0; i < await prescriptionItems.count(); i++) {
-      const item = prescriptionItems.nth(i);
-      const expiryWarning = item.locator('[data-testid="expiry-warning"]');
+    // ตรวจสอบว่าสินค้าถูกเพิ่มเข้าตระกร้า
+    await expect(page.locator('[data-testid="cart-item"]')).toHaveCount(1);
+    
+    // คลิกชำระเงิน
+    await page.click('[data-testid="checkout-button"]');
+    
+    // รอ dialog การชำระเงิน
+    await page.waitForSelector('[data-testid="payment-dialog"]');
+    
+    // รอให้ payment dialog โหลดเสร็จ
+    await page.waitForTimeout(1000);
+    
+    // ตรวจสอบข้อมูลการชำระเงิน
+    await expect(page.locator('[data-testid="payment-total"]')).toBeVisible();
+    await expect(page.locator('[data-testid="payment-methods"]')).toBeVisible();
+    
+    // เลือกวิธีการชำระเงินเป็นเงินสด
+    await page.click('[data-testid="payment-method-cash"]');
+    
+    // ตรวจสอบการแสดงยอดเงินที่ต้องชำระ
+    await expect(page.locator('[data-testid="amount-to-pay"]')).toBeVisible();
+    
+    // ใช้ numpad ใส่จำนวนเงิน
+    await page.click('[data-testid="numpad-1"]');
+    await page.click('[data-testid="numpad-0"]');
+    await page.click('[data-testid="numpad-0"]');
+    
+    // ยืนยันการชำระเงิน
+    await page.click('[data-testid="confirm-payment-button"]');
+    
+    // รอ dialog สำเร็จ
+    await expect(page.locator('[data-testid="payment-success-dialog"]')).toBeVisible();
+    
+    // ตรวจสอบข้อมูลใบเสร็จ
+    await expect(page.locator('[data-testid="receipt-number"]')).toBeVisible();
+    await expect(page.locator('[data-testid="receipt-items"]')).toBeVisible();
+    await expect(page.locator('[data-testid="receipt-total"]')).toBeVisible();
+    await expect(page.locator('[data-testid="receipt-payment-method"]')).toBeVisible();
+    
+    // ปิด dialog สำเร็จด้วยปุ่ม "รับชำระ"
+    await page.click('[data-testid="close-success-dialog"]');
+    
+    // รอให้ dialog ปิด
+    await page.waitForTimeout(1000);
+    
+    // ตรวจสอบว่าตระกร้าว่าง
+    await expect(page.locator('[data-testid="cart-item"]')).toHaveCount(0);
+  });
+
+  test('UAT-003: การปรับสต๊อกหลังการขายใน POS', async ({ page }) => {
+    // รอให้หน้า POS โหลดเสร็จ
+    await page.waitForSelector('[data-testid="product-grid"]');
+    
+    // ค้นหาสินค้า
+    await page.fill('[data-testid="search-input"]', 'ยา');
+    await page.waitForTimeout(1000);
+    
+    // เลือกสินค้าแรกและบันทึกข้อมูลสต๊อกเริ่มต้น
+    const productCards = page.locator('[data-testid="product-card"]');
+    await expect(productCards.first()).toBeVisible();
+    
+    const firstProduct = productCards.first();
+    const initialStockText = await firstProduct.locator('[data-testid="stock-quantity"]').textContent();
+    const initialStock = parseInt(initialStockText?.replace('สต๊อก: ', '') || '0');
+    const productName = await firstProduct.locator('[data-testid="product-name"]').textContent();
+    
+    // เพิ่มสินค้าเข้าตระกร้า
+    await firstProduct.click();
+    await expect(page.locator('[data-testid="cart-item"]')).toHaveCount(1);
+    
+    // ตรวจสอบการแสดงสต๊อกที่อัปเดตในตระกร้า
+    const cartItem = page.locator('[data-testid="cart-item"]').first();
+    await expect(cartItem.locator('[data-testid="product-name"]')).toContainText(productName || '');
+    
+    // ชำระเงิน
+    await page.click('[data-testid="checkout-button"]');
+    await page.waitForSelector('[data-testid="payment-dialog"]');
+    await page.click('[data-testid="payment-method-cash"]');
+    await page.click('[data-testid="confirm-payment-button"]');
+    
+    // รอการชำระเงินสำเร็จ
+    await expect(page.locator('[data-testid="payment-success-dialog"]')).toBeVisible();
+    
+    // ปิด dialog สำเร็จด้วยปุ่ม "รับชำระ"
+    await page.click('[data-testid="close-success-dialog"]');
+    
+    // รอให้ dialog ปิด
+    await page.waitForTimeout(1000);
+    
+    // ตรวจสอบว่าสต๊อกในหน้าจอลดลง
+    await page.waitForTimeout(1000); // รอให้ UI อัปเดต
+    const updatedStockText = await firstProduct.locator('[data-testid="stock-quantity"]').textContent();
+    const updatedStock = parseInt(updatedStockText?.replace('สต๊อก: ', '') || '0');
+    
+    // สต๊อกควรลดลง 1 หน่วย
+    expect(updatedStock).toBe(initialStock - 1);
+  });
+
+  test('UAT-003: การตรวจสอบวันหมดอายุใน POS', async ({ page }) => {
+    // รอให้หน้า POS โหลดเสร็จ
+    await page.waitForSelector('[data-testid="product-grid"]');
+    
+    // ค้นหาสินค้า
+    await page.fill('[data-testid="search-input"]', 'ยา');
+    await page.waitForTimeout(1000);
+    
+    // เลือกสินค้าที่อาจมีการแจ้งเตือนหมดอายุ
+    const productCards = page.locator('[data-testid="product-card"]');
+    await expect(productCards.first()).toBeVisible();
+    
+    // คลิกสินค้าเพื่อเพิ่มเข้าตระกร้า
+    await productCards.first().click();
+    
+    // รอสักครู่เพื่อให้ toast แสดง (ถ้ามี)
+    await page.waitForTimeout(3000);
+    
+    // ตรวจสอบการแจ้งเตือนสินค้าใกล้หมดอายุ
+    const expiryWarning = page.locator('[data-testid="expiry-warning-toast"]');
+    if (await expiryWarning.isVisible()) {
+      await expect(expiryWarning).toContainText('ใกล้หมดอายุ');
       
-      if (await expiryWarning.isVisible()) {
-        // รายการนี้มีการแจ้งเตือนหมดอายุ
-        await expect(expiryWarning).toContainText('ใกล้หมดอายุ');
-        
-        const expiryDate = await item.locator('[data-testid="expiry-date"]').textContent();
-        const daysRemaining = await item.locator('[data-testid="days-remaining"]').textContent();
-        
-        expect(expiryDate).toBeTruthy();
-        expect(daysRemaining).toBeTruthy();
-        
-        // ตรวจสอบว่าการแจ้งเตือนเหมาะสม (เช่น เหลือน้อยกว่า 30 วัน)
-        const days = parseInt(daysRemaining || '0');
-        expect(days).toBeLessThan(30);
-      }
+      // ตรวจสอบข้อมูลใน toast
+      const warningText = await expiryWarning.textContent();
+      expect(warningText).toContain('วัน');
+      expect(warningText).toContain('หน่วย');
     }
     
-    // ดำเนินการจ่ายยา (ระบบควรยังคงอนุญาตให้จ่ายพร้อมการแจ้งเตือน)
-    await page.click('[data-testid="confirm-dispensing-button"]');
-    await page.waitForSelector('[data-testid="dispensing-confirmation-dialog"]');
-    
-    // ตรวจสอบการแจ้งเตือนหมดอายุใน dialog ยืนยัน
-    const expiryWarningInDialog = page.locator('[data-testid="expiry-warning-dialog"]');
-    if (await expiryWarningInDialog.isVisible()) {
-      await expect(expiryWarningInDialog).toContainText('มียาที่ใกล้หมดอายุ');
+    // ตรวจสอบการแจ้งเตือนสินค้าหมดอายุ
+    const expiredWarning = page.locator('[data-testid="expired-warning-toast"]');
+    if (await expiredWarning.isVisible()) {
+      await expect(expiredWarning).toContainText('หมดอายุ');
+      
+      // ตรวจสอบข้อมูลใน toast
+      const warningText = await expiredWarning.textContent();
+      expect(warningText).toContain('หน่วย');
     }
     
-    await page.click('[data-testid="confirm-dispense-button"]');
-    await expect(page.locator('[data-testid="success-message"]')).toBeVisible();
+    // ตรวจสอบว่าสินค้ายังสามารถเพิ่มเข้าตระกร้าได้ (แม้จะมีคำเตือน)
+    await expect(page.locator('[data-testid="cart-item"]')).toHaveCount(1);
+    
+    // ดำเนินการชำระเงิน (ระบบควรยังคงอนุญาตให้ขายพร้อมการแจ้งเตือน)
+    await page.click('[data-testid="checkout-button"]');
+    await page.waitForSelector('[data-testid="payment-dialog"]');
+    await page.click('[data-testid="payment-method-cash"]');
+    await page.click('[data-testid="confirm-payment-button"]');
+    
+    // ตรวจสอบการชำระเงินสำเร็จ
+    await expect(page.locator('[data-testid="payment-success-dialog"]')).toBeVisible();
+    
+    // ปิด dialog สำเร็จด้วยปุ่ม "รับชำระ"
+    await page.click('[data-testid="close-success-dialog"]');
+    
+    // รอให้ dialog ปิด
+    await page.waitForTimeout(1000);
   });
 });
 

@@ -13,7 +13,7 @@ test.describe('การทดสอบเวชระเบียน E2E', () =
     await page.click('[data-testid="login-button"]');
     
     // รอให้ redirect ไปหน้า dashboard
-    await page.waitForURL('/dashboard');
+    await page.waitForURL('/dashboard/pos');
     
     // ไปที่หน้าผู้ป่วย
     await page.click('[data-testid="patients-menu"]');

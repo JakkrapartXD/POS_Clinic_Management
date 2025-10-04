@@ -2,6 +2,7 @@
 
 import { UserProvider } from '@/hooks/use-user'
 import { Toaster } from 'react-hot-toast'
+import { Toaster as SonnerToaster } from '@/components/ui/sonner'
 import { ReactNode } from 'react'
 
 interface ClientProvidersProps {
@@ -33,6 +34,12 @@ export function ClientProviders({ children }: ClientProvidersProps) {
             },
           },
         }}
+      />
+      <SonnerToaster 
+        position="top-right"
+        expand={true}
+        richColors={true}
+        closeButton={true}
       />
     </UserProvider>
   )

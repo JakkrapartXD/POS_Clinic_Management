@@ -255,7 +255,8 @@ export default function LoginPage() {
       console.log('🚀 Dispatching userLoginSuccess event')
       window.dispatchEvent(new CustomEvent('userLoginSuccess'))
       
-      router.push(APP_CONSTANTS.ROUTES.DASHBOARD)
+      // Refresh หน้าเว็บหลัง login สำเร็จ
+      window.location.href = APP_CONSTANTS.ROUTES.DASHBOARD
       
     } catch (err: any) {
       const errorInfo = parseError(err)

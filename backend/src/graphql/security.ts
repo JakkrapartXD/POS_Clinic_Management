@@ -304,17 +304,8 @@ export class SecurityService {
     // Admins can access all patient data
     if (role === 'admin') return;
     
-    // Doctors can access patients they have appointments with
-    if (role === 'doctor') {
-      const hasAppointment = await prisma.appointment.findFirst({
-        where: {
-          patientId: patientId,
-          doctorId: userId
-        }
-      });
-      
-      if (hasAppointment) return;
-    }
+    // Doctors can access all patients for medical purposes (viewing history, creating appointments, etc.)
+    if (role === 'doctor') return;
     
     // Staff, cashier, and nurse can access all patients for basic operations
     if (['staff', 'cashier', 'nurse'].includes(role)) return;

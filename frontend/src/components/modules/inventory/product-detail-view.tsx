@@ -1129,10 +1129,6 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
         quantity: parseInt(stockFormData.quantity),
         quantity_in: parseInt(stockFormData.quantity),
         is_outofstock: false,
-        stockStatus: {
-          hasStock: true,
-          isSynthetic: false
-        },
         production_date: stockFormData.production_date ? new Date(stockFormData.production_date).toISOString() : undefined,
         expiration_date: stockFormData.expiration_date ? new Date(stockFormData.expiration_date).toISOString() : undefined,
         note: `เพิ่มสต๊อก - ล็อต: ${stockFormData.production_lot || 'ไม่ระบุ'}`
