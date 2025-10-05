@@ -513,7 +513,7 @@ export default function TriageQueuePage() {
     const StatusIcon = statusInfo.icon;
     
     return (
-      <Card key={ticket.id} className="hover:shadow-md transition-shadow">
+      <Card key={ticket.id} className="hover:shadow-md transition-shadow" data-testid={`ticket-card-${ticket.patient.phone}`}>
         <CardContent className="p-4">
           <div className="flex justify-between items-start mb-3">
             <div className="flex items-center gap-2">
@@ -550,6 +550,7 @@ export default function TriageQueuePage() {
                 onClick={() => callTicket(ticket.id)}
                 disabled={isUpdating === ticket.id}
                 className="bg-yellow-600 hover:bg-yellow-700"
+                data-testid={`call-button-${ticket.patient.phone}`}
               >
                 <Phone className="w-3 h-3 mr-1" />
 เรียก
@@ -562,6 +563,7 @@ export default function TriageQueuePage() {
                 onClick={() => startTicket(ticket.id)}
                 disabled={isUpdating === ticket.id}
                 className="bg-teal-600 hover:bg-teal-700"
+                data-testid={`start-button-${ticket.patient.phone}`}
               >
                 <Play className="w-3 h-3 mr-1" />
 เริ่มคัดกรอง
@@ -576,6 +578,7 @@ export default function TriageQueuePage() {
                     variant="outline"
                     onClick={() => openVitalsModal(ticket)}
                     className="border-blue-600 text-blue-600 hover:bg-blue-50"
+                    data-testid={`vitals-button-${ticket.patient.phone}`}
                   >
                     <Stethoscope className="w-3 h-3 mr-1" />
 บันทึกสัญญาณชีพ
@@ -586,6 +589,7 @@ export default function TriageQueuePage() {
                   onClick={() => completeTicket(ticket.id)}
                   disabled={isUpdating === ticket.id}
                   className="bg-green-600 hover:bg-green-700"
+                  data-testid={`complete-button-${ticket.patient.phone}`}
                 >
                   <CheckCircle className="w-3 h-3 mr-1" />
 เสร็จสิ้น

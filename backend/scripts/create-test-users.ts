@@ -8,6 +8,20 @@ const prisma = new PrismaClient();
 // Test users configuration
 const TEST_USERS = [
   {
+    username: 'nurse01',
+    password: 'nurse123',
+    email: 'nurse01@test.clinic',
+    role: 'nurse',
+    status: 'active'
+  },
+  {
+    username: 'cashier01',
+    password: 'cashier123',
+    email: 'cashier01@test.clinic',
+    role: 'cashier',
+    status: 'active'
+  },
+  {
     username: 'staff01',
     password: 'staff123',
     email: 'staff01@test.clinic',
@@ -35,10 +49,10 @@ async function createTestUsers() {
 
   try {
     for (const userData of TEST_USERS) {
-      // Check if user already exists in clinic_dev schema
+      // Check if user already exists in snclinc schema
       const existingUser = await prisma.$queryRaw`
         SELECT id, username, email, role, status
-        FROM clinic_dev."User"
+        FROM snclinc."User"
         WHERE username = ${userData.username}
       ` as any[];
 
@@ -50,16 +64,16 @@ async function createTestUsers() {
       // Hash password
       const hashedPassword = await hash(userData.password, 10);
 
-      // Create user in clinic_dev schema using raw SQL (let database generate ID)
+      // Create user in snclinc schema using raw SQL (let database generate ID)
       await prisma.$executeRaw`
-        INSERT INTO clinic_dev."User" (username, password_hash, email, role, status, created_at, updated_at)
+        INSERT INTO snclinc."User" (username, password_hash, email, role, status, created_at, updated_at)
         VALUES (${userData.username}, ${hashedPassword}, ${userData.email}, ${userData.role}, ${userData.status}, NOW(), NOW())
       `;
 
       // Get the created user
       const user = await prisma.$queryRaw`
         SELECT id, username, email, role, status, created_at
-        FROM clinic_dev."User"
+        FROM snclinc."User"
         WHERE username = ${userData.username}
       ` as any[];
 

@@ -6,6 +6,8 @@ Scripts สำหรับจัดการ test users สำหรับ E2E t
 
 | Username     | Role       | Email                    | Password      | หน้าที่                    |
 |--------------|------------|--------------------------|---------------|---------------------------|
+| `nurse01`    | `nurse`    | `nurse01@test.clinic`    | `nurse123`    | Patient Care & Triage     |
+| `cashier01`  | `cashier`  | `cashier01@test.clinic`  | `cashier123`  | Payment & Billing         |
 | `staff01`    | `staff`    | `staff01@test.clinic`    | `staff123`    | Patient Management        |
 | `doctor01`   | `doctor`   | `doctor01@test.clinic`   | `doctor123`   | Medical Records           |
 | `pharmacist01` | `pharmacist` | `pharmacist01@test.clinic` | `pharmacist123` | Pharmacy Dispensing   |
@@ -40,6 +42,18 @@ npm run test-users:delete
 ```
 
 ## 🔐 Role Permissions
+
+### Nurse Role (`nurse01`)
+- ✅ Patient Care & Triage
+- ✅ Vitals Recording
+- ✅ Queue Management
+- ✅ Patient Monitoring
+
+### Cashier Role (`cashier01`)
+- ✅ Payment Processing
+- ✅ Billing & Invoicing
+- ✅ Order Management
+- ✅ Financial Reports
 
 ### Staff Role (`staff01`)
 - ✅ Patient Management

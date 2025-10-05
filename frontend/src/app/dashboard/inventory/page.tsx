@@ -585,9 +585,6 @@ function InventoryPage() {
     setViewMode('list')
   }, [loadProducts])
 
-  const handlePharmacy = useCallback(() => {
-    setViewMode('pharmacy')
-  }, [])
 
   const handleExportSubmit = useCallback(async (exportData: any) => {
     try {
@@ -684,9 +681,7 @@ function InventoryPage() {
                 {getViewTitle()}
               </h1>
               {viewMode === 'list' ? (
-                <Button className="text-teal-500 bg-white hover:bg-purple-50 border border-teal-200">
-                  ตัวเลือก
-                </Button>
+                null // No buttons for list view
               ) : viewMode === 'add-product' ? (
                 <div className="flex space-x-3">
                   <Button variant="outline" onClick={handleBackToList}>
@@ -748,7 +743,6 @@ function InventoryPage() {
               onPrintPriceTag={() => {}} // Disabled
               onPrintMedicineLabel={() => {}} // Disabled
               onProductReport={() => {}} // Disabled
-              onPharmacy={handlePharmacy}
             />
           )}
 

@@ -8,6 +8,20 @@ const prisma = new PrismaClient();
 // Test users configuration
 const TEST_USERS = [
   {
+    username: 'nurse01',
+    password: 'nurse123',
+    email: 'nurse01@test.clinic',
+    role: 'nurse',
+    status: 'active'
+  },
+  {
+    username: 'cashier01',
+    password: 'cashier123',
+    email: 'cashier01@test.clinic',
+    role: 'cashier',
+    status: 'active'
+  },
+  {
     username: 'staff01',
     password: 'staff123',
     email: 'staff01@test.clinic',
@@ -35,12 +49,24 @@ async function listTestUsers() {
 
   try {
     const usernames = TEST_USERS.map(u => u.username);
-    const users = await prisma.$queryRaw`
-      SELECT id, username, email, role, status, created_at
-      FROM clinic_dev."User"
-      WHERE username = ANY(${usernames})
-      ORDER BY username ASC
-    ` as any[];
+    const users = await prisma.user.findMany({
+      where: {
+        username: {
+          in: usernames
+        }
+      },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        role: true,
+        status: true,
+        created_at: true
+      },
+      orderBy: {
+        username: 'asc'
+      }
+    });
 
     if (users.length === 0) {
       console.log('❌ No test users found in the system.');
@@ -68,14 +94,12 @@ async function createTestUsers() {
 
   try {
     for (const userData of TEST_USERS) {
-      // Check if user already exists in clinic_dev schema
-      const existingUser = await prisma.$queryRaw`
-        SELECT id, username, email, role, status
-        FROM clinic_dev."User"
-        WHERE username = ${userData.username}
-      ` as any[];
+      // Check if user already exists
+      const existingUser = await prisma.user.findUnique({
+        where: { username: userData.username }
+      });
 
-      if (existingUser && existingUser.length > 0) {
+      if (existingUser) {
         console.log(`⚠️  User '${userData.username}' already exists. Skipping...`);
         continue;
       }
@@ -83,13 +107,20 @@ async function createTestUsers() {
       // Hash password
       const hashedPassword = await hash(userData.password, 10);
 
-      // Create user in clinic_dev schema using raw SQL (let database generate ID)
-      await prisma.$executeRaw`
-        INSERT INTO clinic_dev."User" (username, password_hash, email, role, status, created_at, updated_at)
-        VALUES (${userData.username}, ${hashedPassword}, ${userData.email}, ${userData.role}, ${userData.status}, NOW(), NOW())
-      `;
+      // Create user using Prisma client
+      const newUser = await prisma.user.create({
+        data: {
+          username: userData.username,
+          password_hash: hashedPassword,
+          email: userData.email,
+          role: userData.role,
+          status: userData.status,
+        }
+      });
 
-      console.log(`✅ Created test user: ${userData.username} (${userData.role})`);
+      console.log(`✅ Created test user: ${newUser.username} (${newUser.role})`);
+      console.log(`   ID: ${newUser.id}`);
+      console.log(`   Email: ${newUser.email}`);
     }
 
     console.log('\n🎉 All test users created successfully!');
@@ -106,23 +137,20 @@ async function deleteTestUsers() {
     let deletedCount = 0;
 
     for (const userData of TEST_USERS) {
-      // Check if user exists in clinic_dev schema
-      const existingUser = await prisma.$queryRaw`
-        SELECT id, username, email, role, status
-        FROM clinic_dev."User"
-        WHERE username = ${userData.username}
-      ` as any[];
+      // Check if user exists
+      const existingUser = await prisma.user.findUnique({
+        where: { username: userData.username }
+      });
 
-      if (!existingUser || existingUser.length === 0) {
+      if (!existingUser) {
         console.log(`⚠️  User '${userData.username}' not found. Skipping...`);
         continue;
       }
 
-      // Delete user from clinic_dev schema
-      await prisma.$executeRaw`
-        DELETE FROM clinic_dev."User"
-        WHERE username = ${userData.username}
-      `;
+      // Delete user
+      await prisma.user.delete({
+        where: { username: userData.username }
+      });
 
       console.log(`✅ Deleted test user: ${userData.username} (${userData.role})`);
       deletedCount++;
