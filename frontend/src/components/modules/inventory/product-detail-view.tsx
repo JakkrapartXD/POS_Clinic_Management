@@ -555,6 +555,24 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
         // Refresh product data to ensure consistency
         await refreshProductData()
         
+        // Force refresh of product variants to show updated data
+        if (product?.product_name) {
+          try {
+            const updatedProductsResponse = await GraphQLAPI.searchProducts(product.product_name)
+            if (updatedProductsResponse.searchProducts) {
+              const sameNameProducts = updatedProductsResponse.searchProducts.filter(
+                (prod: any) => prod.product_name === product.product_name
+              )
+              setProductVariants(sameNameProducts)
+              logger.info('Product variants refreshed after unit deletion', { 
+                variantsCount: sameNameProducts.length 
+              }, 'INVENTORY')
+            }
+          } catch (error) {
+            logger.error('Failed to refresh product variants after unit deletion', error, 'INVENTORY')
+          }
+        }
+        
         // Notify parent component that a product was deleted
         if (onProductDeleted) {
           onProductDeleted()
@@ -761,6 +779,24 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
           setProductVariants(prev => [...prev, newVariant])
           await refreshProductData()
           
+          // Force refresh of product variants to show updated data
+          if (product?.product_name) {
+            try {
+              const updatedProductsResponse = await GraphQLAPI.searchProducts(product.product_name)
+              if (updatedProductsResponse.searchProducts) {
+                const sameNameProducts = updatedProductsResponse.searchProducts.filter(
+                  (prod: any) => prod.product_name === product.product_name
+                )
+                setProductVariants(sameNameProducts)
+                logger.info('Product variants refreshed after unit creation', { 
+                  variantsCount: sameNameProducts.length 
+                }, 'INVENTORY')
+              }
+            } catch (error) {
+              logger.error('Failed to refresh product variants after unit creation', error, 'INVENTORY')
+            }
+          }
+          
           // Notify parent component that product was updated
           if (onProductUpdated) {
             onProductUpdated()
@@ -870,6 +906,24 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
             )
           )
           await refreshProductData()
+          
+          // Force refresh of product variants to show updated data
+          if (product?.product_name) {
+            try {
+              const updatedProductsResponse = await GraphQLAPI.searchProducts(product.product_name)
+              if (updatedProductsResponse.searchProducts) {
+                const sameNameProducts = updatedProductsResponse.searchProducts.filter(
+                  (prod: any) => prod.product_name === product.product_name
+                )
+                setProductVariants(sameNameProducts)
+                logger.info('Product variants refreshed after unit update', { 
+                  variantsCount: sameNameProducts.length 
+                }, 'INVENTORY')
+              }
+            } catch (error) {
+              logger.error('Failed to refresh product variants after unit update', error, 'INVENTORY')
+            }
+          }
           
           // Notify parent component that product was updated
           if (onProductUpdated) {
@@ -1041,6 +1095,24 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
           toast.success('บันทึกข้อมูลสินค้าเรียบร้อยแล้ว')
         }
         
+        // Force refresh of product variants to show updated data
+        if (product?.product_name) {
+          try {
+            const updatedProductsResponse = await GraphQLAPI.searchProducts(product.product_name)
+            if (updatedProductsResponse.searchProducts) {
+              const sameNameProducts = updatedProductsResponse.searchProducts.filter(
+                (prod: any) => prod.product_name === product.product_name
+              )
+              setProductVariants(sameNameProducts)
+              logger.info('Product variants refreshed after general product update', { 
+                variantsCount: sameNameProducts.length 
+              }, 'INVENTORY')
+            }
+          } catch (error) {
+            logger.error('Failed to refresh product variants after general product update', error, 'INVENTORY')
+          }
+        }
+        
         // Notify parent component that product was updated
         if (onProductUpdated) {
           onProductUpdated()
@@ -1165,7 +1237,15 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
               (prod: any) => prod.product_name === product.product_name
             )
             setProductVariants(sameNameProducts)
+            logger.info('Product variants refreshed after stock addition', { 
+              variantsCount: sameNameProducts.length 
+            }, 'INVENTORY')
           }
+        }
+        
+        // Notify parent component that product was updated
+        if (onProductUpdated) {
+          onProductUpdated()
         }
         
         // Close modal and reset form
@@ -1398,6 +1478,11 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
         
         toast.success(`ย้ายสต๊อกสำเร็จ: ${adjustQuantity} ${fromVariant.unit} → ${resultingToUnits} ${toVariant.unit}`)
         
+        // Notify parent component that product was updated
+        if (onProductUpdated) {
+          onProductUpdated()
+        }
+        
       } else {
         // Handle add/subtract operations (existing logic)
       const newQuantity = operation === 'add' 
@@ -1427,9 +1512,44 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
       const response = await GraphQLAPI.updateStock(stock.id, stockInput)
       
       if (response.updateStock) {
+        // Update the product's stock_quantity based on the stock adjustment
+        const { unitData } = selectedStockData
+        const currentProductStock = unitData.stockQuantity || 0
+        const newProductStock = operation === 'add' 
+          ? currentProductStock + adjustQuantity 
+          : currentProductStock - adjustQuantity
+        
+        // Update the product's stock_quantity in the database
+        if (unitData.productId) {
+          await GraphQLAPI.updateProduct(unitData.productId, {
+            stock_quantity: newProductStock
+          })
+        }
+        
         // Refresh product data and stocks
         await loadProduct()
         await loadStocks()
+        
+        // Force refresh of product variants to show updated stock quantities
+        if (product?.product_name) {
+          try {
+            const updatedProductsResponse = await GraphQLAPI.searchProducts(product.product_name)
+            if (updatedProductsResponse.searchProducts) {
+              const sameNameProducts = updatedProductsResponse.searchProducts.filter(
+                (prod: any) => prod.product_name === product.product_name
+              )
+              setProductVariants(sameNameProducts)
+              logger.info('Product variants refreshed after stock adjustment', { 
+                variantsCount: sameNameProducts.length,
+                operation,
+                adjustQuantity,
+                newProductStock
+              }, 'INVENTORY')
+            }
+          } catch (error) {
+            logger.error('Failed to refresh product variants after stock adjustment', error, 'INVENTORY')
+          }
+        }
         
         // Close modal and reset form
         setShowAdjustStockModal(false)
@@ -1443,6 +1563,11 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
         })
         
         toast.success(`ปรับสต๊อกสำเร็จ (${operation === 'add' ? 'เพิ่ม' : 'ลด'} ${adjustQuantity} หน่วย)`)
+        
+        // Notify parent component that product was updated
+        if (onProductUpdated) {
+          onProductUpdated()
+        }
         }
       }
     } catch (error) {
@@ -1494,8 +1619,31 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
       await loadProduct()
       await loadStocks()
       
+      // Force refresh of product variants to show updated data
+      if (product?.product_name) {
+        try {
+          const updatedProductsResponse = await GraphQLAPI.searchProducts(product.product_name)
+          if (updatedProductsResponse.searchProducts) {
+            const sameNameProducts = updatedProductsResponse.searchProducts.filter(
+              (prod: any) => prod.product_name === product.product_name
+            )
+            setProductVariants(sameNameProducts)
+            logger.info('Product variants refreshed after stock management', { 
+              variantsCount: sameNameProducts.length 
+            }, 'INVENTORY')
+          }
+        } catch (error) {
+          logger.error('Failed to refresh product variants after stock management', error, 'INVENTORY')
+        }
+      }
+      
       setShowManageStockModal(false)
       toast.success('แก้ไขสต๊อกสำเร็จ')
+      
+      // Notify parent component that product was updated
+      if (onProductUpdated) {
+        onProductUpdated()
+      }
     } catch (error) {
       console.error('Error updating stock:', error)
       toast.error('เกิดข้อผิดพลาดในการแก้ไขสต๊อก')
@@ -1535,8 +1683,31 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
       await loadProduct()
       await loadStocks()
       
+      // Force refresh of product variants to show updated data
+      if (product?.product_name) {
+        try {
+          const updatedProductsResponse = await GraphQLAPI.searchProducts(product.product_name)
+          if (updatedProductsResponse.searchProducts) {
+            const sameNameProducts = updatedProductsResponse.searchProducts.filter(
+              (prod: any) => prod.product_name === product.product_name
+            )
+            setProductVariants(sameNameProducts)
+            logger.info('Product variants refreshed after stock deletion', { 
+              variantsCount: sameNameProducts.length 
+            }, 'INVENTORY')
+          }
+        } catch (error) {
+          logger.error('Failed to refresh product variants after stock deletion', error, 'INVENTORY')
+        }
+      }
+      
       setShowDeleteStockModal(false)
       toast.success('ลบสต๊อกสำเร็จ')
+      
+      // Notify parent component that product was updated
+      if (onProductUpdated) {
+        onProductUpdated()
+      }
     } catch (error) {
       console.error('Error deleting stock:', error)
       toast.error('เกิดข้อผิดพลาดในการลบสต๊อก')

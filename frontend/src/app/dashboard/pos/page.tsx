@@ -267,30 +267,27 @@ export default function POSPage() {
           })
         }
         
-        // Load prescription cart from localStorage if visitId exists
-        if (visitData.visitId) {
-          const prescriptionCart = localStorage.getItem(`prescription_cart_${visitData.visitId}`)
-          if (prescriptionCart) {
-            try {
-              const cartItems = JSON.parse(prescriptionCart)
-              // Convert prescription cart items to POS cart items
-              const posCartItems = cartItems.map((item: any) => ({
-                id: item.id,
-                product_name: item.product_name,
-                sale_price: item.sale_price,
-                unit: item.unit,
-                pack_size: item.pack_size,
-                quantity: item.quantity,
-                sku: item.sku,
-                barcode: item.barcode,
-                stock_quantity: item.stock_quantity,
-                vat_percent: item.vat_percent || 0
-              }))
-              setCartItems(posCartItems)
-              console.log('Loaded prescription cart:', posCartItems)
-            } catch (error) {
-              console.error('Error parsing prescription cart:', error)
-            }
+        // Load prescription cart from QueueEvent data instead of localStorage
+        if (visitData.prescriptionData && visitData.prescriptionData.items) {
+          try {
+            const cartItems = visitData.prescriptionData.items
+            // Convert prescription cart items to POS cart items
+            const posCartItems = cartItems.map((item: any) => ({
+              id: item.id,
+              product_name: item.product_name,
+              sale_price: item.sale_price,
+              unit: item.unit,
+              pack_size: item.pack_size,
+              quantity: item.quantity,
+              sku: item.sku,
+              barcode: item.barcode,
+              stock_quantity: item.stock_quantity,
+              vat_percent: item.vat_percent || 0
+            }))
+            setCartItems(posCartItems)
+            console.log('Loaded prescription cart from QueueEvent:', posCartItems)
+          } catch (error) {
+            console.error('Error parsing prescription cart from QueueEvent:', error)
           }
         }
         
@@ -665,11 +662,8 @@ export default function POSPage() {
       
       // ลบข้อมูลการสั่งยาจากหมอหลังจากชำระเงินเสร็จ
       if (prescriptionVisitData) {
-        // Clear prescription cart from localStorage
-        if (prescriptionVisitData.visitId) {
-          localStorage.removeItem(`prescription_cart_${prescriptionVisitData.visitId}`)
-          console.log(`🧹 [${paymentSessionId}] Prescription cart cleared from localStorage`)
-        }
+        // Note: ไม่ต้องลบข้อมูลจาก QueueEvent เพราะเป็นข้อมูลประวัติศาสตร์
+        // ข้อมูลการสั่งยาจะยังคงอยู่ใน QueueEvent note เพื่อการติดตาม
         
         setPrescriptionVisitData(null)
         setPrescriptionItems([])
@@ -712,6 +706,9 @@ export default function POSPage() {
     // ลบข้อมูลการสั่งยาจากหมอ
     setPrescriptionVisitData(null)
     setPrescriptionItems([])
+    
+    // Refresh หน้าจอ 1 รอบ
+    window.location.reload()
   }
 
   // สร้าง barcode เมื่อมี completedOrder
@@ -916,12 +913,12 @@ export default function POSPage() {
             <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
               <div className="flex items-center mb-2">
                 <div className="w-2 h-2 bg-blue-500 rounded-full mr-2"></div>
-                <h3 className="font-medium text-blue-900">ข้อมูลการสั่งยาจากหมอ</h3>
+                <h3 className="font-medium text-blue-900" data-testid="prescription-title">ข้อมูลการสั่งยาจากหมอ</h3>
               </div>
               <div className="text-sm text-blue-800 space-y-1">
-                <p><strong>ผู้ป่วย:</strong> {prescriptionVisitData.patientName}</p>
-                <p><strong>อาการ:</strong> {prescriptionVisitData.visitData?.chief_complaint || '-'}</p>
-                <p><strong>การวินิจฉัย:</strong> {prescriptionVisitData.visitData?.diagnosis || '-'}</p>
+                <p data-testid="prescription-patient-name" ><strong>ผู้ป่วย:</strong> {prescriptionVisitData.patientName}</p>
+                <p data-testid="prescription-chief-complaint"><strong>อาการ:</strong> {prescriptionVisitData.visitData?.chief_complaint || '-'}</p>
+                <p data-testid="prescription-diagnosis"><strong>การวินิจฉัย:</strong> {prescriptionVisitData.visitData?.diagnosis || '-'}</p>
                 
                 {/* Medical Information from Patient Data */}
                 {prescriptionVisitData.patientData && (
@@ -982,7 +979,7 @@ export default function POSPage() {
                 {prescriptionVisitData.visitData?.notes && (
                   <div className="mt-2">
                     <p><strong>แผนการรักษา:</strong></p>
-                    <div className="bg-white p-2 rounded border text-xs text-gray-700 whitespace-pre-wrap">
+                    <div data-testid="prescription-treatment-plan" className="bg-white p-2 rounded border text-xs text-gray-700 whitespace-pre-wrap">
                       {prescriptionVisitData.visitData.notes}
                     </div>
                   </div>

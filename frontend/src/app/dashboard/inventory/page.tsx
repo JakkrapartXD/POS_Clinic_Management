@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo, useEffect, useCallback, memo, Suspense } from "react"
-import { useSearchParams } from "next/navigation"
+import { useSearchParams, useRouter, usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import AddProductForm from "@/components/forms/AddProductForm"
 import ProductListSidebar from "@/components/modules/inventory/product-list-sidebar"
@@ -17,7 +17,7 @@ import { useAuth } from "@/components/providers/auth-provider"
 import toast from "react-hot-toast"
 
 type AlphabetMode = 'english' | 'thai' | 'numbers'
-type ViewMode = 'list' | 'add-product' | 'product-detail' | 'import-products' | 'delete-products' | 'export-products' | 'pharmacy'
+type ViewMode = 'list' | 'add-product' | 'product-detail' | 'import-products' | 'delete-products' | 'export-products'
 
 interface TransformedProduct {
   id: string
@@ -177,6 +177,8 @@ const downloadCSV = (csvContent: string, filename: string) => {
 function InventoryPage() {
   const { handleAuthError } = useAuth()
   const searchParams = useSearchParams()
+  const router = useRouter()
+  const pathname = usePathname()
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedLetter, setSelectedLetter] = useState<string>("")
   const [alphabetMode, setAlphabetMode] = useState<AlphabetMode>('english')
@@ -206,6 +208,40 @@ function InventoryPage() {
   }
 
   const currentSections = getCurrentSections()
+
+  // URL state management functions
+  const updateURL = useCallback((params: { productId?: string; tab?: string; view?: string }) => {
+    const url = new URL(window.location.href)
+    
+    if (params.productId) {
+      url.searchParams.set('productId', params.productId)
+    } else {
+      url.searchParams.delete('productId')
+    }
+    
+    if (params.tab) {
+      url.searchParams.set('tab', params.tab)
+    } else {
+      url.searchParams.delete('tab')
+    }
+    
+    if (params.view && params.view !== 'list') {
+      url.searchParams.set('view', params.view)
+    } else {
+      url.searchParams.delete('view')
+    }
+    
+    // Update URL without triggering a page reload
+    window.history.replaceState({}, '', url.toString())
+  }, [])
+
+  const clearURL = useCallback(() => {
+    const url = new URL(window.location.href)
+    url.searchParams.delete('productId')
+    url.searchParams.delete('tab')
+    url.searchParams.delete('view')
+    window.history.replaceState({}, '', url.toString())
+  }, [])
 
   // Load all products from GraphQL (no pagination)
   const loadProducts = useCallback(async () => {
@@ -265,6 +301,28 @@ function InventoryPage() {
     }
   }, [handleAuthError, isLoadingProducts])
 
+  // Enhanced refresh function that preserves current state
+  const refreshData = useCallback(async (preserveView: boolean = true) => {
+    try {
+      logger.info('Refreshing inventory data', { preserveView, currentView: viewMode, selectedProductId }, 'INVENTORY')
+      
+      // Invalidate cache first
+      GraphQLAPI.invalidateCachePattern('Products')
+      
+      // Reload products
+      await loadProducts()
+      
+      // If we're in product detail view and want to preserve it, reload the product
+      if (preserveView && viewMode === 'product-detail' && selectedProductId) {
+        // The ProductDetailView component will handle its own data refresh
+        logger.info('Preserving product detail view after refresh', { productId: selectedProductId }, 'INVENTORY')
+      }
+      
+      logger.info('Inventory data refreshed successfully', {}, 'INVENTORY')
+    } catch (error) {
+      logger.error('Failed to refresh inventory data', error, 'INVENTORY')
+    }
+  }, [loadProducts, viewMode, selectedProductId])
 
   useEffect(() => {
     // Load products on initial mount
@@ -273,11 +331,70 @@ function InventoryPage() {
     }
   }, []) // Empty dependency array for initial load only
 
-  // Handle URL parameters for direct navigation to product detail with stock tab
+  // Handle browser refresh and page visibility changes
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && products.length === 0) {
+        // Page became visible and we don't have products loaded
+        loadProducts()
+      }
+    }
+
+    const handleBeforeUnload = () => {
+      // Save current state to sessionStorage before page unload
+      const state = {
+        viewMode,
+        selectedProductId,
+        searchQuery,
+        selectedLetter,
+        alphabetMode
+      }
+      sessionStorage.setItem('inventoryState', JSON.stringify(state))
+    }
+
+    const handlePageShow = (event: PageTransitionEvent) => {
+      // Handle back/forward navigation
+      if (event.persisted) {
+        // Page was restored from cache
+        const savedState = sessionStorage.getItem('inventoryState')
+        if (savedState) {
+          try {
+            const state = JSON.parse(savedState)
+            setViewMode(state.viewMode || 'list')
+            setSelectedProductId(state.selectedProductId || null)
+            setSearchQuery(state.searchQuery || '')
+            setSelectedLetter(state.selectedLetter || '')
+            setAlphabetMode(state.alphabetMode || 'english')
+          } catch (error) {
+            logger.error('Failed to restore inventory state', error, 'INVENTORY')
+          }
+        }
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    window.addEventListener('pageshow', handlePageShow)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      window.removeEventListener('pageshow', handlePageShow)
+    }
+  }, [products.length, viewMode, selectedProductId, searchQuery, selectedLetter, alphabetMode, loadProducts])
+
+  // Handle URL parameters for direct navigation and state restoration
   useEffect(() => {
     const productId = searchParams.get('productId')
     const tab = searchParams.get('tab')
+    const view = searchParams.get('view')
     
+    // Set view mode from URL if present
+    if (view && ['add-product', 'import-products', 'export-products', 'delete-products'].includes(view)) {
+      setViewMode(view as ViewMode)
+    }
+    
+    // Handle product detail navigation
     if (productId && products.length > 0) {
       // Check if the product exists in our products list
       const productExists = products.some(p => p.id === productId)
@@ -285,11 +402,22 @@ function InventoryPage() {
         setSelectedProductId(productId)
         setViewMode('product-detail')
         
-        // If tab is 'stock', we'll need to pass this to ProductDetailView
-        // The ProductDetailView component will handle the tab selection
+        // Update URL to include view mode
+        updateURL({ productId, tab: tab || undefined, view: 'product-detail' })
       }
     }
-  }, [searchParams, products])
+  }, [searchParams, products, updateURL])
+
+  // Handle initial page load with URL parameters
+  useEffect(() => {
+    const productId = searchParams.get('productId')
+    const view = searchParams.get('view')
+    
+    // If we have URL parameters but no products loaded yet, we need to load products first
+    if ((productId || view) && products.length === 0 && !isLoadingProducts) {
+      loadProducts()
+    }
+  }, [searchParams, products.length, isLoadingProducts, loadProducts])
 
   // Transform products for display - group by product name and combine units
   // Memoized for better performance
@@ -393,18 +521,35 @@ function InventoryPage() {
     }
   }, [alphabetMode])
 
-  // Navigation handlers - memoized
+  // Navigation handlers - memoized with URL updates
   const handleBackToList = useCallback(() => {
     setViewMode('list')
-  }, [])
+    setSelectedProductId(null)
+    clearURL()
+  }, [clearURL])
 
-  // Action handlers - memoized
-  const handleAddProduct = useCallback(() => setViewMode('add-product'), [])
-  const handleImportProducts = useCallback(() => setViewMode('import-products'), [])
-  const handleExportProducts = useCallback(() => setViewMode('export-products'), [])
-  const handleDeleteProduct = useCallback(() => setViewMode('delete-products'), [])
+  // Action handlers - memoized with URL updates
+  const handleAddProduct = useCallback(() => {
+    setViewMode('add-product')
+    updateURL({ view: 'add-product' })
+  }, [updateURL])
+  
+  const handleImportProducts = useCallback(() => {
+    setViewMode('import-products')
+    updateURL({ view: 'import-products' })
+  }, [updateURL])
+  
+  const handleExportProducts = useCallback(() => {
+    setViewMode('export-products')
+    updateURL({ view: 'export-products' })
+  }, [updateURL])
+  
+  const handleDeleteProduct = useCallback(() => {
+    setViewMode('delete-products')
+    updateURL({ view: 'delete-products' })
+  }, [updateURL])
 
-  // Product detail handler - memoized
+  // Product detail handler - memoized with URL updates
   const handleProductClick = useCallback((productId: string) => {
     // Find the product with all its variants
     const product = transformedProducts.find(p => p.id === productId)
@@ -412,34 +557,34 @@ function InventoryPage() {
       // Store all product variants for detail view
       setSelectedProductId(productId)
       setViewMode('product-detail')
+      updateURL({ productId, view: 'product-detail' })
     } else {
       // Fallback to single product
       setSelectedProductId(productId)
       setViewMode('product-detail')
+      updateURL({ productId, view: 'product-detail' })
     }
-  }, [transformedProducts])
+  }, [transformedProducts, updateURL])
 
   // Handle product deletion callback - memoized with debounce
   const handleProductDeleted = useCallback(() => {
-    // Invalidate product cache before reloading
-    GraphQLAPI.invalidateCachePattern('Products')
-    
-    // Debounce reload to prevent multiple rapid calls
+    // Use the enhanced refresh function
     setTimeout(() => {
-      loadProducts() // Reload products after deletion
+      refreshData(false) // Don't preserve view after deletion
+      // Navigate back to list view
+      setViewMode('list')
+      setSelectedProductId(null)
+      clearURL()
     }, 500)
-  }, [loadProducts])
+  }, [refreshData, clearURL])
 
   // Handle product update callback - memoized with debounce
   const handleProductUpdated = useCallback(() => {
-    // Invalidate product cache before reloading
-    GraphQLAPI.invalidateCachePattern('Products')
-    
-    // Debounce reload to prevent multiple rapid calls
+    // Use the enhanced refresh function to preserve current view
     setTimeout(() => {
-      loadProducts() // Reload products after update
+      refreshData(true) // Preserve current view after update
     }, 500)
-  }, [loadProducts])
+  }, [refreshData])
 
   // Submit handlers - memoized with debounce
   const handleSubmitProduct = useCallback(async (productData: any) => {
@@ -551,14 +696,12 @@ function InventoryPage() {
       // Show success message
       toast.success('สร้างสินค้าสำเร็จ')
       
-      // Invalidate product cache before reloading
-      GraphQLAPI.invalidateCachePattern('Products')
-      
-      // Debounce reload to prevent multiple rapid calls
+      // Use the enhanced refresh function
       setTimeout(() => {
-        loadProducts() // Reload products after adding new product
+        refreshData(false) // Don't preserve view after adding new product
+        setViewMode('list')
+        clearURL()
       }, 500)
-      setViewMode('list')
     } catch (error) {
       logger.error('Error creating product', { error, productData }, 'INVENTORY')
       const errorMessage = error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการสร้างสินค้า'
@@ -569,21 +712,27 @@ function InventoryPage() {
   const handleImportSubmit = useCallback(async (importData: any) => {
     // If import was successful, refresh the products list
     if (importData.result && importData.result.success && importData.result.imported > 0) {
-      // Invalidate product cache before reloading
-      GraphQLAPI.invalidateCachePattern('Products')
-      loadProducts()
+      // Use the enhanced refresh function
+      setTimeout(() => {
+        refreshData(false) // Don't preserve view after import
+        setViewMode('list')
+        clearURL()
+      }, 500)
+    } else {
+      setViewMode('list')
+      clearURL()
     }
-    
-    setViewMode('list')
-  }, [loadProducts])
+  }, [refreshData, clearURL])
 
 
   const handleDeleteSubmit = useCallback((deleteData: any) => {
-    // Invalidate product cache before reloading
-    GraphQLAPI.invalidateCachePattern('Products')
-    loadProducts() // Reload products after bulk deletion
-    setViewMode('list')
-  }, [loadProducts])
+    // Use the enhanced refresh function
+    setTimeout(() => {
+      refreshData(false) // Don't preserve view after bulk deletion
+      setViewMode('list')
+      clearURL()
+    }, 500)
+  }, [refreshData, clearURL])
 
 
   const handleExportSubmit = useCallback(async (exportData: any) => {
@@ -611,6 +760,7 @@ function InventoryPage() {
       }
       
       setViewMode('list')
+      clearURL()
     } catch (error) {
       logger.error('Error exporting products', { error, exportData }, 'INVENTORY')
       
@@ -629,7 +779,7 @@ function InventoryPage() {
       const errorMessage = error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการส่งออกข้อมูล'
       toast.error(`ไม่สามารถส่งออกข้อมูลได้: ${errorMessage}`)
     }
-  }, [handleAuthError])
+  }, [handleAuthError, clearURL])
 
   const handleSaveButtonClick = useCallback(() => {
     setSubmitTrigger(prev => prev + 1)
@@ -793,144 +943,6 @@ function InventoryPage() {
             />
           )}
 
-          {viewMode === 'pharmacy' && (
-            <div className="p-6">
-              <div className="mb-6">
-                <Button 
-                  onClick={handleBackToList}
-                  variant="outline"
-                  className="mb-4"
-                >
-                  ← กลับไปหน้าหลัก
-                </Button>
-                <h1 className="text-2xl font-bold text-gray-900">เภสัชกรรม</h1>
-                <p className="text-gray-600 mt-2">จัดการการจ่ายยาและติดตามใบสั่งยา</p>
-              </div>
-              
-              {/* Pharmacy Tabs */}
-              <div className="border-b border-gray-200 mb-6">
-                <nav className="-mb-px flex space-x-8">
-                  <button
-                    data-testid="pending-prescriptions-tab"
-                    className="py-2 px-1 border-b-2 border-teal-500 text-teal-600 font-medium text-sm"
-                  >
-                    ใบสั่งยาที่รอจ่าย
-                  </button>
-                  <button
-                    data-testid="dispensing-history-tab"
-                    className="py-2 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 font-medium text-sm"
-                  >
-                    ประวัติการจ่ายยา
-                  </button>
-                  <button
-                    data-testid="stock-alerts-tab"
-                    className="py-2 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 font-medium text-sm"
-                  >
-                    แจ้งเตือนสต๊อก
-                  </button>
-                  <button
-                    data-testid="expiry-alerts-tab"
-                    className="py-2 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 font-medium text-sm"
-                  >
-                    แจ้งเตือนหมดอายุ
-                  </button>
-                </nav>
-              </div>
-
-              {/* Mock Pharmacy Content */}
-              <div className="space-y-6">
-                <div 
-                  data-testid="prescription-list"
-                  className="bg-white border border-gray-200 rounded-lg p-6"
-                >
-                  <h3 className="text-lg font-semibold mb-4">รายการใบสั่งยา</h3>
-                  <div className="space-y-4">
-                    <div 
-                      data-testid="prescription-row"
-                      className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 cursor-pointer"
-                    >
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h4 className="font-medium">ใบสั่งยา #RX001</h4>
-                          <p className="text-sm text-gray-600">ผู้ป่วย: สมชาย ใจดี</p>
-                          <p className="text-sm text-gray-600">วันที่: 2024-01-15</p>
-                        </div>
-                        <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full">
-                          รอจ่าย
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div 
-                  data-testid="dispensing-history-list"
-                  className="bg-white border border-gray-200 rounded-lg p-6"
-                >
-                  <h3 className="text-lg font-semibold mb-4">ประวัติการจ่ายยา</h3>
-                  <div className="space-y-4">
-                    <div 
-                      data-testid="dispensing-history-item"
-                      className="border border-gray-200 rounded-lg p-4"
-                    >
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h4 className="font-medium">ใบสั่งยา #RX002</h4>
-                          <p className="text-sm text-gray-600">ผู้ป่วย: สมหญิง ใจงาม</p>
-                          <p className="text-sm text-gray-600">วันที่จ่าย: 2024-01-14</p>
-                        </div>
-                        <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
-                          จ่ายแล้ว
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div 
-                  data-testid="stock-alerts-list"
-                  className="bg-white border border-gray-200 rounded-lg p-6"
-                >
-                  <h3 className="text-lg font-semibold mb-4">แจ้งเตือนสต๊อก</h3>
-                  <div className="space-y-4">
-                    <div 
-                      data-testid="stock-alert-item"
-                      className="border border-red-200 rounded-lg p-4 bg-red-50"
-                    >
-                      <div className="flex items-center">
-                        <span className="text-red-500 mr-2">⚠️</span>
-                        <div>
-                          <p className="font-medium text-red-800">สต๊อกต่ำ</p>
-                          <p className="text-sm text-red-600">พาราเซตามอล 500mg - เหลือ 5 เม็ด</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div 
-                  data-testid="expiry-alerts-list"
-                  className="bg-white border border-gray-200 rounded-lg p-6"
-                >
-                  <h3 className="text-lg font-semibold mb-4">แจ้งเตือนหมดอายุ</h3>
-                  <div className="space-y-4">
-                    <div 
-                      data-testid="expiry-alert-item"
-                      className="border border-orange-200 rounded-lg p-4 bg-orange-50"
-                    >
-                      <div className="flex items-center">
-                        <span className="text-orange-500 mr-2">⏰</span>
-                        <div>
-                          <p className="font-medium text-orange-800">ใกล้หมดอายุ</p>
-                          <p className="text-sm text-orange-600">แอสไพริน 300mg - หมดอายุใน 15 วัน</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>

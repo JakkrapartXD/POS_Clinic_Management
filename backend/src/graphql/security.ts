@@ -118,7 +118,19 @@ export class SecurityService {
   }
 
   static requireStaff(context: any) {
-    this.requireRole(context, ['admin', 'doctor', 'cashier', 'staff', 'nurse']);
+    this.requireRole(context, ['admin', 'doctor', 'cashier', 'staff', 'nurse', 'pharmacist']);
+  }
+
+  static requirePharmacist(context: any) {
+    this.requireRole(context, ['admin', 'pharmacist']);
+  }
+
+  static requireCashier(context: any) {
+    this.requireRole(context, ['admin', 'cashier']);
+  }
+
+  static requireNurse(context: any) {
+    this.requireRole(context, ['admin', 'nurse']);
   }
 
   // Rate limiting - now accepts redisClient as parameter
@@ -307,8 +319,8 @@ export class SecurityService {
     // Doctors can access all patients for medical purposes (viewing history, creating appointments, etc.)
     if (role === 'doctor') return;
     
-    // Staff, cashier, and nurse can access all patients for basic operations
-    if (['staff', 'cashier', 'nurse'].includes(role)) return;
+    // Staff, cashier, nurse, and pharmacist can access all patients for basic operations
+    if (['staff', 'cashier', 'nurse', 'pharmacist'].includes(role)) return;
     
     throw new GraphQLError('Access denied: Insufficient permissions to access patient data');
   }

@@ -16,10 +16,11 @@ test.describe.serial('การทดสอบระบบคิว E2E', () => 
     address: '123 ถนนคิวทดสอบ แขวงคิวทดสอบ เขตคิวทดสอบ กรุงเทพฯ 10110'
   };
 
-  test.beforeEach(async ({ page }) => {
+  // Helper function สำหรับ setup page
+  const setupPage = async (page: any) => {
     // ตั้งค่า console logging และเก็บ errors
     const consoleErrors: string[] = [];
-    page.on('console', msg => {
+    page.on('console', (msg: any) => {
       if (msg.type() === 'error') {
         console.log('🚨 Browser Error:', msg.text());
         consoleErrors.push(msg.text());
@@ -27,7 +28,7 @@ test.describe.serial('การทดสอบระบบคิว E2E', () => 
     });
     
     // ตั้งค่า network request logging
-    page.on('requestfailed', request => {
+    page.on('requestfailed', (request: any) => {
       console.log('🚨 Request Failed:', request.url(), request.failure()?.errorText);
     });
     
@@ -42,6 +43,11 @@ test.describe.serial('การทดสอบระบบคิว E2E', () => 
         originalError.apply(console, args);
       };
     });
+  };
+
+  // Helper function สำหรับ login ด้วย nurse
+  const loginAsNurse = async (page: any) => {
+    await setupPage(page);
     
     // ไปที่หน้า login
     await page.goto('/login');
@@ -66,11 +72,72 @@ test.describe.serial('การทดสอบระบบคิว E2E', () => 
       await page.reload();
       await page.waitForSelector('[data-testid="patients-menu"]', { timeout: 5000 });
     }
-  });
+  };
+
+  // Helper function สำหรับ login ด้วย doctor
+  const loginAsDoctor = async (page: any) => {
+    await setupPage(page);
+    
+    // ไปที่หน้า login
+    await page.goto('/login');
+    
+    // เข้าสู่ระบบด้วยผู้ใช้หมอ (doctor)
+    await page.fill('[data-testid="username-input"]', 'doctor01');
+    await page.fill('[data-testid="password-input"]', 'doctor123');
+    await page.click('[data-testid="login-button"]');
+    
+    // รอให้ redirect ไปหน้า dashboard
+    await page.waitForURL('/dashboard/pos');
+    
+    // รอให้ authentication เสร็จสิ้น
+    await page.waitForTimeout(3000);
+    
+    // รอให้ sidebar โหลดเสร็จ
+    try {
+      await page.waitForSelector('[data-testid="queue/doctor-menu"]', { timeout: 5000 });
+    } catch (error) {
+      // ถ้า sidebar ไม่โหลด ให้ refresh หน้า
+      console.log('Sidebar not loaded, refreshing page...');
+      await page.reload();
+      await page.waitForSelector('[data-testid="queue/doctor-menu"]', { timeout: 5000 });
+    }
+  };
+
+  // Helper function สำหรับ login ด้วย cashier
+  const loginAsCashier = async (page: any) => {
+    await setupPage(page);
+    
+    // ไปที่หน้า login
+    await page.goto('/login');
+    
+    // เข้าสู่ระบบด้วยผู้ใช้แคชเชียร์ (cashier)
+    await page.fill('[data-testid="username-input"]', 'cashier01');
+    await page.fill('[data-testid="password-input"]', 'cashier123');
+    await page.click('[data-testid="login-button"]');
+    
+    // รอให้ redirect ไปหน้า dashboard
+    await page.waitForURL('/dashboard/pos');
+    
+    // รอให้ authentication เสร็จสิ้น
+    await page.waitForTimeout(3000);
+    
+    // รอให้ sidebar โหลดเสร็จ
+    try {
+      await page.waitForSelector('[data-testid="queue/cashier-menu"]', { timeout: 5000 });
+    } catch (error) {
+      // ถ้า sidebar ไม่โหลด ให้ refresh หน้า
+      console.log('Sidebar not loaded, refreshing page...');
+      await page.reload();
+      await page.waitForSelector('[data-testid="queue/cashier-menu"]', { timeout: 5000 });
+    }
+  };
 
   test('UAT-Queue-001: ทดสอบระบบคิวคัดกรองแบบครบวงจร', async ({ page }) => {
     console.log('🚀 เริ่มทดสอบระบบคิวคัดกรองแบบครบวงจร');
     console.log('📋 ข้อมูลผู้ป่วยทดสอบ:', testPatient);
+
+    // Login ด้วย nurse
+    await loginAsNurse(page);
 
     // ===== ขั้นตอนที่ 1: สร้างผู้ป่วยใหม่ =====
     console.log('📝 ขั้นตอนที่ 1: สร้างผู้ป่วยใหม่');
@@ -252,6 +319,343 @@ test.describe.serial('การทดสอบระบบคิว E2E', () => 
     console.log('✅ เสร็จสิ้นคัดกรองสำเร็จ');
 
     console.log('🎉 ทดสอบระบบคิวคัดกรองแบบครบวงจรเสร็จสิ้น!');
+  });
+
+  test('UAT-Queue-002: ทดสอบระบบคิวหมอแบบครบวงจร', async ({ page }) => {
+    console.log('🚀 เริ่มทดสอบระบบคิวหมอแบบครบวงจร');
+    console.log('📋 ข้อมูลผู้ป่วยทดสอบ:', testPatient);
+
+    // ===== ขั้นตอนที่ 1: Login ด้วย doctor01 =====
+    console.log('🔐 ขั้นตอนที่ 1: Login ด้วย doctor01');
+    
+    // Login ด้วย doctor
+    await loginAsDoctor(page);
+    console.log('✅ Login ด้วย doctor01 สำเร็จ');
+
+    // ===== ขั้นตอนที่ 2: เข้าคิวหมอ =====
+    console.log('🏥 ขั้นตอนที่ 2: เข้าคิวหมอ');
+    
+    // กดเข้าคิวหมอ
+    await page.click('[data-testid="queue/doctor-menu"]');
+    
+    // รอให้ไปหน้า doctor queue
+    await page.waitForURL('/queue/doctor');
+    console.log('✅ เข้าคิวหมอสำเร็จ');
+
+    // ===== ขั้นตอนที่ 3: ตรวจสอบหน้าและค้นหาผู้ป่วย =====
+    console.log('🔍 ขั้นตอนที่ 3: ตรวจสอบหน้าและค้นหาผู้ป่วย');
+    
+    // ตรวจสอบ h1:has-text("คิวหมอ")
+    await expect(page.locator('h1:has-text("คิวหมอ")')).toBeVisible();
+    console.log('✅ หน้าแสดงหัวข้อ "คิวหมอ"');
+    
+    // ค้นหาผู้ป่วยด้วยชื่อ
+    const searchInput = page.locator('input[placeholder*="ค้นหา"]');
+    await searchInput.fill(testPatient.firstName);
+    await page.waitForTimeout(2000); // รอผลการค้นหา
+    console.log('✅ ค้นหาผู้ป่วยด้วยชื่อ');
+
+    // ===== ขั้นตอนที่ 4: เรียกผู้ป่วย =====
+    console.log('📞 ขั้นตอนที่ 4: เรียกผู้ป่วย');
+    
+    // หาตั๋วคิวของผู้ป่วย (รอเรียก)
+    const ticketCard = page.locator(`[data-testid="ticket-card-${testPatient.phone}"]`).first();
+    await expect(ticketCard).toBeVisible();
+    
+    // กดปุ่มเรียก
+    const callButton = ticketCard.locator('button:has-text("เรียก")');
+    await expect(callButton).toBeVisible();
+    await callButton.click();
+    
+    // รอ 3 วินาที
+    await page.waitForTimeout(3000);
+    console.log('✅ เรียกผู้ป่วยสำเร็จ');
+
+    // ===== ขั้นตอนที่ 5: เริ่มตรวจ =====
+    console.log('🩺 ขั้นตอนที่ 5: เริ่มตรวจ');
+    
+    // กดปุ่มเริ่มตรวจ
+    const startButton = ticketCard.locator('button:has-text("เริ่มตรวจ")');
+    await expect(startButton).toBeVisible();
+    await startButton.click();
+    
+    // รอให้ระบบประมวลผล
+    await page.waitForTimeout(3000);
+    console.log('✅ เริ่มตรวจสำเร็จ');
+
+    // ===== ขั้นตอนที่ 6: ดูสัญญาณชีพ =====
+    console.log('📊 ขั้นตอนที่ 6: ดูสัญญาณชีพ');
+    
+    // กดปุ่มดูสัญญาณชีพ
+    const vitalsButton = ticketCard.locator('button:has-text("ดูสัญญาณชีพ")');
+    await expect(vitalsButton).toBeVisible();
+    await vitalsButton.click();
+    
+    // รอ modal ขึ้นมา
+    await page.waitForSelector('[role="dialog"]', { timeout: 10000 });
+    console.log('✅ Modal สัญญาณชีพเปิดขึ้น');
+    
+    // ตรวจสอบข้อมูลสัญญาณชีพที่กรอกไปในขั้นตอนแรก
+    const vitalsModal = page.locator('[role="dialog"]');
+    await expect(vitalsModal.locator('text=175 cm')).toBeVisible(); // ส่วนสูง
+    await expect(vitalsModal.locator('text=75 kg')).toBeVisible(); // น้ำหนัก
+    await expect(vitalsModal.locator('text=36.8 °C')).toBeVisible(); // อุณหภูมิ
+    await expect(vitalsModal.locator('text=80 bpm')).toBeVisible(); // อัตราการเต้นหัวใจ
+    await expect(vitalsModal.locator('text=125/85 mmHg')).toBeVisible(); // ความดันโลหิต
+    await expect(vitalsModal.locator('text=99 %')).toBeVisible(); // SpO2
+    console.log('✅ ตรวจสอบข้อมูลสัญญาณชีพถูกต้อง');
+    
+    // กดปิด modal
+    const closeButton = vitalsModal.locator('button:has-text("ปิด")');
+    await closeButton.click();
+    await page.waitForSelector('[role="dialog"]', { state: 'hidden', timeout: 5000 });
+    console.log('✅ ปิด modal สัญญาณชีพ');
+
+    // ===== ขั้นตอนที่ 7: บันทึกการตรวจ =====
+    console.log('📝 ขั้นตอนที่ 7: บันทึกการตรวจ');
+    
+    // กดปุ่มบันทึกการตรวจ
+    const consultationButton = ticketCard.locator('button:has-text("บันทึกการตรวจ")');
+    await expect(consultationButton).toBeVisible();
+    await consultationButton.click();
+    
+    // รอ modal ขึ้นมา
+    await page.waitForSelector('[role="dialog"]', { timeout: 10000 });
+    console.log('✅ Modal บันทึกการตรวจเปิดขึ้น');
+    
+    // กรอกข้อมูลการตรวจ
+    const consultationModal = page.locator('[role="dialog"]');
+    
+    // กรอกอาการสำคัญ
+    await consultationModal.locator('textarea[placeholder*="อาการสำคัญ"]').fill('ปวดหัวและมีไข้');
+    
+    // กรอกการวินิจฉัย
+    await consultationModal.locator('textarea[placeholder*="การวินิจฉัย"]').fill('ไข้หวัดธรรมดา');
+    
+    // กรอกแผนการรักษา
+    await consultationModal.locator('textarea[placeholder*="แผนการรักษา"]').fill('ให้ยาลดไข้และพักผ่อน');
+    
+    // กรอกวันที่นัดหมาย (1 ธันวาคม 2025)
+    await consultationModal.locator('input[type="date"]').fill('2025-12-01');
+    
+    // กรอกเหตุผลการนัดหมาย
+    await consultationModal.locator('input[placeholder*="เช่น ติดตามผลการรักษา, ตรวจเลือด..."]').fill('ติดตามผลการรักษา');
+    
+    console.log('✅ กรอกข้อมูลการตรวจเสร็จ');
+    await page.waitForTimeout(3000);
+    // กดปุ่มบันทึก
+    const saveButton = consultationModal.locator('[data-testid="save-consultation-button"]');
+    await expect(saveButton).toBeVisible();
+    await saveButton.click();
+    
+    // รอให้ระบบประมวลผล
+    await page.waitForTimeout(3000);
+    console.log('✅ บันทึกการตรวจสำเร็จ');
+
+    // ===== ขั้นตอนที่ 8: สั่งยา =====
+    console.log('💊 ขั้นตอนที่ 8: สั่งยา');
+    
+    // กดปุ่มสั่งยา
+    const prescriptionButton = ticketCard.locator('button:has-text("สั่งยา")');
+    await expect(prescriptionButton).toBeVisible();
+    await prescriptionButton.click();
+    
+    // รอ modal ขึ้นมา
+    await page.waitForSelector('[role="dialog"]', { timeout: 10000 });
+    console.log('✅ Modal สั่งยาเปิดขึ้น');
+    
+    const prescriptionModal = page.locator('[role="dialog"]');
+    
+    // ค้นหายาในช่องค้นหา
+    const productSearchInput = prescriptionModal.locator('input[placeholder*="ค้นหาสินค้าจากชื่อ หรือบาร์โค้ด..."]');
+    await productSearchInput.fill('ยา');
+    await page.waitForTimeout(1000);
+    
+    // คลิกเพิ่มยาตัวแรกที่พบ
+    const firstProduct = prescriptionModal.locator('[data-testid^="product-card-"]').first();
+    await expect(firstProduct).toBeVisible();
+    await firstProduct.click();
+    console.log('✅ เพิ่มยาตัวแรกเข้าตะกร้า');
+    
+    // ค้นหา "ค่าตรวจ"
+    await productSearchInput.clear();
+    await productSearchInput.fill('ค่าตรวจ');
+    await page.waitForTimeout(1000);
+    
+    // คลิกเพิ่มค่าตรวจตัวแรกที่พบ
+    const firstLabTest = prescriptionModal.locator('[data-testid^="product-card-"]').first();
+    await expect(firstLabTest).toBeVisible();
+    await firstLabTest.click();
+    console.log('✅ เพิ่มค่าตรวจเข้าตะกร้า');
+    
+    // กดปุ่มบันทึก
+    const savePrescriptionButton = prescriptionModal.locator('button:has-text("บันทึก")');
+    await expect(savePrescriptionButton).toBeVisible();
+    await savePrescriptionButton.click();
+    
+    // รอ 2 วินาที
+    await page.waitForTimeout(2000);
+    console.log('✅ บันทึกการสั่งยาสำเร็จ');
+
+    // ===== ขั้นตอนที่ 9: เสร็จสิ้น =====
+    console.log('✅ ขั้นตอนที่ 9: เสร็จสิ้น');
+    
+    // กดปุ่มเสร็จสิ้น
+    const completeButton = ticketCard.locator('button:has-text("เสร็จสิ้น")');
+    await expect(completeButton).toBeVisible();
+    await completeButton.click();
+    
+    // รอให้ระบบประมวลผล
+    await page.waitForTimeout(3000);
+    console.log('✅ เสร็จสิ้นการตรวจสำเร็จ');
+
+    console.log('🎉 ทดสอบระบบคิวหมอแบบครบวงจรเสร็จสิ้น!');
+  });
+
+  test('UAT-Queue-003: ทดสอบระบบคิวแคชเชียร์แบบครบวงจร', async ({ page }) => {
+    console.log('🚀 เริ่มทดสอบระบบคิวแคชเชียร์แบบครบวงจร');
+    console.log('📋 ข้อมูลผู้ป่วยทดสอบ:', testPatient);
+
+    // ===== ขั้นตอนที่ 1: Login ด้วย cashier01 =====
+    console.log('🔐 ขั้นตอนที่ 1: Login ด้วย cashier01');
+    
+    // Login ด้วย cashier
+    await loginAsCashier(page);
+    console.log('✅ Login ด้วย cashier01 สำเร็จ');
+
+    // ===== ขั้นตอนที่ 2: เข้าคิวแคชเชียร์ =====
+    console.log('💰 ขั้นตอนที่ 2: เข้าคิวแคชเชียร์');
+    
+    // กดเข้าคิวแคชเชียร์
+    await page.click('[data-testid="queue/cashier-menu"]');
+    
+    // รอให้ไปหน้า cashier queue
+    await page.waitForURL('/queue/cashier');
+    console.log('✅ เข้าคิวแคชเชียร์สำเร็จ');
+
+    // ===== ขั้นตอนที่ 3: ค้นหาผู้ป่วย =====
+    console.log('🔍 ขั้นตอนที่ 3: ค้นหาผู้ป่วย');
+    
+    // ค้นหาผู้ป่วยด้วยชื่อ
+    const searchInput = page.locator('input[placeholder*="ค้นหา"]');
+    await searchInput.fill(testPatient.firstName);
+    await page.waitForTimeout(2000); // รอผลการค้นหา
+    console.log('✅ ค้นหาผู้ป่วยด้วยชื่อ');
+
+    // ===== ขั้นตอนที่ 4: เรียกผู้ป่วยและเริ่มบริการ =====
+    console.log('📞 ขั้นตอนที่ 4: เรียกผู้ป่วยและเริ่มบริการ');
+    
+    // หาตั๋วคิวของผู้ป่วย (รอเรียก)
+    const ticketCard = page.locator(`[data-testid="ticket-card-${testPatient.phone}"]`).first();
+    await expect(ticketCard).toBeVisible();
+    
+    // กดปุ่มเรียก
+    const callButton = ticketCard.locator('button:has-text("เรียก")');
+    await expect(callButton).toBeVisible();
+    await callButton.click();
+    
+    // รอ 2 วินาที
+    await page.waitForTimeout(2000);
+    console.log('✅ เรียกผู้ป่วยสำเร็จ');
+    
+    // กดปุ่มเริ่มบริการ
+    const startButton = ticketCard.locator('button:has-text("เริ่มบริการ")');
+    await expect(startButton).toBeVisible();
+    await startButton.click();
+    
+    // รอให้ระบบประมวลผล
+    await page.waitForTimeout(3000);
+    console.log('✅ เริ่มบริการสำเร็จ');
+
+    // ===== ขั้นตอนที่ 5: เปิด POS =====
+    console.log('🛒 ขั้นตอนที่ 5: เปิด POS');
+    
+    // กดปุ่มเปิด POS
+    const openPOSButton = ticketCard.locator(`[data-testid="open-pos-button-${testPatient.phone}"]`);
+    await expect(openPOSButton).toBeVisible();
+    await openPOSButton.click();
+    
+    // รอให้ไปหน้า POS
+    await page.waitForURL('/dashboard/pos');
+    console.log('✅ เปิด POS สำเร็จ');
+
+    // ===== ขั้นตอนที่ 6: ตรวจสอบข้อมูลการสั่งยาจากหมอ =====
+    console.log('📋 ขั้นตอนที่ 6: ตรวจสอบข้อมูลการสั่งยาจากหมอ');
+    
+    // รอให้หน้า POS โหลดเสร็จ
+    await page.waitForSelector('[data-testid="product-grid"]');
+    
+    // ตรวจสอบส่วนตะกร้าสินค้า
+    const prescriptionSection = page.locator('[data-testid="prescription-title"]').locator('..');
+    await expect(prescriptionSection).toBeVisible();
+    console.log('✅ พบส่วนข้อมูลการสั่งยาจากหมอ');
+    
+    // ตรวจสอบข้อมูลผู้ป่วยในส่วนการสั่งยาจากหมอ
+    await expect(page.locator('[data-testid="prescription-patient-name"]')).toBeVisible();
+    console.log('✅ ตรวจสอบข้อมูลผู้ป่วย');
+    
+    // ตรวจสอบอาการสำคัญ
+    await expect(page.locator('[data-testid="prescription-chief-complaint"]')).toBeVisible();
+    console.log('✅ ตรวจสอบอาการสำคัญ');
+    
+    // ตรวจสอบการวินิจฉัย
+    await expect(page.locator('[data-testid="prescription-diagnosis"]')).toBeVisible();
+    console.log('✅ ตรวจสอบการวินิจฉัย');
+    
+    // ตรวจสอบแผนการรักษา
+    await expect(page.locator('[data-testid="prescription-treatment-plan"]')).toBeVisible();
+    console.log('✅ ตรวจสอบแผนการรักษา');
+    
+    // ตรวจสอบว่ามีสินค้าในตะกร้าจากการสั่งยาของหมอ
+    const cartItems = page.locator('[data-testid="cart-item"]');
+    await expect(cartItems).toHaveCount(2); // ควรมียาและค่าตรวจ
+    console.log('✅ ตรวจสอบสินค้าในตะกร้าจากการสั่งยาของหมอ');
+
+    // ===== ขั้นตอนที่ 7: ชำระสินค้า =====
+    console.log('💳 ขั้นตอนที่ 7: ชำระสินค้า');
+    console.log('✅ ตรวจสอบสินค้าในตะกร้า');
+    
+    // คลิกชำระเงิน
+    await page.click('[data-testid="checkout-button"]');
+    
+    // รอ dialog การชำระเงิน
+    await page.waitForSelector('[data-testid="payment-dialog"]');
+    console.log('✅ เปิด dialog การชำระเงิน');
+    
+    // เลือกวิธีการชำระเงินเป็นเงินสด
+    await page.click('[data-testid="payment-method-cash"]');
+    
+    // ใช้ numpad ใส่จำนวนเงิน
+    await page.click('[data-testid="numpad-1"]');
+    await page.click('[data-testid="numpad-0"]');
+    await page.click('[data-testid="numpad-0"]');
+    await page.click('[data-testid="numpad-0"]');
+    
+    // ยืนยันการชำระเงิน
+    await page.click('[data-testid="confirm-payment-button"]');
+    
+    // รอ dialog สำเร็จ
+    await expect(page.locator('[data-testid="payment-success-dialog"]')).toBeVisible();
+    console.log('✅ การชำระเงินสำเร็จ');
+    
+    // ตรวจสอบข้อมูลใบเสร็จ
+    await expect(page.locator('[data-testid="receipt-number"]')).toBeVisible();
+    await expect(page.locator('[data-testid="receipt-items"]')).toBeVisible();
+    await expect(page.locator('[data-testid="receipt-total"]')).toBeVisible();
+    await expect(page.locator('[data-testid="receipt-payment-method"]')).toBeVisible();
+    console.log('✅ ตรวจสอบข้อมูลใบเสร็จ');
+    
+    // ปิด dialog สำเร็จ
+    await page.click('[data-testid="close-success-dialog"]');
+    
+    // รอให้ dialog ปิด
+    await page.waitForTimeout(1000);
+    
+    // ตรวจสอบว่าตระกร้าว่าง
+    await expect(page.locator('[data-testid="cart-item"]')).toHaveCount(0);
+    console.log('✅ ตระกร้าว่างหลังการชำระเงิน');
+
+    console.log('🎉 ทดสอบระบบคิวแคชเชียร์แบบครบวงจรเสร็จสิ้น!');
   });
 
   test.afterAll(async () => {

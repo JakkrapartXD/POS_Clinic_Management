@@ -130,7 +130,6 @@ export default function ProductListSidebar({
                       </div>
                       <div className="text-right">
                         <div className="text-sm font-medium text-teal-600">฿{product.price}</div>
-                        <div className="w-4 h-4 border border-gray-300 mt-1"></div>
                       </div>
                     </div>
                   </div>
