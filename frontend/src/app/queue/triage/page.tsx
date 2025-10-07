@@ -138,13 +138,13 @@ export default function TriageQueuePage() {
 
   useEffect(() => {
     fetchTriageQueue();
-    // Set up polling for real-time updates
+    // Set up polling for real-time updates with longer interval to avoid rate limiting
     const interval = setInterval(() => {
       // Skip polling if any ticket is being updated
       if (!isUpdating) {
         fetchTriageQueue();
       }
-    }, 30000); // Refresh every 30 seconds
+    }, 60000); // Refresh every 60 seconds (increased from 30 seconds)
     return () => clearInterval(interval);
   }, [selectedStatus, searchQuery, isUpdating]);
 
@@ -170,7 +170,17 @@ export default function TriageQueuePage() {
 
     } catch (error: any) {
       console.error('Error fetching triage queue:', error);
-      toast.error(error.message || 'ไม่สามารถโหลดคิวคัดกรองได้');
+      
+      // Handle rate limiting specifically
+      if (error.message?.includes('Rate limit exceeded') || error.message?.includes('Request too frequent')) {
+        toast.error('การเรียกข้อมูลบ่อยเกินไป กรุณารอสักครู่แล้วลองใหม่');
+        // Extend polling interval temporarily
+        setTimeout(() => {
+          fetchTriageQueue(true);
+        }, 30000); // Wait 30 seconds before retry
+      } else {
+        toast.error(error.message || 'ไม่สามารถโหลดคิวคัดกรองได้');
+      }
     } finally {
       setIsLoading(false);
     }

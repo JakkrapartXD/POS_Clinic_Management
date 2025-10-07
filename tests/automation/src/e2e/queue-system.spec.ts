@@ -655,6 +655,42 @@ test.describe.serial('การทดสอบระบบคิว E2E', () => 
     await expect(page.locator('[data-testid="cart-item"]')).toHaveCount(0);
     console.log('✅ ตระกร้าว่างหลังการชำระเงิน');
 
+    // ===== ขั้นตอนที่ 8: กลับมาหน้าคิวแคชเชียร์ =====
+    console.log('🔄 ขั้นตอนที่ 8: กลับมาหน้าคิวแคชเชียร์');
+    
+    // กลับมาหน้าคิวแคชเชียร์
+    await page.click('[data-testid="queue/cashier-menu"]');
+    
+    // รอให้ไปหน้า cashier queue
+    await page.waitForURL('/queue/cashier');
+    console.log('✅ กลับมาหน้าคิวแคชเชียร์สำเร็จ');
+
+    // ===== ขั้นตอนที่ 9: ค้นหาผู้ป่วยเดิม =====
+    console.log('🔍 ขั้นตอนที่ 9: ค้นหาผู้ป่วยเดิม');
+    
+    // ค้นหาผู้ป่วยด้วยชื่อเดิม
+    const searchInputAgain = page.locator('input[placeholder*="ค้นหา"]');
+    await searchInputAgain.fill(testPatient.firstName);
+    await page.waitForTimeout(2000); // รอผลการค้นหา
+    console.log('✅ ค้นหาผู้ป่วยเดิมด้วยชื่อ');
+
+    // ===== ขั้นตอนที่ 10: กดปุ่มเสร็จสิ้น =====
+    console.log('✅ ขั้นตอนที่ 10: กดปุ่มเสร็จสิ้น');
+    
+    // หาตั๋วคิวของผู้ป่วย (ควรอยู่ในสถานะ in_service หรือ done)
+    const ticketCardAgain = page.locator(`[data-testid="ticket-card-${testPatient.phone}"]`).first();
+    await expect(ticketCardAgain).toBeVisible();
+    console.log('✅ พบตั๋วคิวของผู้ป่วย');
+    
+    // กดปุ่มเสร็จสิ้น
+    const completeButton = ticketCardAgain.locator('button:has-text("เสร็จสิ้น")');
+    await expect(completeButton).toBeVisible();
+    await completeButton.click();
+    
+    // รอให้ระบบประมวลผล
+    await page.waitForTimeout(3000);
+    console.log('✅ เสร็จสิ้นการบริการแคชเชียร์สำเร็จ');
+
     console.log('🎉 ทดสอบระบบคิวแคชเชียร์แบบครบวงจรเสร็จสิ้น!');
   });
 

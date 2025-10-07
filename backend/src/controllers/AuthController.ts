@@ -2,6 +2,7 @@ import { Elysia, t } from "elysia";
 import { cookie } from "@elysiajs/cookie";
 import { AuthService } from "../services/AuthService";
 import { getCookieNames, getSessionConfig } from "../config/auth";
+import { SecurityService } from "../graphql/security";
 
 // Validation schemas
 const authSignUpModel = t.Object({
@@ -28,7 +29,21 @@ export const authController = (app: Elysia, redisClient?: any) => {
     .put(
       "/sign-up",
       async ({ body: { username, password, email } }) => {
-        return await authService.signUp(username, password, email);
+        const result = await authService.signUp(username, password, email);
+        
+        // Log security tracking for user registration
+        if (result.success && result.user) {
+          await SecurityService.logSensitiveOperation(
+            result.user.id,
+            'USER_REGISTRATION',
+            'User',
+            result.user.id,
+            { username, email },
+            redisClient
+          );
+        }
+        
+        return result;
       },
       {
         body: authSignUpModel,
@@ -43,6 +58,18 @@ export const authController = (app: Elysia, redisClient?: any) => {
         if (!result.success) {
           set.status = 401;
           return { success: false, error: result.error };
+        }
+        
+        // Log security tracking for successful login
+        if (result.user) {
+          await SecurityService.logSensitiveOperation(
+            result.user.id,
+            'USER_LOGIN',
+            'User',
+            result.user.id,
+            { username, loginTime: new Date().toISOString() },
+            redisClient
+          );
         }
         
         // Set cookies
@@ -79,8 +106,22 @@ export const authController = (app: Elysia, redisClient?: any) => {
       const cookieNames = getCookieNames();
       const sessionToken = cookie[cookieNames.sessionToken]?.value;
       if (sessionToken) {
-
+        // Get user info before signing out for audit log
+        const userId = await authService.getUserIdBySessionToken(sessionToken);
+        
         await authService.signOut(sessionToken);
+        
+        // Log security tracking for logout
+        if (userId) {
+          await SecurityService.logSensitiveOperation(
+            userId,
+            'USER_LOGOUT',
+            'User',
+            userId,
+            { logoutTime: new Date().toISOString() },
+            redisClient
+          );
+        }
         
         // Remove both cookies
         cookie[cookieNames.sessionToken].remove();

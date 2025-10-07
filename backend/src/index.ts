@@ -278,11 +278,11 @@ const app = new Elysia()
 
   // Register routes
   .use(AuthRoutes)
-  .use(userRoutes)
-  .use(uploadRoutes)
+  .use(userRoutes(redisClient))
+  .use(uploadRoutes(redisClient))
   .use(oauthRoutes)
-  .use(backupRoutes)
-  .use(clinicRoutes)
+  .use(backupRoutes(redisClient))
+  .use(clinicRoutes(redisClient))
 
   // Default route
   .get("/", () => ({

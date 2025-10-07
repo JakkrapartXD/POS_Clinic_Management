@@ -126,6 +126,9 @@ export const clinicQueries = {
       throw new Error("Access denied");
     }
 
+    // Add specific rate limiting for queue tickets queries
+    await context.security.checkRateLimit(context.userId, 'query', context.redisClient);
+
     try {
       return await clinicService.getQueueTickets({
         station: station as any,
@@ -214,6 +217,9 @@ export const clinicQueries = {
     if (!["nurse", "doctor", "admin", "staff"].includes(context.user.role)) {
       throw new Error("FORBIDDEN");
     }
+
+    // Add specific rate limiting for triage queue queries
+    await context.security.checkRateLimit(context.userId, 'query', context.redisClient);
 
     try {
       return await clinicService.getTriageQueue({

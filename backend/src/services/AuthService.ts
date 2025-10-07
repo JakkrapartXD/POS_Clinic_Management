@@ -22,7 +22,7 @@ export class AuthService {
       role: 'staff', // เพิ่ม default role เนื่องจาก schema กำหนดให้เป็น required
     });
     
-    return { success: true, userId: user.id };
+    return { success: true, userId: user.id, user: user };
   }
 
   async signIn(username: string, password: string) {
@@ -102,6 +102,10 @@ export class AuthService {
     }
     
     return { success: true };
+  }
+
+  async getUserIdBySessionToken(sessionToken: string): Promise<string | null> {
+    return await this.sessionModel.getUserIdByToken(sessionToken);
   }
 
   generateSessionToken() {

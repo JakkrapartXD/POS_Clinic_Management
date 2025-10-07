@@ -1,8 +1,9 @@
 import { Elysia } from "elysia";
 import { uploadService } from "../middleware/upload";
 import { jwt } from "@elysiajs/jwt";
+import { SecurityService } from "../graphql/security";
 
-export const uploadRoutes = new Elysia({ prefix: "/upload" })
+export const uploadRoutes = (redisClient?: any) => new Elysia({ prefix: "/upload" })
   .use(
     jwt({
       name: "jwt",
@@ -66,6 +67,21 @@ export const uploadRoutes = new Elysia({ prefix: "/upload" })
       }
 
       const result = await uploadService.saveFile(file, category);
+      
+      // Log security tracking for file upload
+      await SecurityService.logSensitiveOperation(
+        payload.sub,
+        'UPLOAD_FILE',
+        'File',
+        result.filename,
+        { 
+          category, 
+          fileSize: file.size, 
+          contentType: file.type,
+          originalName: file.name 
+        },
+        redisClient
+      );
       
       return {
         success: true,
@@ -132,6 +148,19 @@ export const uploadRoutes = new Elysia({ prefix: "/upload" })
       }
       
       await uploadService.deleteFile(category, filename);
+      
+      // Log security tracking for file deletion
+      await SecurityService.logSensitiveOperation(
+        payload.sub,
+        'DELETE_FILE',
+        'File',
+        filename,
+        { 
+          category, 
+          filename 
+        },
+        redisClient
+      );
       
       return {
         success: true,
