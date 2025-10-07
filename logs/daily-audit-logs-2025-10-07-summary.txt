@@ -1,0 +1,40 @@
+=== Daily Audit Logs Summary ===
+Export Date: Tue Oct  7 15:12:09 +07 2025
+Target Date: 2025-10-07
+Container: final_project-redis-1
+Redis IP: 172.18.0.2
+Redis Port: 0.0.0.0:6379
+
+=== Data Counts ===
+Total Audit Keys Scanned: 25
+Audit Logs for 2025-10-07: 7
+
+=== Time Range ===
+Start Timestamp: 1759770000000
+End Timestamp: 1759856399999
+Start Time: 2025-10-07 00:00:00
+End Time: 2025-10-07 23:59:59
+
+=== Files Generated ===
+JSON Data: logs/daily-audit-logs-2025-10-07.json
+Summary: logs/daily-audit-logs-2025-10-07-summary.txt
+
+=== Redis Connection Info ===
+Connection String: redis://172.18.0.2:6379
+Docker Command: docker exec final_project-redis-1 redis-cli
+External Access: redis-cli -h 172.18.0.2 -p 6379
+
+=== All Daily Audit Operations ===
+All operations for 2025-10-07:
+   3 PROCESS_PAYMENT
+   3 CREATE_ORDER
+   1 CREATE_PATIENT
+
+=== Operation Details ===
+2025-10-07T07:59:40.118Z | CREATE_PATIENT | Patient | {"name":"ผู้ป่วยคิวทดสอบ_1759823972861 นามสกุลคิวทดสอบ"}
+2025-10-07T07:45:58.492Z | PROCESS_PAYMENT | Payment | {"orderId":"cmgg99rj9000bs308kh6psytz","amount":410,"type":"cash"}
+2025-10-07T07:45:58.467Z | CREATE_ORDER | Order | {"total":410,"items":2}
+2025-10-07T08:00:40.916Z | PROCESS_PAYMENT | Payment | {"orderId":"cmgg9sofe001qs308xr9in484","amount":219,"type":"cash"}
+2025-10-07T08:00:40.898Z | CREATE_ORDER | Order | {"total":219,"items":2}
+2025-10-07T07:45:09.172Z | CREATE_ORDER | Order | {"total":131,"items":2}
+2025-10-07T07:45:09.199Z | PROCESS_PAYMENT | Payment | {"orderId":"cmgg98pi00001s308b46dhcv4","amount":131,"type":"cash"}

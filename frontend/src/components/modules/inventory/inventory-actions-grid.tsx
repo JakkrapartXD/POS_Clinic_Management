@@ -108,6 +108,7 @@ export default function InventoryActionsGrid({
               key={action.id}
               className="bg-white shadow-sm border border-gray-200 hover:shadow-md transition-shadow cursor-pointer" 
               onClick={action.onClick}
+              data-testid={`${action.id}-button`}
             >
               <CardContent className="p-8 text-center">
                 <IconComponent className="h-12 w-12 text-teal-500 mb-4 mx-auto" />

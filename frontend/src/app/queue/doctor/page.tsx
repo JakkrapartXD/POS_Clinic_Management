@@ -126,6 +126,9 @@ export default function DoctorQueuePage() {
   const [prescriptionCart, setPrescriptionCart] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [productSearchQuery, setProductSearchQuery] = useState('');
+  const [productSearchResults, setProductSearchResults] = useState<any[]>([]);
+  const [isSearchingProducts, setIsSearchingProducts] = useState(false);
+  const [productSearchTimeout, setProductSearchTimeout] = useState<NodeJS.Timeout | null>(null);
   const [isLoadingProducts, setIsLoadingProducts] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [categories, setCategories] = useState<any[]>([]);
@@ -455,6 +458,47 @@ export default function DoctorQueuePage() {
       setIsLoadingProducts(false);
     }
   };
+
+  // Debounced search function for products
+  const performProductSearch = async (query: string) => {
+    if (query.length < 2) {
+      setProductSearchResults([]);
+      return;
+    }
+
+    try {
+      setIsSearchingProducts(true);
+      const response = await GraphQLAPI.searchProducts(query);
+      setProductSearchResults(response.searchProducts || []);
+    } catch (error) {
+      console.error('Error searching products:', error);
+      setProductSearchResults([]);
+    } finally {
+      setIsSearchingProducts(false);
+    }
+  };
+
+  // Handle product search query changes with debouncing
+  useEffect(() => {
+    if (productSearchTimeout) {
+      clearTimeout(productSearchTimeout);
+    }
+
+    if (productSearchQuery.trim()) {
+      const timeout = setTimeout(() => {
+        performProductSearch(productSearchQuery.trim());
+      }, 300); // 300ms debounce
+      setProductSearchTimeout(timeout);
+    } else {
+      setProductSearchResults([]);
+    }
+
+    return () => {
+      if (productSearchTimeout) {
+        clearTimeout(productSearchTimeout);
+      }
+    };
+  }, [productSearchQuery]);
 
   const addToPrescriptionCart = (product: any) => {
     const existingItem = prescriptionCart.find((item) => item.id === product.id);
@@ -1376,15 +1420,18 @@ export default function DoctorQueuePage() {
 
                   {/* Product Grid */}
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                    {products
-                      .filter(product => {
-                        const matchesSearch = product.product_name.toLowerCase().includes(productSearchQuery.toLowerCase()) ||
-                                             product.sku?.toLowerCase().includes(productSearchQuery.toLowerCase()) ||
-                                             product.barcode?.includes(productSearchQuery);
-                        const matchesCategory = selectedCategory === "all" || product.category?.name === selectedCategory;
-                        return matchesSearch && matchesCategory;
-                      })
-                      .map((product) => (
+                    {(() => {
+                      // Use search results if there's a search query, otherwise use all products
+                      const productsToShow = productSearchQuery.trim() 
+                        ? (productSearchResults || [])
+                        : products;
+                      
+                      return productsToShow
+                        .filter(product => {
+                          const matchesCategory = selectedCategory === "all" || product.category?.name === selectedCategory;
+                          return matchesCategory;
+                        })
+                        .map((product) => (
                         <Card
                           key={product.id}
                           className="cursor-pointer hover:shadow-md transition-shadow"
@@ -1405,7 +1452,8 @@ export default function DoctorQueuePage() {
                             <div className="text-orange-600 font-medium text-sm">฿{product.sale_price.toFixed(2)}</div>
                           </CardContent>
                         </Card>
-                      ))}
+                      ));
+                    })()}
                   </div>
                 </div>
               </div>

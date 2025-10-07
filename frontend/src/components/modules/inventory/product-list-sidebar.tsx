@@ -21,6 +21,8 @@ interface ProductListSidebarProps {
   products: Product[]
   onProductClick?: (productId: string) => void
   totalProducts?: number
+  isSearching?: boolean
+  error?: string | null
 }
 
 export default function ProductListSidebar({
@@ -29,16 +31,23 @@ export default function ProductListSidebar({
   selectedLetter,
   products,
   onProductClick,
-  totalProducts = 0
+  totalProducts = 0,
+  isSearching = false,
+  error = null
 }: ProductListSidebarProps) {
   // Group products by first letter
   const groupedProducts = useMemo(() => {
     const filtered = products.filter((product) => 
+      product && 
+      product.name && 
+      product.letter &&
       product.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
       (!selectedLetter || product.letter === selectedLetter)
     )
     
     const grouped = filtered.reduce((acc, product) => {
+      if (!product || !product.letter) return acc
+      
       const letter = product.letter
       if (!acc[letter]) {
         acc[letter] = []
@@ -77,7 +86,14 @@ export default function ProductListSidebar({
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
             className="pl-10 text-sm border-gray-200"
+            disabled={isSearching}
+            data-testid="product-search-input"
           />
+          {isSearching && (
+            <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -100,7 +116,18 @@ export default function ProductListSidebar({
 
       {/* Product List with Sections - Scrollable */}
       <div className="flex-1 overflow-y-auto">
-        {Object.entries(groupedProducts).length > 0 ? (
+        {error ? (
+          <div className="p-8 text-center text-red-500">
+            <div className="text-lg mb-2">เกิดข้อผิดพลาด</div>
+            <div className="text-sm mb-4">{error}</div>
+            <button
+              onClick={() => window.location.reload()}
+              className="bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded-lg text-sm"
+            >
+              รีเฟรชหน้า
+            </button>
+          </div>
+        ) : Object.entries(groupedProducts).length > 0 ? (
           Object.entries(groupedProducts).map(([letter, products]) => (
             <div key={letter} className="border-b border-gray-100">
               {/* Section Header */}
@@ -110,30 +137,37 @@ export default function ProductListSidebar({
               
               {/* Products in Section */}
               <div className="space-y-1 p-2">
-                {products.map((product) => (
-                  <div 
-                    key={product.id} 
-                    className="p-3 hover:bg-gray-50 rounded-lg border border-gray-100 bg-white cursor-pointer transition-colors"
-                    onClick={() => onProductClick?.(product.id.toString())}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <div className="font-medium text-gray-900 text-sm">
-                          {product.name}
-                          {product.variant && product.variant !== 'หน่วย' && (
-                            <span className="text-gray-500 font-normal ml-1">
-                              {product.variant}
-                            </span>
-                          )}
+                {products.map((product) => {
+                  if (!product || !product.id || !product.name) {
+                    return null
+                  }
+                  
+                  return (
+                    <div 
+                      key={product.id} 
+                      className="p-3 hover:bg-gray-50 rounded-lg border border-gray-100 bg-white cursor-pointer transition-colors"
+                      onClick={() => onProductClick?.(product.id.toString())}
+                      data-testid={`product-item-${product.name}`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="font-medium text-gray-900 text-sm">
+                            {product.name}
+                            {product.variant && product.variant !== 'หน่วย' && (
+                              <span className="text-gray-500 font-normal ml-1">
+                                {product.variant}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs text-gray-400 mt-1">{product.status}</div>
                         </div>
-                        <div className="text-xs text-gray-400 mt-1">{product.status}</div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-sm font-medium text-teal-600">฿{product.price}</div>
+                        <div className="text-right">
+                          <div className="text-sm font-medium text-teal-600">฿{product.price}</div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           ))

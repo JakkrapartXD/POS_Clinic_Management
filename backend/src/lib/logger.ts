@@ -193,10 +193,10 @@ class BackendLogger {
   // GraphQL logging
   graphql = {
     query: (operationName: string, userId?: string) => {
-      this.debug('GraphQL query', { operationName, userId }, 'GRAPHQL')
+      // this.debug('GraphQL query', { operationName, userId }, 'GRAPHQL')
     },
     mutation: (operationName: string, userId?: string) => {
-      this.debug('GraphQL mutation', { operationName, userId }, 'GRAPHQL')
+      // this.debug('GraphQL mutation', { operationName, userId }, 'GRAPHQL')
     },
     error: (operationName: string, error: any, userId?: string) => {
       this.error('GraphQL operation failed', { operationName, error, userId }, 'GRAPHQL')

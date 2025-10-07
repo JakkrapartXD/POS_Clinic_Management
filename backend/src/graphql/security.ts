@@ -24,10 +24,10 @@ export class SecurityService {
     let token: string | undefined;
 
     // Debug: Log request details
-    console.log('=== Backend Authentication Debug ===');
-    console.log('Request headers:', context.request?.headers);
-    console.log('Request cookies:', context.request?.cookies);
-    console.log('Authorization header:', context.request?.headers?.authorization);
+    // console.log('=== Backend Authentication Debug ===');
+    // console.log('Request headers:', context.request?.headers);
+    // console.log('Request cookies:', context.request?.cookies);
+    // console.log('Authorization header:', context.request?.headers?.authorization);
     
     // Try to extract token from multiple sources
     if (context.request) {
@@ -35,17 +35,17 @@ export class SecurityService {
       const authHeader = context.request.headers?.authorization;
       if (authHeader && authHeader.startsWith('Bearer ')) {
         token = authHeader.replace('Bearer ', '');
-        console.log('Found token in Authorization header');
+        // console.log('Found token in Authorization header');
       } 
       // From cookies
       else if (context.request.cookies?.['next-auth.jwt-token']) {
         token = context.request.cookies['next-auth.jwt-token'];
-        console.log('Found token in cookies');
+        // console.log('Found token in cookies');
       }
     }
 
-    console.log('Final token:', token ? 'Found' : 'Not found');
-    console.log('================================');
+    // console.log('Final token:', token ? 'Found' : 'Not found');
+    // console.log('================================');
 
     if (!token) {
       return { isAuthenticated: false };
@@ -57,7 +57,7 @@ export class SecurityService {
       const userId = payload.sub || payload.userId || payload.id;
 
       if (!userId) {
-        console.log('JWT payload missing user ID:', payload);
+        // console.log('JWT payload missing user ID:', payload);
         return { isAuthenticated: false };
       }
 
@@ -74,7 +74,7 @@ export class SecurityService {
       });
 
       if (!user || user.status !== 'active') {
-        console.log('User not found or inactive:', { userId, user });
+        // console.log('User not found or inactive:', { userId, user });
         return { isAuthenticated: false };
       }
 
@@ -262,14 +262,14 @@ export class SecurityService {
   ) {
     try {
       // Log to audit table (you may want to create this table)
-      console.log('AUDIT LOG:', {
-        userId,
-        operation,
-        entityType,
-        entityId,
-        details,
-        timestamp: new Date().toISOString()
-      });
+      // console.log('AUDIT LOG:', {
+      //   userId,
+      //   operation,
+      //   entityType,
+      //   entityId,
+      //   details,
+      //   timestamp: new Date().toISOString()
+      // });
       
       // Store in Redis for recent activity tracking if Redis client is available
       if (redisClient && redisClient.isReady) {

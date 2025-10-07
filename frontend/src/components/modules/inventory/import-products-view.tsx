@@ -10,7 +10,6 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { Upload, FileText, Download, CheckCircle, AlertTriangle, Info, RefreshCw } from "lucide-react"
 import { parseCSV, createImportPreview, readFileAsText, downloadCSVTemplate, ImportPreviewResult } from "@/utils/csv-parser"
-import { ImportSettings } from "@/types/csv-import"
 import { GraphQLAPI } from "@/clients/graphql"
 import { logger } from "@/lib/logger"
 
@@ -31,11 +30,6 @@ export default function ImportProductsView({ onBack, onImport }: ImportProductsV
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
   const [existingProducts, setExistingProducts] = useState<any[]>([])
   const [existingCategories, setExistingCategories] = useState<any[]>([])
-  const [importSettings, setImportSettings] = useState<ImportSettings>({
-    skipDuplicates: false, // Changed to false to see all products
-    updateExisting: false,
-    createBackup: true
-  })
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault()
@@ -269,8 +263,7 @@ export default function ImportProductsView({ onBack, onImport }: ImportProductsV
     setIsImporting(true)
     try {
       logger.info('Starting bulk import', { 
-        validRows: previewResult.validRows.length,
-        settings: importSettings 
+        validRows: previewResult.validRows.length
       }, 'IMPORT')
       
       // Transform products to match GraphQL schema
@@ -284,8 +277,7 @@ export default function ImportProductsView({ onBack, onImport }: ImportProductsV
           unit: p.unit,
           pack_size: p.pack_size,
           sku: p.sku
-        })),
-        settings: importSettings
+        }))
       })
       
       // Log each product in detail
@@ -315,7 +307,7 @@ export default function ImportProductsView({ onBack, onImport }: ImportProductsV
       })
       
       console.log('🔍 Calling backend bulk import...')
-      const result = await GraphQLAPI.bulkImportProducts(transformedProducts, importSettings)
+      const result = await GraphQLAPI.bulkImportProducts(transformedProducts)
       console.log('🔍 Backend call completed')
       
       setImportResult(result.bulkImportProducts)
@@ -376,7 +368,6 @@ export default function ImportProductsView({ onBack, onImport }: ImportProductsV
       // Call parent onImport with result
       onImport({
         file: uploadedFile,
-        settings: importSettings,
         result: result.bulkImportProducts
       })
       
@@ -401,7 +392,7 @@ export default function ImportProductsView({ onBack, onImport }: ImportProductsV
         <p className="text-gray-600">นำเข้าข้อมูลสินค้าจากไฟล์ Excel หรือ CSV</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="space-y-6">
         {/* File Upload Section */}
         <Card>
           <CardHeader>
@@ -412,7 +403,7 @@ export default function ImportProductsView({ onBack, onImport }: ImportProductsV
           </CardHeader>
           <CardContent>
             <div
-              className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+              className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
                 dragActive 
                   ? 'border-purple-400 bg-purple-50' 
                   : 'border-gray-300 hover:border-gray-400'
@@ -423,8 +414,8 @@ export default function ImportProductsView({ onBack, onImport }: ImportProductsV
               onDrop={handleDrop}
             >
               {uploadedFile ? (
-                <div className="space-y-2">
-                  <CheckCircle className="h-12 w-12 text-green-500 mx-auto" />
+                <div className="space-y-3">
+                  <CheckCircle className="h-10 w-10 text-green-500 mx-auto" />
                   <p className="text-sm font-medium text-gray-700">{uploadedFile.name}</p>
                   <p className="text-xs text-gray-500">
                     {(uploadedFile.size / 1024 / 1024).toFixed(2)} MB
@@ -433,19 +424,20 @@ export default function ImportProductsView({ onBack, onImport }: ImportProductsV
                     variant="outline" 
                     size="sm"
                     onClick={() => setUploadedFile(null)}
+                    className="text-xs"
                   >
                     เปลี่ยนไฟล์
                   </Button>
                 </div>
               ) : (
-                <div className="space-y-4">
-                  <FileText className="h-12 w-12 text-gray-400 mx-auto" />
+                <div className="space-y-3">
+                  <FileText className="h-10 w-10 text-gray-400 mx-auto" />
                   <div>
                     <p className="text-sm text-gray-600 mb-2">
                       ลากไฟล์มาวางที่นี่ หรือ
                     </p>
                     <label className="cursor-pointer">
-                      <span className="text-teal-600 hover:text-teal-700 font-medium">
+                      <span className="text-teal-600 hover:text-teal-700 font-medium text-sm">
                         เลือกไฟล์
                       </span>
                       <input
@@ -464,14 +456,14 @@ export default function ImportProductsView({ onBack, onImport }: ImportProductsV
             </div>
 
             {/* Download Template */}
-            <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+            <div className="mt-4 p-3 bg-gray-50 rounded-lg">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-700">ไม่มีแม่แบบ?</p>
                   <p className="text-xs text-gray-500">ดาวน์โหลดไฟล์ตัวอย่างสำหรับการนำเข้า</p>
                 </div>
-                <Button variant="outline" size="sm" onClick={handleDownloadTemplate}>
-                  <Download className="h-4 w-4 mr-1" />
+                <Button variant="outline" size="sm" onClick={handleDownloadTemplate} className="text-xs">
+                  <Download className="h-3 w-3 mr-1" />
                   ดาวน์โหลดแม่แบบ
                 </Button>
               </div>
@@ -479,77 +471,9 @@ export default function ImportProductsView({ onBack, onImport }: ImportProductsV
           </CardContent>
         </Card>
 
-        {/* Import Settings */}
-        <Card>
-          <CardHeader>
-            <CardTitle>ตั้งค่าการนำเข้า</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-3">
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="skipDuplicates"
-                  checked={importSettings.skipDuplicates}
-                  onChange={(e) => setImportSettings(prev => ({
-                    ...prev,
-                    skipDuplicates: e.target.checked
-                  }))}
-                  className="rounded"
-                />
-                <Label htmlFor="skipDuplicates" className="text-sm">
-                  ข้ามสินค้าที่ซ้ำกัน
-                </Label>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="updateExisting"
-                  checked={importSettings.updateExisting}
-                  onChange={(e) => setImportSettings(prev => ({
-                    ...prev,
-                    updateExisting: e.target.checked
-                  }))}
-                  className="rounded"
-                />
-                <Label htmlFor="updateExisting" className="text-sm">
-                  อัปเดตสินค้าที่มีอยู่แล้ว
-                </Label>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="createBackup"
-                  checked={importSettings.createBackup}
-                  onChange={(e) => setImportSettings(prev => ({
-                    ...prev,
-                    createBackup: e.target.checked
-                  }))}
-                  className="rounded"
-                />
-                <Label htmlFor="createBackup" className="text-sm">
-                  สร้างข้อมูลสำรองก่อนนำเข้า
-                </Label>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="notes" className="text-sm">หมายเหตุ (ไม่บังคับ)</Label>
-              <Textarea
-                id="notes"
-                placeholder="เพิ่มหมายเหตุสำหรับการนำเข้าครั้งนี้..."
-                className="h-20"
-              />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
       {/* Processing Status */}
       {(isLoadingProducts || isProcessing) && (
-        <Card className="mt-6">
+        <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-center space-x-3">
               <RefreshCw className="h-5 w-5 animate-spin text-teal-500" />
@@ -563,48 +487,50 @@ export default function ImportProductsView({ onBack, onImport }: ImportProductsV
 
       {/* Preview Section */}
       {previewResult && !isProcessing && (
-        <Card className="mt-6">
+        <Card>
           <CardHeader>
-            <CardTitle className="flex items-center justify-between">
+            <CardTitle className="flex items-center">
               <span>ตัวอย่างข้อมูล</span>
-              <div className="flex space-x-4 text-sm">
-                <span className="text-blue-600">สินค้า: {previewResult.summary.uniqueProducts} ชนิด</span>
-                <span className="text-green-600">รายการถูกต้อง: {previewResult.summary.validRows}</span>
-                <span className="text-red-600">ผิดพลาด: {previewResult.summary.invalidRows}</span>
-                <span className="text-gray-600">รวม: {previewResult.summary.totalRows}</span>
-              </div>
             </CardTitle>
+            <div className="flex space-x-4 text-sm text-gray-600">
+              <span>สินค้า: {previewResult.summary.uniqueProducts} ชนิด</span>
+              <span>รายการถูกต้อง: {previewResult.summary.validRows}</span>
+              <span>ผิดพลาด: {previewResult.summary.invalidRows}</span>
+              <span>รวม: {previewResult.summary.totalRows}</span>
+            </div>
           </CardHeader>
           <CardContent>
-            {/* Summary */}
-            <div className="grid grid-cols-4 gap-4 mb-4">
-              <div className="bg-blue-50 p-3 rounded-lg text-center">
+            {/* Summary Cards */}
+            <div className="grid grid-cols-4 gap-3 mb-4">
+              <div className="bg-blue-50 p-4 rounded-lg text-center border border-blue-100">
                 <div className="text-2xl font-bold text-blue-600">{previewResult.summary.uniqueProducts}</div>
-                <div className="text-sm text-blue-700">สินค้าที่ไม่ซ้ำ</div>
+                <div className="text-sm text-blue-700 font-medium">สินค้าที่ไม่ซ้ำ</div>
               </div>
-              <div className="bg-green-50 p-3 rounded-lg text-center">
+              <div className="bg-green-50 p-4 rounded-lg text-center border border-green-100">
                 <div className="text-2xl font-bold text-green-600">{previewResult.summary.validRows}</div>
-                <div className="text-sm text-green-700">รายการถูกต้อง</div>
+                <div className="text-sm text-green-700 font-medium">รายการถูกต้อง</div>
               </div>
-              <div className="bg-red-50 p-3 rounded-lg text-center">
+              <div className="bg-red-50 p-4 rounded-lg text-center border border-red-100">
                 <div className="text-2xl font-bold text-red-600">{previewResult.summary.invalidRows}</div>
-                <div className="text-sm text-red-700">รายการผิดพลาด</div>
+                <div className="text-sm text-red-700 font-medium">รายการผิดพลาด</div>
               </div>
-              <div className="bg-gray-50 p-3 rounded-lg text-center">
+              <div className="bg-gray-50 p-4 rounded-lg text-center border border-gray-100">
                 <div className="text-2xl font-bold text-gray-600">{previewResult.summary.totalRows}</div>
-                <div className="text-sm text-gray-700">รายการทั้งหมด</div>
+                <div className="text-sm text-gray-700 font-medium">รายการทั้งหมด</div>
               </div>
             </div>
 
             {/* Debug Info */}
-            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <div className="text-sm text-blue-700">
-                <div className="font-medium mb-1">Debug Info:</div>
-                <div>• สินค้าในฐานข้อมูล: {existingProducts.length} รายการ</div>
-                <div>• หมวดหมู่ในฐานข้อมูล: {existingCategories.length} รายการ</div>
-                {existingProducts.length > 0 && (
-                  <div>• ตัวอย่างสินค้า: {existingProducts.slice(0, 3).map(p => p.product_name).join(', ')}</div>
-                )}
+            <div className="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+              <div className="text-sm text-orange-700">
+                <div className="font-medium mb-2">Debug Info:</div>
+                <div className="space-y-1">
+                  <div>• สินค้าในฐานข้อมูล: {existingProducts.length} รายการ</div>
+                  <div>• หมวดหมู่ในฐานข้อมูล: {existingCategories.length} รายการ</div>
+                  {existingProducts.length > 0 && (
+                    <div>• ตัวอย่างสินค้า: {existingProducts.slice(0, 3).map(p => p.product_name).join(', ')}</div>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -693,7 +619,7 @@ export default function ImportProductsView({ onBack, onImport }: ImportProductsV
 
       {/* Import Result */}
       {importResult && (
-        <Card className="mt-6">
+        <Card>
           <CardHeader>
             <CardTitle className={`flex items-center ${importResult.success ? 'text-green-600' : 'text-orange-600'}`}>
               {importResult.success ? <CheckCircle className="h-5 w-5 mr-2" /> : <AlertTriangle className="h-5 w-5 mr-2" />}
@@ -822,14 +748,6 @@ export default function ImportProductsView({ onBack, onImport }: ImportProductsV
                   </div>
                 </div>
                 
-                <div className="text-sm text-gray-600">
-                  <div className="font-semibold">การตั้งค่า:</div>
-                  <ul className="list-disc list-inside ml-2 space-y-1">
-                    <li>{importSettings.skipDuplicates ? '✓' : '✗'} ข้ามสินค้าที่ซ้ำกัน</li>
-                    <li>{importSettings.updateExisting ? '✓' : '✗'} อัปเดตสินค้าที่มีอยู่แล้ว</li>
-                    <li>{importSettings.createBackup ? '✓' : '✗'} สร้างข้อมูลสำรองก่อนนำเข้า</li>
-                  </ul>
-                </div>
                 
                 <div className="text-sm text-gray-500">
                   การดำเนินการนี้ไม่สามารถยกเลิกได้ กรุณาตรวจสอบข้อมูลให้ถูกต้องก่อนดำเนินการ
@@ -846,5 +764,6 @@ export default function ImportProductsView({ onBack, onImport }: ImportProductsV
         </AlertDialog>
       </div>
     </div>
+  </div>
   )
 }

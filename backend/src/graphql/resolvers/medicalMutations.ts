@@ -8,7 +8,7 @@ export const medicalMutations = {
     const { input } = args;
     context.security.requireStaff(context);
     
-    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient, context.request);
     
     if (!input.orderItems || input.orderItems.length === 0) {
       throw new GraphQLError('Order must have at least one item');
@@ -172,7 +172,7 @@ export const medicalMutations = {
     context.security.requireStaff(context);
     context.security.validateId(input.orderId);
     
-    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient, context.request);
     
     // Validate order exists
     const order = await context.prisma.order.findUnique({
@@ -249,7 +249,7 @@ export const medicalMutations = {
     const { input } = args;
     context.security.requireStaff(context);
     
-    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient, context.request);
     
     context.security.validateId(input.patientId);
     context.security.validateId(input.doctorId);
@@ -321,7 +321,7 @@ export const medicalMutations = {
     context.security.requireStaff(context);
     context.security.validateId(id);
     
-    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient, context.request);
     
     const updateData: any = {};
     
@@ -387,7 +387,7 @@ export const medicalMutations = {
     const { input } = args;
     context.security.requireDoctor(context);
     
-    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient, context.request);
     
     context.security.validateId(input.patientId);
     context.security.validateId(input.doctorId);
@@ -441,7 +441,7 @@ export const medicalMutations = {
     const { input } = args;
     context.security.requireDoctor(context);
     
-    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient, context.request);
     
     context.security.validateId(input.medicalRecordId);
     context.security.validateId(input.productId);
@@ -524,7 +524,7 @@ export const medicalMutations = {
     const { input } = args;
     context.security.requireDoctor(context);
     
-    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient, context.request);
     
     context.security.validateId(input.patientId);
     context.security.validateId(input.doctorId);
@@ -573,7 +573,7 @@ export const medicalMutations = {
     const { input } = args;
     context.security.requireStaff(context);
     
-    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient, context.request);
     
     const sanitizedInput = {
       name: context.security.sanitizeString(input.name),
@@ -607,7 +607,7 @@ export const medicalMutations = {
     const { input } = args;
     context.security.requireStaff(context);
     
-    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient, context.request);
     
     context.security.validateId(input.supplierId);
     
@@ -747,7 +747,7 @@ export const medicalMutations = {
     const { date } = args;
     context.security.requireStaff(context);
     
-    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient, context.request);
     
     const reportDate = new Date(date);
     const nextDay = new Date(reportDate);
@@ -824,7 +824,7 @@ export const medicalMutations = {
     const { date } = args;
     context.security.requireStaff(context);
     
-    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient, context.request);
     
     const reportService = new ReportService(context.prisma);
     const reportDate = new Date(date);
@@ -860,7 +860,7 @@ export const medicalMutations = {
   async generateStockAlerts(parent: any, args: any, context: any) {
     context.security.requireStaff(context);
     
-    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient, context.request);
     
     const reportService = new ReportService(context.prisma);
     
@@ -895,7 +895,7 @@ export const medicalMutations = {
     const { date } = args;
     context.security.requireStaff(context);
     
-    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient, context.request);
     
     const reportService = new ReportService(context.prisma);
     const reportDate = new Date(date);

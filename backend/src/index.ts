@@ -136,13 +136,13 @@ const app = new Elysia()
           const elysiaContextCookies = elysiaCtx.cookie || {};
           
           // Debug: Log cookies information
-          console.log('=== GraphQL Context Debug ===');
-          console.log('Cookie header:', cookieHeader);
-          console.log('Parsed cookies:', parsedCookies);
-          console.log('Elysia context cookie:', elysiaContextCookies);
-          console.log('JWT token from parsed:', parsedCookies['next-auth.jwt-token']);
-          console.log('JWT token from Elysia:', elysiaContextCookies['next-auth.jwt-token']?.value || elysiaContextCookies['next-auth.jwt-token']);
-          console.log('================================');
+          // console.log('=== GraphQL Context Debug ===');
+          // console.log('Cookie header:', cookieHeader);
+          // console.log('Parsed cookies:', parsedCookies);
+          // console.log('Elysia context cookie:', elysiaContextCookies);
+          // console.log('JWT token from parsed:', parsedCookies['next-auth.jwt-token']);
+          // console.log('JWT token from Elysia:', elysiaContextCookies['next-auth.jwt-token']?.value || elysiaContextCookies['next-auth.jwt-token']);
+          // console.log('================================');
           
           // Create a compatible request object for GraphQL context
           const contextRequest = {
@@ -277,7 +277,7 @@ const app = new Elysia()
   })
 
   // Register routes
-  .use(AuthRoutes)
+  .use(AuthRoutes(redisClient))
   .use(userRoutes(redisClient))
   .use(uploadRoutes(redisClient))
   .use(oauthRoutes)

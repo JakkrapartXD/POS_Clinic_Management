@@ -321,14 +321,68 @@ export default function POSPage() {
     }
   }
 
+  // Search products using GraphQL searchProducts query
+  const [searchResults, setSearchResults] = useState<Product[]>([])
+  const [isSearching, setIsSearching] = useState(false)
+  const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null)
+
+  // Debounced search function
+  const performSearch = async (query: string) => {
+    if (query.length < 2) {
+      setSearchResults([])
+      return
+    }
+
+    try {
+      setIsSearching(true)
+      const response = await GraphQLAPI.searchProducts(query)
+      setSearchResults(response.searchProducts || [])
+    } catch (error) {
+      logger.error('Error searching products:', error, 'POS')
+      setSearchResults([])
+    } finally {
+      setIsSearching(false)
+    }
+  }
+
+  // Handle search query changes with debouncing
+  useEffect(() => {
+    if (searchTimeout) {
+      clearTimeout(searchTimeout)
+    }
+
+    if (searchQuery.trim()) {
+      const timeout = setTimeout(() => {
+        performSearch(searchQuery.trim())
+      }, 300) // 300ms debounce
+      setSearchTimeout(timeout)
+    } else {
+      setSearchResults([])
+    }
+
+    return () => {
+      if (searchTimeout) {
+        clearTimeout(searchTimeout)
+      }
+    }
+  }, [searchQuery])
+
   // กรองสินค้าตามการค้นหาและหมวดหมู่
-  const filteredProducts = products.filter(product => {
-    const matchesSearch = product.product_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         product.sku?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         product.barcode?.includes(searchQuery)
-    const matchesCategory = selectedCategory === "all" || product.category?.name === selectedCategory
-    return matchesSearch && matchesCategory
-  })
+  const filteredProducts = (() => {
+    // If there's a search query, use search results
+    if (searchQuery.trim()) {
+      return searchResults.filter(product => {
+        const matchesCategory = selectedCategory === "all" || product.category?.name === selectedCategory
+        return matchesCategory
+      })
+    }
+    
+    // Otherwise, use all products with category filter
+    return products.filter(product => {
+      const matchesCategory = selectedCategory === "all" || product.category?.name === selectedCategory
+      return matchesCategory
+    })
+  })()
 
   const addToCart = async (product: Product) => {
     // ตรวจสอบว่าสินค้าหมดสต๊อกหรือไม่

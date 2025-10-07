@@ -1,215 +1,206 @@
+# E2E Tests สำหรับระบบ Pharmacy Management
 
-# Automated Test Suite
+## ภาพรวม
 
-This directory contains the automated test suite for the Clinic Management System.
+E2E (End-to-End) tests นี้ใช้ Playwright เพื่อทดสอบการทำงานของระบบ Pharmacy Management อย่างครบถ้วน
 
-## Structure
+## ไฟล์ Tests
 
-```
-tests/automation/
-├── src/
-│   ├── setup.ts                 # Test setup and configuration
-│   ├── unit/                    # Unit tests
-│   │   ├── auth.service.test.ts
-│   │   ├── patient.service.test.ts
-│   │   └── inventory.service.test.ts
-│   ├── integration/             # Integration tests
-│   │   ├── patient-flow.test.ts
-│   │   └── billing-flow.test.ts
-│   └── e2e/                     # End-to-end tests
-│       ├── patient-management.spec.ts
-│       ├── medical-records.spec.ts
-│       └── pharmacy-dispensing.spec.ts
-├── scripts/                     # Test scripts
-│   ├── setup-test-env.js
-│   ├── cleanup-test-data.js
-│   └── run-tests.js
-├── package.json                 # Test dependencies
-├── playwright.config.ts         # Playwright configuration
-└── README.md                    # This file
-```
+### 1. `inventory-system.spec.ts`
+ทดสอบระบบสต๊อกสินค้า ประกอบด้วย:
 
-## Prerequisites
+- **Test 1**: เข้าสู่ระบบและสร้างสินค้าใหม่พร้อมสต๊อกเริ่มต้น
+- **Test 2**: ค้นหาสินค้าและตรวจสอบข้อมูลในหน้า product detail
+- **Test 3**: เพิ่มหน่วยนับใหม่และตรวจสอบข้อมูล
+- **Test 4**: เพิ่มสต๊อกให้หน่วยนับใหม่
+- **Test 5**: ทดสอบการปรับเพิ่ม/ลดสต๊อกและย้ายหน่วย
 
-1. Node.js 18+
-2. PostgreSQL (for integration tests)
-3. Redis (for integration tests)
-4. Backend server running on port 4000
-5. Frontend server running on port 3000
+### 2. `inventory-helpers.ts`
+Helper functions สำหรับ inventory tests:
 
-## Setup
+- `createTestProduct()` - สร้างข้อมูลสินค้าทดสอบ
+- `loginAsPharmacist()` - เข้าสู่ระบบด้วยเภสัชกร
+- `navigateToInventory()` - ไปที่หน้า inventory
+- `fillProductForm()` - กรอกฟอร์มสินค้า
+- `addNewUnit()` - เพิ่มหน่วยนับใหม่
+- `addStock()` - เพิ่มสต๊อก
+- `adjustStock()` - ปรับสต๊อก
+- `cleanupTestProduct()` - ลบสินค้าทดสอบ
 
-1. Install dependencies:
-   ```bash
-   cd tests/automation
-   npm install
-   ```
+### 3. Tests อื่นๆ
+- `queue-system.spec.ts` - ทดสอบระบบคิว
+- `patient-management.spec.ts` - ทดสอบการจัดการผู้ป่วย
+- `pharmacy-dispensing.spec.ts` - ทดสอบการจ่ายยา
+- `medical-dispensing-history.spec.ts` - ทดสอบประวัติการจ่ายยา
 
-2. Setup test environment:
-   ```bash
-   npm run setup
-   ```
+## การรัน Tests
 
-3. Install Playwright browsers (Desktop only):
-   ```bash
-   npx playwright install chromium firefox webkit msedge
-   ```
-
-## Running Tests
-
-### All Tests
+### 1. ติดตั้ง Dependencies
 ```bash
-npm run test:all
+cd tests/automation
+npm install
 ```
 
-### Unit Tests Only
+### 2. รัน Tests ทั้งหมด
 ```bash
-npm run test:unit
+npx playwright test
 ```
 
-### Integration Tests Only
+### 3. รัน Test เฉพาะ
 ```bash
-npm run test:integration
+# รัน inventory tests
+npx playwright test inventory-system.spec.ts
+
+# รัน test เฉพาะ
+npx playwright test inventory-system.spec.ts --grep "สร้างสินค้าใหม่"
 ```
 
-### E2E Tests Only
+### 4. รัน Tests แบบ Headed (เห็น Browser)
 ```bash
-npm run test:e2e
+npx playwright test --headed
 ```
 
-### E2E Tests by Browser
+### 5. รัน Tests แบบ Debug
 ```bash
-# Chrome only
-npm run test:e2e:chrome
-
-# Firefox only
-npm run test:e2e:firefox
-
-# Safari only
-npm run test:e2e:safari
-
-# Edge only
-npm run test:e2e:edge
+npx playwright test --debug
 ```
 
-### Watch Mode
+## Test Data
+
+### User Accounts สำหรับ Testing
+- **Pharmacist**: `pharmacist01` / `pharmacist123`
+- **Staff**: `staff01` / `staff123`
+- **Nurse**: `nurse01` / `nurse123`
+
+### Test Product Data
+```typescript
+const testProduct = {
+  product_name: `ยาทดสอบระบบสต๊อก_${timestamp}`,
+  generic_name: 'Generic Test Medicine',
+  product_type: 'ยารักษาโรค',
+  sale_price: '25.50',
+  unit: 'เม็ด',
+  pack_size: '10',
+  // ... ข้อมูลอื่นๆ
+}
+```
+
+## Data Test IDs
+
+Tests ใช้ `data-testid` attributes เพื่อระบุ elements:
+
+### Inventory Page
+- `inventory-page` - หน้าหลัก inventory
+- `add-product-button` - ปุ่มเพิ่มสินค้าใหม่
+- `product-search-input` - ช่องค้นหาสินค้า
+- `product-item-{name}` - รายการสินค้า
+
+### Product Form
+- `product-name-input` - ช่องชื่อสินค้า
+- `generic-name-input` - ช่องชื่อสามัญ
+- `sale-price-input` - ช่องราคาขาย
+- `save-product-button` - ปุ่มบันทึกสินค้า
+
+### Product Detail
+- `product-detail-view` - หน้าลายละเอียดสินค้า
+- `add-unit-button` - ปุ่มเพิ่มหน่วยนับ
+- `stock-tab` - แท็บสต๊อก
+- `add-stock-button` - ปุ่มเพิ่มสต๊อก
+
+### Stock Management
+- `adjust-stock-button` - ปุ่มปรับสต๊อก
+- `adjust-operation-add` - เลือกการเพิ่มสต๊อก
+- `adjust-operation-transfer` - เลือกการย้ายสต๊อก
+- `adjust-quantity-input` - ช่องจำนวน
+
+## การ Debug Tests
+
+### 1. เปิด Browser DevTools
 ```bash
-npm run test:watch
+npx playwright test --debug
 ```
 
-### Coverage Report
+### 2. ดู Screenshots เมื่อ Test ล้มเหลว
 ```bash
-npm run test:coverage
+npx playwright show-report
 ```
 
-## Test Scripts
-
-### Setup Test Environment
+### 3. ดู Videos ของ Tests
 ```bash
-node scripts/setup-test-env.js
+npx playwright test --video=on
 ```
 
-### Cleanup Test Data
-```bash
-node scripts/cleanup-test-data.js
-```
+## Best Practices
 
-### Run Specific Test Type
-```bash
-node scripts/run-tests.js unit
-node scripts/run-tests.js integration
-node scripts/run-tests.js e2e
-node scripts/run-tests.js all
-```
+### 1. Test Isolation
+- แต่ละ test ควรเป็นอิสระจากกัน
+- ใช้ `test.describe.serial()` สำหรับ tests ที่ต้องรันตามลำดับ
+- Cleanup ข้อมูลทดสอบใน `afterAll()`
 
-## Test Configuration
+### 2. Wait Strategies
+- ใช้ `waitForSelector()` แทน `waitForTimeout()`
+- รอให้ elements โหลดเสร็จก่อนทำการ interact
+- ใช้ `expect().toBeVisible()` เพื่อตรวจสอบ
 
-### Environment Variables
-- `TEST_DATABASE_URL`: Test database connection string
-- `API_BASE_URL`: Backend API URL (default: http://localhost:4000)
-- `FRONTEND_URL`: Frontend URL (default: http://localhost:3000)
-- `JWT_SECRET`: JWT secret for testing
-- `TEST_TIMEOUT`: Test timeout in milliseconds
+### 3. Error Handling
+- ใช้ try-catch สำหรับ cleanup operations
+- Log errors ที่มีประโยชน์สำหรับ debugging
+- ไม่ให้ test ล้มเหลวเพราะ cleanup errors
 
-### Test Data
-Test data is automatically generated and cleaned up after each test run. The test data includes:
-- Test users with different roles
-- Test patients
-- Test products and categories
-- Test orders and prescriptions
-
-## CI/CD Integration
-
-The test suite is integrated with GitHub Actions for continuous integration. The workflow:
-1. Sets up test environment (PostgreSQL, Redis)
-2. Installs dependencies
-3. Runs unit and integration tests
-4. Runs E2E tests
-5. Uploads test results and coverage reports
-
-## Test Reports
-
-Test results are generated in multiple formats:
-- **HTML Report**: `test-results/index.html`
-- **JSON Report**: `test-results/results.json`
-- **JUnit Report**: `test-results/results.xml`
-- **Coverage Report**: `coverage/index.html`
+### 4. Data Management
+- ใช้ timestamp หรือ unique identifiers สำหรับ test data
+- เก็บ test data ใน helper functions
+- Cleanup test data หลัง test เสร็จ
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **Database Connection Error**
-   - Ensure PostgreSQL is running
-   - Check TEST_DATABASE_URL in .env.test
+1. **Element not found**
+   - ตรวจสอบ `data-testid` ว่าถูกต้อง
+   - รอให้ page โหลดเสร็จก่อน
+   - ใช้ `waitForSelector()` แทน `locator()`
 
-2. **Redis Connection Error**
-   - Ensure Redis is running
-   - Check REDIS_URL in .env.test
+2. **Test timeout**
+   - เพิ่ม timeout ใน `waitForSelector()`
+   - ตรวจสอบ network requests
+   - ใช้ `--timeout` flag
 
-3. **Backend Server Not Running**
-   - Start backend server: `cd backend && npm run dev`
-   - Check API_BASE_URL in .env.test
+3. **Authentication issues**
+   - ตรวจสอบ user credentials
+   - รอให้ login เสร็จก่อนไปหน้าอื่น
+   - ใช้ `waitForURL()` เพื่อตรวจสอบ navigation
 
-4. **Frontend Server Not Running**
-   - Start frontend server: `cd frontend && npm run dev`
-   - Check FRONTEND_URL in .env.test
-
-5. **Playwright Browser Issues**
-   - Install desktop browsers: `npx playwright install chromium firefox webkit msedge`
-   - Check browser dependencies
-
-### Debug Mode
-
-Run tests in debug mode:
+### Debug Commands
 ```bash
-DEBUG=* npm run test:unit
+# รัน test เฉพาะและดู output
+npx playwright test inventory-system.spec.ts --reporter=line
+
+# รัน test แบบ slow motion
+npx playwright test --slowMo=1000
+
+# รัน test ใน browser เฉพาะ
+npx playwright test --project=chromium
 ```
 
-### Verbose Output
+## การเพิ่ม Tests ใหม่
 
-Run tests with verbose output:
-```bash
-npm run test:unit -- --verbose
-```
+1. สร้างไฟล์ `.spec.ts` ใหม่
+2. Import helper functions ที่จำเป็น
+3. ใช้ `test.describe.serial()` สำหรับ tests ที่ต้องรันตามลำดับ
+4. เพิ่ม `data-testid` ใน components ที่ต้องการ test
+5. เขียน cleanup logic ใน `afterAll()`
 
-## Contributing
+## CI/CD Integration
 
-When adding new tests:
-1. Follow the existing naming conventions
-2. Add proper test data cleanup
-3. Include both positive and negative test cases
-4. Add appropriate assertions
-5. Update this README if needed
+Tests เหล่านี้สามารถรันใน CI/CD pipeline:
 
-## Test Coverage
-
-The test suite aims for:
-- **Unit Tests**: 90%+ coverage
-- **Integration Tests**: 80%+ coverage
-- **E2E Tests**: Critical user flows
-
-Run coverage report:
-```bash
-npm run test:coverage
+```yaml
+# GitHub Actions example
+- name: Run E2E Tests
+  run: |
+    cd tests/automation
+    npm install
+    npx playwright install
+    npx playwright test
 ```

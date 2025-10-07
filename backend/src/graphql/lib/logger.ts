@@ -7,8 +7,9 @@ export const logger = {
     console.error(`[${category || 'ERROR'}] ${message}`, error);
   },
   debug: (message: string, data?: any, category?: string) => {
-    if (process.env.NODE_ENV === 'development') {
-      console.debug(`[${category || 'DEBUG'}] ${message}`, data ? JSON.stringify(data) : '');
-    }
+    // Debug logs disabled
+    // if (process.env.NODE_ENV === 'development') {
+    //   console.debug(`[${category || 'DEBUG'}] ${message}`, data ? JSON.stringify(data) : '');
+    // }
   }
 };

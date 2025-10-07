@@ -772,8 +772,8 @@ export const GraphQLQueries = {
   `,
 
   SEARCH_PRODUCTS: `
-    query SearchProducts($query: String!) {
-      searchProducts(query: $query) {
+    query SearchProducts($query: String!, $includeInactive: Boolean) {
+      searchProducts(query: $query, includeInactive: $includeInactive) {
         id
         product_name
         product_type
@@ -2228,9 +2228,9 @@ export const GraphQLAPI = {
   getAllProducts: (variables?: { filter?: any; pagination?: PaginationInput }): Promise<{ products: any }> =>
     graphqlClient.query(GraphQLQueries.ALL_PRODUCTS, { variables }),
 
-  searchProducts: (query: string): Promise<{ searchProducts: any[] }> =>
+  searchProducts: (query: string, includeInactive?: boolean): Promise<{ searchProducts: any[] }> =>
     graphqlClient.query(GraphQLQueries.SEARCH_PRODUCTS, {
-      variables: { query }
+      variables: { query, includeInactive }
     }),
 
   getProduct: (id: string): Promise<{ product: any }> =>
@@ -2432,12 +2432,11 @@ export const GraphQLAPI = {
   },
 
   // Bulk import products
-  bulkImportProducts: (products: MappedProductData[], settings: ImportSettings): Promise<{ bulkImportProducts: ImportResult }> =>
+  bulkImportProducts: (products: MappedProductData[]): Promise<{ bulkImportProducts: ImportResult }> =>
     graphqlClient.mutation(GraphQLMutations.BULK_IMPORT_PRODUCTS, {
       variables: { 
         input: { 
-          products, 
-          settings 
+          products
         } 
       }
     }),

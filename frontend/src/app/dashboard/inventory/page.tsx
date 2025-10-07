@@ -185,6 +185,9 @@ function InventoryPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('list')
   const [submitTrigger, setSubmitTrigger] = useState(0)
   const [products, setProducts] = useState<Product[]>([])
+  const [searchResults, setSearchResults] = useState<TransformedProduct[]>([])
+  const [isSearching, setIsSearching] = useState(false)
+  const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null)
@@ -300,6 +303,101 @@ function InventoryPage() {
       setIsLoadingProducts(false)
     }
   }, [handleAuthError, isLoadingProducts])
+
+  // Debounced search function for products (including inactive)
+  const performSearch = async (query: string) => {
+    if (query.length < 2) {
+      setSearchResults([])
+      return
+    }
+
+    try {
+      setIsSearching(true)
+      setError(null) // Clear any previous errors
+      
+      const response = await GraphQLAPI.searchProducts(query, true) // includeInactive = true
+      const rawResults = response.searchProducts || []
+      
+      // Transform search results to match the expected structure
+      const transformedSearchResults = rawResults.map((product: Product) => {
+        const firstChar = product.product_name.charAt(0).toUpperCase()
+        let letter = firstChar
+        if (/[ก-ฮ]/.test(firstChar)) {
+          letter = firstChar // Thai letter
+        } else if (/[A-Z]/.test(firstChar)) {
+          letter = firstChar // English letter
+        } else if (/[0-9]/.test(firstChar)) {
+          letter = firstChar // Number
+        } else {
+          letter = '#' // Special characters
+        }
+        
+        return {
+          id: product.id,
+          letter,
+          name: product.product_name,
+          variant: product.unit || 'หน่วย',
+          stock: product.stock_quantity || 0,
+          status: `${product.stock_quantity || 0} ${product.unit || 'หน่วย'}`,
+          price: product.sale_price,
+          allProducts: [product] // Single product in array for consistency
+        }
+      })
+      
+      setSearchResults(transformedSearchResults)
+      
+      logger.info('Product search completed', { 
+        query, 
+        resultCount: transformedSearchResults.length 
+      }, 'INVENTORY')
+    } catch (error) {
+      logger.error('Error searching products:', error, 'INVENTORY')
+      
+      // Check if it's an authentication error
+      if (error instanceof Error && (
+        error.message.includes('Authentication required') ||
+        error.message.includes('Unauthorized') ||
+        error.message.includes('Not authenticated') ||
+        error.message.includes('Invalid token') ||
+        error.message.includes('Token expired')
+      )) {
+        handleAuthError(error)
+        return
+      }
+      
+      // Set user-friendly error message
+      const errorMessage = error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการค้นหาสินค้า'
+      setError(errorMessage)
+      setSearchResults([])
+      
+      // Show toast notification
+      toast.error('ไม่สามารถค้นหาสินค้าได้ กรุณาลองใหม่อีกครั้ง')
+    } finally {
+      setIsSearching(false)
+    }
+  }
+
+  // Handle search query changes with debouncing
+  useEffect(() => {
+    if (searchTimeout) {
+      clearTimeout(searchTimeout)
+    }
+
+    if (searchQuery.trim()) {
+      const timeout = setTimeout(() => {
+        performSearch(searchQuery.trim())
+      }, 300) // 300ms debounce
+      setSearchTimeout(timeout)
+    } else {
+      setSearchResults([])
+    }
+
+    return () => {
+      if (searchTimeout) {
+        clearTimeout(searchTimeout)
+      }
+    }
+  }, [searchQuery])
 
   // Enhanced refresh function that preserves current state
   const refreshData = useCallback(async (preserveView: boolean = true) => {
@@ -797,16 +895,18 @@ function InventoryPage() {
   }, [viewMode])
 
   return (
-    <div className="flex h-screen bg-gray-50 overflow-hidden">
+    <div className="flex h-screen bg-gray-50 overflow-hidden" data-testid="inventory-page">
       {/* Left Sidebar - Product List - Only show in list mode */}
       {viewMode === 'list' && (
         <ProductListSidebar
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
           selectedLetter={selectedLetter}
-          products={transformedProducts}
+          products={searchQuery.trim() ? searchResults : transformedProducts}
           onProductClick={handleProductClick}
           totalProducts={totalProducts}
+          isSearching={isSearching}
+          error={error}
         />
       )}
 
@@ -837,7 +937,7 @@ function InventoryPage() {
                   <Button variant="outline" onClick={handleBackToList}>
                     ยกเลิก
                   </Button>
-                  <Button onClick={handleSaveButtonClick} className="bg-teal-500 hover:bg-teal-600">
+                  <Button onClick={handleSaveButtonClick} className="bg-teal-500 hover:bg-teal-600" data-testid="save-product-button">
                     บันทึกสินค้า
                   </Button>
                 </div>

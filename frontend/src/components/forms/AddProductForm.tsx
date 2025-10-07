@@ -257,7 +257,7 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
   }, [submitTrigger])
 
   return (
-    <div className="p-6">
+    <div className="p-6" data-testid="add-product-form">
       <div className="max-w-4xl mx-auto space-y-8">
         
         {/* General Information */}
@@ -298,7 +298,10 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
                     handleInputChange('product_type', value)
                   }}
                 >
-                  <SelectTrigger className="mt-2 h-12 px-4 rounded-xl border-2 border-gray-200 bg-white focus:bg-white focus:border-purple-300 focus:ring-2 focus:ring-teal-100 transition-all duration-200 shadow-sm">
+                  <SelectTrigger 
+                    className="mt-2 h-12 px-4 rounded-xl border-2 border-gray-200 bg-white focus:bg-white focus:border-purple-300 focus:ring-2 focus:ring-teal-100 transition-all duration-200 shadow-sm"
+                    data-testid="product-type-select"
+                  >
                     <SelectValue placeholder="ยารักษาโรค" />
                   </SelectTrigger>
                   <SelectContent className="bg-white">
@@ -325,6 +328,7 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
                   className="mt-2 h-12 px-4 rounded-xl border-2 border-gray-200 bg-gray-50 focus:bg-white focus:border-purple-300 focus:ring-2 focus:ring-teal-100 transition-all duration-200 shadow-sm"
                   placeholder="โปรดระบุชื่อสินค้า"
                   required
+                  data-testid="product-name-input"
                 />
               </div>
 
@@ -341,6 +345,7 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
                     className="mt-2 h-12 px-4 rounded-xl border-2 border-gray-200 bg-gray-50 focus:bg-white focus:border-purple-300 focus:ring-2 focus:ring-teal-100 transition-all duration-200 shadow-sm"
                     placeholder="0.00"
                     required
+                    data-testid="sale-price-input"
                   />
                 </div>
 
@@ -355,35 +360,38 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
                       handleInputChange('unit', value)
                     }}
                   >
-                    <SelectTrigger className="mt-2 h-12 px-4 rounded-xl border-2 border-gray-200 bg-gray-50 focus:bg-white focus:border-purple-300 focus:ring-2 focus:ring-teal-100 transition-all duration-200 shadow-sm">
+                    <SelectTrigger 
+                      className="mt-2 h-12 px-4 rounded-xl border-2 border-gray-200 bg-gray-50 focus:bg-white focus:border-purple-300 focus:ring-2 focus:ring-teal-100 transition-all duration-200 shadow-sm"
+                      data-testid="unit-input"
+                    >
                       <SelectValue placeholder="เลือกหน่วยนับ" />
                     </SelectTrigger>
-                    <SelectContent className="bg-white">
+                    <SelectContent className="bg-white" data-testid="unit-select-content">
                       {selectValues.category === 'medical-service' ? (
-                        <SelectItem value="ครั้ง">ครั้ง</SelectItem>
+                        <SelectItem value="ครั้ง" data-testid="unit-option-ครั้ง">ครั้ง</SelectItem>
                       ) : (
                         <>
-                          <SelectItem value="เม็ด">เม็ด</SelectItem>
-                          <SelectItem value="แคปซูล">แคปซูล</SelectItem>
-                          <SelectItem value="ขวด">ขวด</SelectItem>
-                          <SelectItem value="หลอด">หลอด</SelectItem>
-                          <SelectItem value="แผง">แผง</SelectItem>
-                          <SelectItem value="ซอง">ซอง</SelectItem>
-                          <SelectItem value="กระปุก">กระปุก</SelectItem>
-                          <SelectItem value="ถุง">ถุง</SelectItem>
-                          <SelectItem value="กล่อง">กล่อง</SelectItem>
-                          <SelectItem value="หยด">หยด</SelectItem>
-                          <SelectItem value="มิลลิลิตร">มิลลิลิตร</SelectItem>
-                          <SelectItem value="กรัม">กรัม</SelectItem>
-                          <SelectItem value="กิโลกรัม">กิโลกรัม</SelectItem>
-                          <SelectItem value="ชิ้น">ชิ้น</SelectItem>
-                          <SelectItem value="อัน">อัน</SelectItem>
-                          <SelectItem value="คู่">คู่</SelectItem>
-                          <SelectItem value="ชุด">ชุด</SelectItem>
-                          <SelectItem value="แผ่น">แผ่น</SelectItem>
-                          <SelectItem value="ม้วน">ม้วน</SelectItem>
-                          <SelectItem value="ครั้ง">ครั้ง</SelectItem>
-                          <SelectItem value="อื่นๆ">อื่นๆ</SelectItem>
+                          <SelectItem value="เม็ด" data-testid="unit-option-เม็ด">เม็ด</SelectItem>
+                          <SelectItem value="แคปซูล" data-testid="unit-option-แคปซูล">แคปซูล</SelectItem>
+                          <SelectItem value="ขวด" data-testid="unit-option-ขวด">ขวด</SelectItem>
+                          <SelectItem value="หลอด" data-testid="unit-option-หลอด">หลอด</SelectItem>
+                          <SelectItem value="แผง" data-testid="unit-option-แผง">แผง</SelectItem>
+                          <SelectItem value="ซอง" data-testid="unit-option-ซอง">ซอง</SelectItem>
+                          <SelectItem value="กระปุก" data-testid="unit-option-กระปุก">กระปุก</SelectItem>
+                          <SelectItem value="ถุง" data-testid="unit-option-ถุง">ถุง</SelectItem>
+                          <SelectItem value="กล่อง" data-testid="unit-option-กล่อง">กล่อง</SelectItem>
+                          <SelectItem value="หยด" data-testid="unit-option-หยด">หยด</SelectItem>
+                          <SelectItem value="มิลลิลิตร" data-testid="unit-option-มิลลิลิตร">มิลลิลิตร</SelectItem>
+                          <SelectItem value="กรัม" data-testid="unit-option-กรัม">กรัม</SelectItem>
+                          <SelectItem value="กิโลกรัม" data-testid="unit-option-กิโลกรัม">กิโลกรัม</SelectItem>
+                          <SelectItem value="ชิ้น" data-testid="unit-option-ชิ้น">ชิ้น</SelectItem>
+                          <SelectItem value="อัน" data-testid="unit-option-อัน">อัน</SelectItem>
+                          <SelectItem value="คู่" data-testid="unit-option-คู่">คู่</SelectItem>
+                          <SelectItem value="ชุด" data-testid="unit-option-ชุด">ชุด</SelectItem>
+                          <SelectItem value="แผ่น" data-testid="unit-option-แผ่น">แผ่น</SelectItem>
+                          <SelectItem value="ม้วน" data-testid="unit-option-ม้วน">ม้วน</SelectItem>
+                          <SelectItem value="ครั้ง" data-testid="unit-option-ครั้ง">ครั้ง</SelectItem>
+                          <SelectItem value="อื่นๆ" data-testid="unit-option-อื่นๆ">อื่นๆ</SelectItem>
                         </>
                       )}
                     </SelectContent>
@@ -399,6 +407,7 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
                     onChange={(e) => handleInputChange('generic_name', e.target.value)}
                     className="mt-2 h-12 px-4 rounded-xl border-2 border-gray-200 bg-gray-50 focus:bg-white focus:border-purple-300 focus:ring-2 focus:ring-teal-100 transition-all duration-200 shadow-sm"
                     placeholder="ระบุชื่อยาสามัญ"
+                    data-testid="generic-name-input"
                   />
                 </div>
               )}
@@ -410,6 +419,7 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
                   onChange={(e) => handleInputChange('short_name', e.target.value)}
                   className="mt-2 h-12 px-4 rounded-xl border-2 border-gray-200 bg-gray-50 focus:bg-white focus:border-purple-300 focus:ring-2 focus:ring-teal-100 transition-all duration-200 shadow-sm"
                   placeholder="ชื่อย่อ"
+                  data-testid="short-name-input"
                 />
               </div>
             </div>
@@ -430,7 +440,7 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
               className="flex space-x-6 mb-6"
             >
               <div className="flex items-center space-x-2">
-                <RadioGroupItem value="active" id="active" />
+                <RadioGroupItem value="active" id="active" data-testid="status-active-radio" />
                 <Label htmlFor="active" className="text-sm font-medium text-teal-600">แสดงหน้าร้าน</Label>
               </div>
               <div className="flex items-center space-x-2">
@@ -459,6 +469,7 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
                         ? "bg-teal-500 text-white border-teal-500 shadow-lg" 
                         : "text-gray-600 border-2 border-gray-200 bg-gray-50 hover:bg-white hover:border-teal-200"
                     }`}
+                    data-testid={`expiration-warning-${days}-days`}
                   >
                     ก่อน {days} วัน
                   </Button>
@@ -489,6 +500,7 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
                       ? "bg-teal-500 text-white border-teal-500 shadow-lg" 
                       : "text-gray-600 border-2 border-gray-200 bg-gray-50 hover:bg-white hover:border-teal-200"
                   }`}
+                  data-testid={`vat-${vat.value}-percent`}
                 >
                   {vat.label}
                 </Button>
@@ -609,6 +621,7 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
                   onChange={(e) => handleInputChange('dosage_unit', e.target.value)}
                   className="mt-2 h-12 px-4 rounded-xl border-2 border-gray-200 bg-gray-50 focus:bg-white focus:border-purple-300 focus:ring-2 focus:ring-teal-100 transition-all duration-200 shadow-sm"
                   placeholder="เม็ด"
+                  data-testid="dosage-unit-input"
                 />
               </div>
               <div>
@@ -619,6 +632,7 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
                   onChange={(e) => handleInputChange('times_per_day', e.target.value)}
                   className="mt-2 h-12 px-4 rounded-xl border-2 border-gray-200 bg-gray-50 focus:bg-white focus:border-purple-300 focus:ring-2 focus:ring-teal-100 transition-all duration-200 shadow-sm"
                   placeholder="3"
+                  data-testid="times-per-day-input"
                 />
               </div>
               <div>
@@ -629,6 +643,7 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
                   onChange={(e) => handleInputChange('interval_hours', e.target.value)}
                   className="mt-2 h-12 px-4 rounded-xl border-2 border-gray-200 bg-gray-50 focus:bg-white focus:border-purple-300 focus:ring-2 focus:ring-teal-100 transition-all duration-200 shadow-sm"
                   placeholder="8"
+                  data-testid="interval-hours-input"
                 />
               </div>
             </div>
@@ -640,6 +655,7 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
                   id="before-meal"
                   checked={formData.before_meal}
                   onCheckedChange={(checked) => handleInputChange('before_meal', checked)}
+                  data-testid="before-meal-checkbox"
                 />
                 <Label htmlFor="before-meal" className="text-sm">
                   <span className="font-medium">ก่อนอาหาร</span>
@@ -653,6 +669,7 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
                   id="after-meal"
                   checked={formData.after_meal}
                   onCheckedChange={(checked) => handleInputChange('after_meal', checked)}
+                  data-testid="after-meal-checkbox"
                 />
                 <Label htmlFor="after-meal" className="text-sm">
                   <span className="font-medium">หลังอาหาร</span>
@@ -666,6 +683,7 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
                   id="after-meal-immediate"
                   checked={formData.after_meal_immediate}
                   onCheckedChange={(checked) => handleInputChange('after_meal_immediate', checked)}
+                  data-testid="after-meal-immediate-checkbox"
                 />
                 <Label htmlFor="after-meal-immediate" className="text-sm">
                   <span className="font-medium">หลังอาหารทันที</span>
@@ -696,6 +714,7 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
                     onChange={(e) => handleInputChange('morning', e.target.value)}
                     className="mt-2 h-12 px-4 rounded-xl border-2 border-gray-200 bg-gray-50 focus:bg-white focus:border-purple-300 focus:ring-2 focus:ring-teal-100 transition-all duration-200 shadow-sm"
                     placeholder="เช้า"
+                    data-testid="morning-input"
                   />
                 </div>
                 <div>
@@ -706,6 +725,7 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
                     onChange={(e) => handleInputChange('noon', e.target.value)}
                     className="mt-2 h-12 px-4 rounded-xl border-2 border-gray-200 bg-gray-50 focus:bg-white focus:border-purple-300 focus:ring-2 focus:ring-teal-100 transition-all duration-200 shadow-sm"
                     placeholder="กลางวัน"
+                    data-testid="noon-input"
                   />
                 </div>
                 <div>
@@ -716,6 +736,7 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
                     onChange={(e) => handleInputChange('evening', e.target.value)}
                     className="mt-2 h-12 px-4 rounded-xl border-2 border-gray-200 bg-gray-50 focus:bg-white focus:border-purple-300 focus:ring-2 focus:ring-teal-100 transition-all duration-200 shadow-sm"
                     placeholder="เย็น"
+                    data-testid="evening-input"
                   />
                 </div>
                 <div>
@@ -726,6 +747,7 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
                     onChange={(e) => handleInputChange('before_bed', e.target.value)}
                     className="mt-2 h-12 px-4 rounded-xl border-2 border-gray-200 bg-gray-50 focus:bg-white focus:border-purple-300 focus:ring-2 focus:ring-teal-100 transition-all duration-200 shadow-sm"
                     placeholder="ก่อนนอน"
+                    data-testid="before-bed-input"
                   />
                 </div>
               </div>
@@ -740,6 +762,7 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
                   onChange={(e) => handleInputChange('dosage', e.target.value)}
                   className="mt-2 h-12 px-4 rounded-xl border-2 border-gray-200 bg-gray-50 focus:bg-white focus:border-purple-300 focus:ring-2 focus:ring-teal-100 transition-all duration-200 shadow-sm"
                   placeholder="ครั้งละ 1 เม็ด"
+                  data-testid="dosage-input"
                 />
               </div>
 
@@ -751,6 +774,7 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
                   className="mt-2 px-4 py-3 rounded-xl border-2 border-gray-200 bg-gray-50 focus:bg-white focus:border-purple-300 focus:ring-2 focus:ring-teal-100 transition-all duration-200 shadow-sm resize-none"
                   rows={3}
                   placeholder="สรรพคุณของยา"
+                  data-testid="properties-textarea"
                 />
               </div>
 
@@ -762,6 +786,7 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
                   className="mt-2 px-4 py-3 rounded-xl border-2 border-gray-200 bg-gray-50 focus:bg-white focus:border-purple-300 focus:ring-2 focus:ring-teal-100 transition-all duration-200 shadow-sm resize-none"
                   rows={3}
                   placeholder="คำแนะนำการใช้"
+                  data-testid="usage-instruction-textarea"
                 />
               </div>
 
@@ -773,6 +798,7 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
                   className="mt-2 px-4 py-3 rounded-xl border-2 border-gray-200 bg-gray-50 focus:bg-white focus:border-purple-300 focus:ring-2 focus:ring-teal-100 transition-all duration-200 shadow-sm resize-none"
                   rows={2}
                   placeholder="หมายเหตุการขาย"
+                  data-testid="sale-note-textarea"
                 />
               </div>
 
@@ -784,6 +810,7 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
                   className="mt-2 px-4 py-3 rounded-xl border-2 border-gray-200 bg-gray-50 focus:bg-white focus:border-purple-300 focus:ring-2 focus:ring-teal-100 transition-all duration-200 shadow-sm resize-none"
                   rows={2}
                   placeholder="หมายเหตุการสั่งซื้อ"
+                  data-testid="purchase-note-textarea"
                 />
               </div>
             </div>
@@ -803,6 +830,7 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
                 <Switch 
                   checked={formData.add_initial_stock}
                   onCheckedChange={(checked) => handleInputChange('add_initial_stock', checked)}
+                  data-testid="initial-stock-switch"
                 />
                 <Label className="text-sm font-medium">เพิ่มสต๊อกเริ่มต้น</Label>
               </div>
@@ -822,6 +850,7 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
                         onChange={(e) => handleInputChange('initial_stock_quantity', e.target.value)}
                         placeholder="กรอกจำนวนสต๊อก"
                         className="mt-1"
+                        data-testid="initial-stock-quantity"
                       />
                     </div>
                     
@@ -853,6 +882,7 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
                         value={formData.initial_stock_production_date}
                         onChange={(e) => handleInputChange('initial_stock_production_date', e.target.value)}
                         className="mt-1"
+                        data-testid="production-date-input"
                       />
                     </div>
                     
@@ -866,6 +896,7 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
                         value={formData.initial_stock_expiration_date}
                         onChange={(e) => handleInputChange('initial_stock_expiration_date', e.target.value)}
                         className="mt-1"
+                        data-testid="expiration-date-input"
                       />
                     </div>
                   </div>
@@ -880,6 +911,7 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
                       onChange={(e) => handleInputChange('initial_stock_production_lot', e.target.value)}
                       placeholder="กรอกล็อตการผลิต"
                       className="mt-1"
+                      data-testid="production-lot-input"
                     />
                   </div>
                   
@@ -894,6 +926,7 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
                       placeholder="กรอกหมายเหตุเพิ่มเติม"
                       className="mt-1"
                       rows={2}
+                      data-testid="stock-note-input"
                     />
                   </div>
                 </div>
