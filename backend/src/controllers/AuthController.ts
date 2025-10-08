@@ -51,7 +51,7 @@ export const authController = (app: Elysia, redisClient?: any) => {
     )
     .post(
       "/sign-in",
-      async ({ set, cookie, body: { username, password } }) => {
+      async ({ set, cookie, request, body: { username, password } }) => {
         // Get the login credentials and verify password
         const result = await authService.signIn(username, password);
         
@@ -62,13 +62,25 @@ export const authController = (app: Elysia, redisClient?: any) => {
         
         // Log security tracking for successful login
         if (result.user) {
+          const detectedIP = request.headers.get('x-forwarded-for') || 
+            request.headers.get('x-real-ip') || 
+            request.headers.get('cf-connecting-ip') ||
+            request.headers.get('x-client-ip') ||
+            '127.0.0.1';
+          
           await SecurityService.logSensitiveOperation(
             result.user.id,
             'USER_LOGIN',
             'User',
             result.user.id,
             { username, loginTime: new Date().toISOString() },
-            redisClient
+            redisClient,
+            { 
+              username: result.user.username, 
+              role: result.user.role, 
+              email: result.user.email 
+            },
+            detectedIP
           );
         }
         

@@ -68,7 +68,12 @@ while IFS= read -r key; do
                 echo "    \"key\": \"$key\"," >> "$OUTPUT_FILE"
                 echo "    \"value\": $value," >> "$OUTPUT_FILE"
                 echo "    \"timestamp\": $TIMESTAMP," >> "$OUTPUT_FILE"
-                echo "    \"date\": \"$TARGET_DATE\"" >> "$OUTPUT_FILE"
+                echo "    \"date\": \"$TARGET_DATE\"," >> "$OUTPUT_FILE"
+                echo "    \"actor\": $(echo "$value" | jq '.actor // {}')," >> "$OUTPUT_FILE"
+                echo "    \"action\": $(echo "$value" | jq -r '.action // .operation // "unknown"' | sed 's/^/"/; s/$/"/')," >> "$OUTPUT_FILE"
+                echo "    \"resource\": $(echo "$value" | jq '.resource // {type: .entityType, id: .entityId}')," >> "$OUTPUT_FILE"
+                echo "    \"ipAddress\": $(echo "$value" | jq -r '.ipAddress // "unknown"' | sed 's/^/"/; s/$/"/')," >> "$OUTPUT_FILE"
+                echo "    \"time\": $(echo "$value" | jq -r '.timestamp // "unknown"' | sed 's/^/"/; s/$/"/')" >> "$OUTPUT_FILE"
                 echo -n "  }" >> "$OUTPUT_FILE"
                 ((AUDIT_COUNT++))
             fi
@@ -115,11 +120,23 @@ echo "📋 สร้างไฟล์สรุป: $SUMMARY_FILE"
     if [ $AUDIT_COUNT -gt 0 ]; then
         echo "All operations for $TARGET_DATE:"
         # แสดง operations ทั้งหมดที่เกิดขึ้นในวันนั้น
-        cat "$OUTPUT_FILE" | jq -r '.[] | .value.operation' | sort | uniq -c | sort -nr
+        cat "$OUTPUT_FILE" | jq -r '.[] | .action' | sort | uniq -c | sort -nr
         echo ""
         echo "=== Operation Details ==="
-        # แสดงรายละเอียด operations ทั้งหมดพร้อม timestamp
-        cat "$OUTPUT_FILE" | jq -r '.[] | "\(.value.timestamp) | \(.value.operation) | \(.value.entityType) | \(.value.details)"'
+        # แสดงรายละเอียด operations ทั้งหมดพร้อม timestamp, actor, และ IP
+        cat "$OUTPUT_FILE" | jq -r '.[] | "\(.time) | \(.actor.username // "unknown") (\(.actor.role // "unknown")) | \(.action) | \(.resource.type) | \(.ipAddress)"'
+        echo ""
+        echo "=== Actor Summary ==="
+        # แสดงสรุปผู้ใช้งานที่ทำการ audit
+        cat "$OUTPUT_FILE" | jq -r '.[] | "\(.actor.username // "unknown") (\(.actor.role // "unknown"))"' | sort | uniq -c | sort -nr
+        echo ""
+        echo "=== IP Address Summary ==="
+        # แสดงสรุป IP addresses
+        cat "$OUTPUT_FILE" | jq -r '.[] | .ipAddress' | sort | uniq -c | sort -nr
+        echo ""
+        echo "=== Resource Type Summary ==="
+        # แสดงสรุปประเภทของ resource ที่ถูกเข้าถึง
+        cat "$OUTPUT_FILE" | jq -r '.[] | .resource.type' | sort | uniq -c | sort -nr
     else
         echo "No audit operations found for $TARGET_DATE"
     fi
@@ -143,4 +160,10 @@ echo "📖 ดูข้อมูล JSON:"
 echo "   cat $OUTPUT_FILE | jq ."
 echo ""
 echo "📊 วิเคราะห์ข้อมูล:"
-echo "   cat $OUTPUT_FILE | jq '.[] | .value.operation' | sort | uniq -c"
+echo "   cat $OUTPUT_FILE | jq '.[] | .action' | sort | uniq -c"
+echo ""
+echo "👤 วิเคราะห์ผู้ใช้งาน:"
+echo "   cat $OUTPUT_FILE | jq '.[] | .actor.username' | sort | uniq -c"
+echo ""
+echo "🌐 วิเคราะห์ IP Address:"
+echo "   cat $OUTPUT_FILE | jq '.[] | .ipAddress' | sort | uniq -c"

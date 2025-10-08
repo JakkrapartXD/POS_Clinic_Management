@@ -337,6 +337,9 @@ test.describe('การทดสอบการสั่งยาใน POS E2E
     // รอให้ dialog ปิด
     await page.waitForTimeout(1000);
     
+    await page.fill('[data-testid="search-input"]', 'ยา');
+    await page.waitForTimeout(1000);
+    
     // ตรวจสอบว่าสต๊อกในหน้าจอลดลง
     await page.waitForTimeout(1000); // รอให้ UI อัปเดต
     const updatedStockText = await firstProduct.locator('[data-testid="stock-quantity"]').textContent();

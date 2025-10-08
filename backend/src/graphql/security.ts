@@ -258,7 +258,9 @@ export class SecurityService {
     entityType: string,
     entityId: string,
     details?: any,
-    redisClient?: any
+    redisClient?: any,
+    actorInfo?: { username?: string; role?: string; email?: string },
+    ipAddress?: string
   ) {
     try {
       // Log to audit table (you may want to create this table)
@@ -276,11 +278,26 @@ export class SecurityService {
         const auditKey = `audit:${userId}:${Date.now()}`;
         // Use setEx instead of setex for Redis v5 compatibility
         await redisClient.setEx(auditKey, 24 * 60 * 60, JSON.stringify({
-          operation,
-          entityType,
-          entityId,
-          details,
-          timestamp: new Date().toISOString()
+          // Actor information
+          actor: {
+            userId,
+            username: actorInfo?.username || 'unknown',
+            role: actorInfo?.role || 'unknown',
+            email: actorInfo?.email || 'unknown'
+          },
+          // Action information
+          action: operation,
+          // Resource information
+          resource: {
+            type: entityType,
+            id: entityId
+          },
+          // Additional details
+          details: details || {},
+          // Time information
+          timestamp: new Date().toISOString(),
+          // IP address
+          ipAddress: ipAddress || 'unknown'
         }));
       }
     } catch (error) {

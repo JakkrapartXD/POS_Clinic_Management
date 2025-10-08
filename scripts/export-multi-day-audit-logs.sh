@@ -128,7 +128,23 @@ echo "📋 สร้างไฟล์สรุป: $SUMMARY_FILE"
     echo "=== Operation Statistics ==="
     if [ $TOTAL_AUDIT_COUNT -gt 0 ]; then
         echo "All operations across all days:"
-        cat "$COMBINED_FILE" | jq -r '.[] | .value.operation' | sort | uniq -c | sort -nr
+        cat "$COMBINED_FILE" | jq -r '.[] | .action' | sort | uniq -c | sort -nr
+        echo ""
+        echo "=== Actor Summary ==="
+        echo "All actors across all days:"
+        cat "$COMBINED_FILE" | jq -r '.[] | "\(.actor.username // "unknown") (\(.actor.role // "unknown"))"' | sort | uniq -c | sort -nr
+        echo ""
+        echo "=== IP Address Summary ==="
+        echo "All IP addresses across all days:"
+        cat "$COMBINED_FILE" | jq -r '.[] | .ipAddress' | sort | uniq -c | sort -nr
+        echo ""
+        echo "=== Resource Type Summary ==="
+        echo "All resource types across all days:"
+        cat "$COMBINED_FILE" | jq -r '.[] | .resource.type' | sort | uniq -c | sort -nr
+        echo ""
+        echo "=== Detailed Operations ==="
+        echo "All operations with actor and IP details:"
+        cat "$COMBINED_FILE" | jq -r '.[] | "\(.time) | \(.actor.username // "unknown") (\(.actor.role // "unknown")) | \(.action) | \(.resource.type) | \(.ipAddress)"'
     fi
     echo ""
     echo "=== Redis Connection Info ==="
@@ -155,4 +171,13 @@ echo "📖 ดูข้อมูล JSON:"
 echo "   cat $COMBINED_FILE | jq ."
 echo ""
 echo "📊 วิเคราะห์ข้อมูล:"
-echo "   cat $COMBINED_FILE | jq '.[] | .value.operation' | sort | uniq -c"
+echo "   cat $COMBINED_FILE | jq '.[] | .action' | sort | uniq -c"
+echo ""
+echo "👤 วิเคราะห์ผู้ใช้งาน:"
+echo "   cat $COMBINED_FILE | jq '.[] | .actor.username' | sort | uniq -c"
+echo ""
+echo "🌐 วิเคราะห์ IP Address:"
+echo "   cat $COMBINED_FILE | jq '.[] | .ipAddress' | sort | uniq -c"
+echo ""
+echo "📋 วิเคราะห์ Resource Types:"
+echo "   cat $COMBINED_FILE | jq '.[] | .resource.type' | sort | uniq -c"

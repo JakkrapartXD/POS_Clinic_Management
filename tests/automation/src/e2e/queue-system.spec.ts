@@ -6,6 +6,7 @@ test.describe.serial('การทดสอบระบบคิว E2E', () => 
   const testPatient = {
     firstName: `ผู้ป่วยคิวทดสอบ_${timestamp}`,
     lastName: 'นามสกุลคิวทดสอบ',
+    nickname: `ชื่อเล่น_${timestamp}`,
     nationalId: `${timestamp}`,
     phone: `08${Math.floor(Math.random() * 100000000).toString().padStart(8, '0')}`,
     email: `queue_patient_test_${timestamp}@example.com`,
@@ -153,6 +154,7 @@ test.describe.serial('การทดสอบระบบคิว E2E', () => 
     // กรอกแบบฟอร์มผู้ป่วย
     await page.fill('[data-testid="first-name-input"]', testPatient.firstName);
     await page.fill('[data-testid="last-name-input"]', testPatient.lastName);
+    await page.fill('[data-testid="nickname-input"]', testPatient.nickname);
     await page.fill('[data-testid="national-id-input"]', testPatient.nationalId);
     await page.fill('[data-testid="phone-input"]', testPatient.phone);
     await page.fill('[data-testid="email-input"]', testPatient.email);
@@ -225,6 +227,14 @@ test.describe.serial('การทดสอบระบบคิว E2E', () => 
     // ตรวจสอบข้อมูลผู้ป่วย
     await expect(page.locator('[data-testid="patient-detail-name"]')).toContainText(testPatient.firstName);
     await expect(page.locator('[data-testid="patient-detail-phone"]')).toContainText(testPatient.phone);
+    
+    // ตรวจสอบ nickname (ถ้ามี element สำหรับแสดง nickname)
+    const nicknameElement = page.locator('[data-testid="patient-detail-nickname"]');
+    if (await nicknameElement.isVisible()) {
+      await expect(nicknameElement).toContainText(testPatient.nickname);
+      console.log('✅ ข้อมูล nickname ถูกต้อง');
+    }
+    
     console.log('✅ ข้อมูลผู้ป่วยถูกต้อง');
 
     // กดปุ่มเพิ่มคิวคัดกรอง

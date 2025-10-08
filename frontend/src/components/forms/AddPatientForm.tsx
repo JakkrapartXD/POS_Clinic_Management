@@ -455,6 +455,7 @@ export default function AddPatientForm({ isOpen, onClose, onSuccess }: AddPatien
                         value={formData.nickname}
                         onChange={(e) => handleInputChange('nickname', e.target.value)}
                         placeholder="ชื่อเล่น"
+                        data-testid="nickname-input"
                       />
                     </div>
                     

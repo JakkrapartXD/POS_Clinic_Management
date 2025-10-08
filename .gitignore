@@ -10,6 +10,13 @@ secrets/
 node_modules/
 dist/
 build/
+logs/*.json
+logs/*.txt
+logs/*.log
+logs/*.tar.gz
+logs/*.tgz
+logs/*.log
+logs/*.tar.gz
 
 # Docker
 pgdata/

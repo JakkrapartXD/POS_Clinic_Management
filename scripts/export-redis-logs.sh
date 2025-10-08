@@ -41,7 +41,12 @@ while IFS= read -r key; do
             echo "  {" >> "$OUTPUT_FILE"
             echo "    \"key\": \"$key\"," >> "$OUTPUT_FILE"
             echo "    \"value\": $value," >> "$OUTPUT_FILE"
-            echo "    \"type\": \"audit\"" >> "$OUTPUT_FILE"
+            echo "    \"type\": \"audit\"," >> "$OUTPUT_FILE"
+            echo "    \"actor\": $(echo "$value" | jq '.actor // {}')," >> "$OUTPUT_FILE"
+            echo "    \"action\": $(echo "$value" | jq -r '.action // .operation // "unknown"' | sed 's/^/"/; s/$/"/')," >> "$OUTPUT_FILE"
+            echo "    \"resource\": $(echo "$value" | jq '.resource // {type: .entityType, id: .entityId}')," >> "$OUTPUT_FILE"
+            echo "    \"ipAddress\": $(echo "$value" | jq -r '.ipAddress // "unknown"' | sed 's/^/"/; s/$/"/')," >> "$OUTPUT_FILE"
+            echo "    \"time\": $(echo "$value" | jq -r '.timestamp // "unknown"' | sed 's/^/"/; s/$/"/')" >> "$OUTPUT_FILE"
             echo -n "  }" >> "$OUTPUT_FILE"
             ((AUDIT_COUNT++))
         fi
@@ -126,7 +131,23 @@ echo "📋 สร้างไฟล์สรุป: $SUMMARY_FILE"
     echo "=== All Audit Operations ==="
     echo "All operations across all audit logs:"
     if [ -f "$OUTPUT_FILE" ]; then
-        cat "$OUTPUT_FILE" | jq -r '.[] | .value.operation' | sort | uniq -c | sort -nr
+        cat "$OUTPUT_FILE" | jq -r '.[] | select(.type == "audit") | .action' | sort | uniq -c | sort -nr
+        echo ""
+        echo "=== Actor Summary ==="
+        echo "All actors across all audit logs:"
+        cat "$OUTPUT_FILE" | jq -r '.[] | select(.type == "audit") | "\(.actor.username // "unknown") (\(.actor.role // "unknown"))"' | sort | uniq -c | sort -nr
+        echo ""
+        echo "=== IP Address Summary ==="
+        echo "All IP addresses across all audit logs:"
+        cat "$OUTPUT_FILE" | jq -r '.[] | select(.type == "audit") | .ipAddress' | sort | uniq -c | sort -nr
+        echo ""
+        echo "=== Resource Type Summary ==="
+        echo "All resource types across all audit logs:"
+        cat "$OUTPUT_FILE" | jq -r '.[] | select(.type == "audit") | .resource.type' | sort | uniq -c | sort -nr
+        echo ""
+        echo "=== Detailed Audit Operations ==="
+        echo "All audit operations with actor and IP details:"
+        cat "$OUTPUT_FILE" | jq -r '.[] | select(.type == "audit") | "\(.time) | \(.actor.username // "unknown") (\(.actor.role // "unknown")) | \(.action) | \(.resource.type) | \(.ipAddress)"'
     fi
 } > "$SUMMARY_FILE"
 
