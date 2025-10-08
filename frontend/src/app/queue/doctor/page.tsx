@@ -459,6 +459,69 @@ export default function DoctorQueuePage() {
     }
   };
 
+  // ตรวจสอบสต๊อกและแจ้งเตือน
+  const checkStockWarnings = async (product: any) => {
+    try {
+      // ตรวจสอบสต๊อกต่ำ
+      if (product.stock_quantity <= (product.reorder_point || 0)) {
+        toast.warning(`⚠️ สต๊อกต่ำ: ${product.product_name} เหลือ ${product.stock_quantity} ${product.unit || 'หน่วย'}`, {
+          duration: 5000,
+          id: 'stock-warning-toast'
+        });
+      }
+
+      // ตรวจสอบสต๊อกใกล้หมดอายุ
+      const stocksResponse = await GraphQLAPI.getStocks({ productId: product.id });
+      
+      if (stocksResponse.stocks && stocksResponse.stocks.length > 0) {
+        const today = new Date();
+        const warningDays = product.expiration_warning_date || 90;
+        
+        // ตรวจสอบสต๊อกที่ใกล้หมดอายุ
+        const nearExpiryStocks = stocksResponse.stocks.filter((stock: any) => {
+          if (!stock.expiration_date) return false;
+          
+          const expDate = new Date(stock.expiration_date);
+          const daysUntilExpiry = Math.ceil((expDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+          
+          return daysUntilExpiry <= warningDays && daysUntilExpiry > 0;
+        });
+
+        if (nearExpiryStocks.length > 0) {
+          const totalNearExpiry = nearExpiryStocks.reduce((sum: number, stock: any) => sum + stock.quantity, 0);
+          const earliestExpiry = Math.min(...nearExpiryStocks.map((stock: any) => {
+            const expDate = new Date(stock.expiration_date);
+            return Math.ceil((expDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+          }));
+          
+          toast.warning(`⏰ สินค้าใกล้หมดอายุ: ${product.product_name} เหลือ ${earliestExpiry} วัน (${totalNearExpiry} ${product.unit || 'หน่วย'})`, {
+            duration: 6000,
+            id: 'expiry-warning-toast'
+          });
+        }
+
+        // ตรวจสอบสต๊อกที่หมดอายุแล้ว
+        const expiredStocks = stocksResponse.stocks.filter((stock: any) => {
+          if (!stock.expiration_date) return false;
+          
+          const expDate = new Date(stock.expiration_date);
+          return expDate < today;
+        });
+
+        if (expiredStocks.length > 0) {
+          const totalExpired = expiredStocks.reduce((sum: number, stock: any) => sum + stock.quantity, 0);
+          toast.error(`🚫 สินค้าหมดอายุ: ${product.product_name} (${totalExpired} ${product.unit || 'หน่วย'})`, {
+            duration: 8000,
+            id: 'expired-warning-toast'
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Failed to check stock warnings', error);
+      // ไม่แสดง error ให้ผู้ใช้ เพราะไม่ใช่การทำงานหลัก
+    }
+  };
+
   // Debounced search function for products
   const performProductSearch = async (query: string) => {
     if (query.length < 2) {
@@ -500,10 +563,24 @@ export default function DoctorQueuePage() {
     };
   }, [productSearchQuery]);
 
-  const addToPrescriptionCart = (product: any) => {
+  const addToPrescriptionCart = async (product: any) => {
+    // ตรวจสอบว่าสินค้าหมดสต๊อกหรือไม่
+    if (product.stock_quantity <= 0) {
+      toast.error('สินค้าหมดสต๊อก', {
+        id: 'out-of-stock-toast'
+      });
+      return;
+    }
+
     const existingItem = prescriptionCart.find((item) => item.id === product.id);
 
     if (existingItem) {
+      // ตรวจสอบว่าจำนวนในตระกร้า + 1 จะเกินสต๊อกหรือไม่
+      if (existingItem.quantity >= product.stock_quantity) {
+        toast.error('ไม่สามารถเพิ่มสินค้าได้ เนื่องจากสต๊อกไม่เพียงพอ');
+        return;
+      }
+      
       setPrescriptionCart(prescriptionCart.map((item) => 
         item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
       ));
@@ -522,6 +599,9 @@ export default function DoctorQueuePage() {
       };
       setPrescriptionCart([...prescriptionCart, cartItem]);
     }
+    
+    // ตรวจสอบสต๊อกหลังจากเพิ่มสินค้าเข้าตระกร้า
+    await checkStockWarnings(product);
   };
 
   const removeFromPrescriptionCart = (productId: string) => {
@@ -532,6 +612,18 @@ export default function DoctorQueuePage() {
     if (quantity <= 0) {
       removeFromPrescriptionCart(productId);
       return;
+    }
+
+    // หาสินค้าในตระกร้าและสินค้าจาก products
+    const cartItem = prescriptionCart.find((item) => item.id === productId);
+    const product = products.find((p) => p.id === productId);
+    
+    if (cartItem && product) {
+      // ตรวจสอบว่าจำนวนใหม่จะเกินสต๊อกหรือไม่
+      if (quantity > product.stock_quantity) {
+        toast.error('ไม่สามารถเพิ่มสินค้าได้ เนื่องจากสต๊อกไม่เพียงพอ');
+        return;
+      }
     }
 
     setPrescriptionCart(prescriptionCart.map((item) => 
@@ -1434,8 +1526,12 @@ export default function DoctorQueuePage() {
                         .map((product) => (
                         <Card
                           key={product.id}
-                          className="cursor-pointer hover:shadow-md transition-shadow"
-                          onClick={() => addToPrescriptionCart(product)}
+                          className={`transition-shadow ${
+                            product.stock_quantity > 0 
+                              ? 'cursor-pointer hover:shadow-md' 
+                              : 'cursor-not-allowed opacity-60'
+                          }`}
+                          onClick={() => product.stock_quantity > 0 && addToPrescriptionCart(product)}
                           data-testid={`product-card-${product.id}`}
                         >
                           <CardContent className="p-3">
@@ -1447,9 +1543,12 @@ export default function DoctorQueuePage() {
                               {product.pack_size} {product.unit}
                             </div>
                             <div className="text-xs text-gray-400 mb-1">
-                              สต๊อก: {product.stock_quantity}
+                              {product.stock_quantity > 0 ? `สต๊อก: ${product.stock_quantity}` : 'สินค้าหมด'}
                             </div>
                             <div className="text-orange-600 font-medium text-sm">฿{product.sale_price.toFixed(2)}</div>
+                            {product.stock_quantity <= 0 && (
+                              <div className="mt-1 text-xs text-red-600 font-medium">สินค้าหมด</div>
+                            )}
                           </CardContent>
                         </Card>
                       ));
@@ -1472,34 +1571,43 @@ export default function DoctorQueuePage() {
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {prescriptionCart.map((item) => (
-                        <div key={item.id} className="flex items-center justify-between bg-white p-3 rounded-lg shadow-sm">
-                          <div className="flex-1">
-                            <h4 className="font-medium text-sm">{item.product_name}</h4>
-                            <div className="text-xs text-gray-500">{item.pack_size} {item.unit}</div>
-                            <div className="text-orange-600 text-sm">฿{item.sale_price.toFixed(2)}</div>
+                      {prescriptionCart.map((item) => {
+                        const product = products.find(p => p.id === item.id);
+                        const maxQuantity = product?.stock_quantity || item.stock_quantity;
+                        
+                        return (
+                          <div key={item.id} className="flex items-center justify-between bg-white p-3 rounded-lg shadow-sm">
+                            <div className="flex-1">
+                              <h4 className="font-medium text-sm">{item.product_name}</h4>
+                              <div className="text-xs text-gray-500">{item.pack_size} {item.unit}</div>
+                              <div className="text-orange-600 text-sm">฿{item.sale_price.toFixed(2)}</div>
+                              <div className="text-xs text-gray-400">
+                                สต๊อก: {maxQuantity} {item.unit}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                className="h-6 w-6"
+                                onClick={() => updatePrescriptionQuantity(item.id, item.quantity - 1)}
+                              >
+                                <Minus className="h-3 w-3" />
+                              </Button>
+                              <span className="w-6 text-center text-sm">{item.quantity}</span>
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                className="h-6 w-6"
+                                disabled={item.quantity >= maxQuantity}
+                                onClick={() => updatePrescriptionQuantity(item.id, item.quantity + 1)}
+                              >
+                                <Plus className="h-3 w-3" />
+                              </Button>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              className="h-6 w-6"
-                              onClick={() => updatePrescriptionQuantity(item.id, item.quantity - 1)}
-                            >
-                              <Minus className="h-3 w-3" />
-                            </Button>
-                            <span className="w-6 text-center text-sm">{item.quantity}</span>
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              className="h-6 w-6"
-                              onClick={() => updatePrescriptionQuantity(item.id, item.quantity + 1)}
-                            >
-                              <Plus className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>

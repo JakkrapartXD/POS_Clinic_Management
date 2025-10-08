@@ -63,3 +63,90 @@ export const generateJWT = (payload: any) => {
   return `${header}.${body}.${signature}`;
 };
 
+// Authentication helper for integration tests
+export const authenticateUser = async (apiUrl: string, username: string, password: string) => {
+  const loginMutation = `
+    mutation SignIn($input: SignInInput!) {
+      signIn(input: $input) {
+        token
+        user {
+          id
+          username
+          email
+          role
+        }
+      }
+    }
+  `;
+
+  try {
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include', // Include cookies for session-based auth
+      body: JSON.stringify({
+        query: loginMutation,
+        variables: {
+          input: {
+            username,
+            password
+          }
+        }
+      })
+    });
+
+    const result = await response.json();
+    
+    if (result.errors) {
+      throw new Error(result.errors[0].message);
+    }
+
+    return {
+      token: result.data?.signIn?.token,
+      user: result.data?.signIn?.user,
+      cookies: response.headers.get('set-cookie') // Get session cookies
+    };
+  } catch (error) {
+    console.error('Authentication failed:', error);
+    throw error;
+  }
+};
+
+// Create authenticated axios instance
+export const createAuthenticatedAxios = (apiUrl: string, token?: string, cookies?: string) => {
+  const headers: any = {
+    'Content-Type': 'application/json',
+  };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  if (cookies) {
+    headers['Cookie'] = cookies;
+  }
+
+  return {
+    post: async (url: string, data: any, config: any = {}) => {
+      return fetch(url, {
+        method: 'POST',
+        headers: {
+          ...headers,
+          ...config.headers
+        },
+        credentials: 'include',
+        body: JSON.stringify(data)
+      }).then(async (response) => {
+        const result = await response.json();
+        return {
+          status: response.status,
+          data: result,
+          headers: response.headers
+        };
+      });
+    }
+  };
+};
+
