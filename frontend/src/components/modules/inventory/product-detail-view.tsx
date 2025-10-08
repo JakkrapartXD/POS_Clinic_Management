@@ -1734,7 +1734,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
 
 
   return (
-    <div className="p-6">
+    <div className="p-6" data-testid="product-detail-view">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
@@ -1777,7 +1777,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="general">ข้อมูลทั่วไป</TabsTrigger>
             <TabsTrigger value="units">หน่วยนับ</TabsTrigger>
-            <TabsTrigger value="stock">สต๊อกสินค้า</TabsTrigger>
+            <TabsTrigger value="stock" data-testid="stock-tab">สต๊อกสินค้า</TabsTrigger>
           </TabsList>
 
           {/* ข้อมูลทั่วไป */}
@@ -1788,7 +1788,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                 <div className="grid grid-cols-2 gap-6">
                   <div>
                     <label className="text-sm font-medium text-gray-600">ประเภทสินค้า</label>
-                    <div className="mt-1 text-gray-900">{getProductTypeLabel(product.product_type)}</div>
+                    <div className="mt-1 text-gray-900" data-testid="product-type-display">{getProductTypeLabel(product.product_type)}</div>
                   </div>
                   <div>
                     <label className="text-sm font-medium text-gray-600">หมวดหมู่สินค้า</label>
@@ -1796,11 +1796,11 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                   </div>
                   <div>
                     <label className="text-sm font-medium text-gray-600">ชื่อสินค้า</label>
-                    <div className="mt-1 text-gray-900">{product.product_name}</div>
+                    <div className="mt-1 text-gray-900" data-testid="product-name-display">{product.product_name}</div>
                   </div>
                   <div>
                     <label className="text-sm font-medium text-gray-600">ชื่อสามัญทางยา</label>
-                    <div className="mt-1 text-gray-900">{product.generic_name || '-'}</div>
+                    <div className="mt-1 text-gray-900" data-testid="generic-name-display">{product.generic_name || '-'}</div>
                   </div>
                   <div>
                     <label className="text-sm font-medium text-gray-600">ชื่อย่อ</label>
@@ -1937,7 +1937,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                           <tr key={variant.id || index} className={`hover:bg-gray-50 ${isMain ? 'bg-purple-50' : ''}`}>
                             <td className="px-4 py-4">
                               <div className="flex items-center space-x-2">
-                                <span className={`font-medium ${isMain ? 'text-teal-600' : canDelete ? 'text-blue-600' : 'text-gray-600'}`}>
+                                <span className={`font-medium ${isMain ? 'text-teal-600' : canDelete ? 'text-blue-600' : 'text-gray-600'}`} data-testid="unit-display">
                                   {variant.unit || 'หน่วย'}
                                 </span>
                                 <Badge variant={isMain ? 'default' : 'outline'} className={`text-xs ${isMain ? 'bg-teal-600' : 'border-gray-200 text-gray-700'}`}>
@@ -1949,7 +1949,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                               </div>
                             </td>
                             <td className="px-4 py-4">
-                              <span className="text-gray-900">{variant.pack_size || '1'}</span>
+                              <span className="text-gray-900" data-testid="pack-size-display">{variant.pack_size || '1'}</span>
                               {isMain && (
                                 <div className="text-xs text-gray-500">(สินค้าหลัก)</div>
                               )}
@@ -1959,7 +1959,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                               <span className="text-gray-900">฿{variant.cost ? Number(variant.cost).toLocaleString() : '-'}</span>
                             </td>
                             <td className="px-4 py-4">
-                              <span className="text-gray-900 font-medium">฿{variant.sale_price ? Number(variant.sale_price).toLocaleString() : '-'}</span>
+                              <span className="text-gray-900 font-medium" data-testid="sale-price-display">฿{variant.sale_price ? Number(variant.sale_price).toLocaleString() : '-'}</span>
                             </td>
                             <td className="px-4 py-4">
                               <span className="text-gray-900">{variant.stock_quantity || 0}</span>
@@ -2026,7 +2026,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
 
 
           {/* สต๊อกสินค้า */}
-          <TabsContent value="stock" className="space-y-6">
+          <TabsContent value="stock" className="space-y-6" data-testid="stock-table">
             <div className="flex justify-between items-center">
               <h3 className="text-lg font-semibold">ข้อมูลสต๊อก</h3>
               <div className="flex space-x-2">
@@ -2119,8 +2119,8 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                     </div>
                                 </td>
                                 <td className="py-3 px-4 text-gray-500">-</td>
-                                <td className="py-3 px-4 text-gray-500">{formatDate(stock.production_date)}</td>
-                                <td className="py-3 px-4 text-gray-500">{formatDate(stock.expiration_date)}</td>
+                                <td className="py-3 px-4 text-gray-500" data-testid="production-date">{formatDate(stock.production_date)}</td>
+                                <td className="py-3 px-4 text-gray-500" data-testid="expiration-date">{formatDate(stock.expiration_date)}</td>
                                 <td className="py-3 px-4 text-gray-500">{stock.product_cost ? `฿${stock.product_cost.toFixed(2)}` : '-'}</td>
                                 <td className="py-3 px-4 font-medium">฿{stock.product_sale_price?.toFixed(2) || '0.00'}</td>
                                 <td className="py-3 px-4 font-medium text-green-600">
@@ -2131,7 +2131,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                                     <span className="text-orange-600 font-semibold">-</span>
                                   ) : (
                                     <div>
-                                      <div className="font-medium">{stock.quantity.toLocaleString()}x</div>
+                                      <div className="font-medium" data-testid="stock-quantity">{stock.quantity.toLocaleString()}x</div>
                                       <div className="text-sm text-blue-600">
                                         <button 
                                           className="hover:underline"

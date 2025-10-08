@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { GraphQLAPI } from "@/clients/graphql"
 import { API_CONFIG } from "@/config/api"
 import { Button } from "@/components/ui/button"
@@ -99,6 +99,11 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
     unit: ""
   })
   
+  // Track if validation has been shown to prevent duplicate toasts
+  const validationShownRef = useRef(false)
+  // Track if form is currently submitting to prevent multiple submissions
+  const isSubmittingRef = useRef(false)
+  
   const [formData, setFormData] = useState<ProductFormData>({
     product_name: "",
     product_type: "medicine",
@@ -145,15 +150,21 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
     initial_stock_note: ""
   })
 
-  const handleInputChange = (field: keyof ProductFormData, value: any) => {
+  const handleInputChange = useCallback((field: keyof ProductFormData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }))
-  }
+    // Reset validation flag when user starts typing in required fields
+    if (field === 'product_name' || field === 'sale_price' || field === 'unit') {
+      validationShownRef.current = false
+    }
+  }, [])
 
   // Handle category change with special logic for medical services
-  const handleCategoryChange = (value: string) => {
+  const handleCategoryChange = useCallback((value: string) => {
     const actualValue = value === 'not-specified' ? '' : value
     setSelectValues(prev => ({ ...prev, category: actualValue }))
     handleInputChange('category', actualValue)
+    // Reset validation flag when category changes
+    validationShownRef.current = false
     
     // Special handling for medical services
     if (actualValue === 'medical-service') {
@@ -173,32 +184,43 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
       handleInputChange('initial_stock_production_lot', '')
       handleInputChange('initial_stock_note', '')
     }
-  }
+  }, [handleInputChange])
 
-  const handleImageChange = (file: File | null, imageUrl?: string) => {
+  const handleImageChange = useCallback((file: File | null, imageUrl?: string) => {
     setFormData(prev => ({ 
       ...prev, 
       image: file,
       image_url: imageUrl || ''
     }))
-  }
+  }, [])
 
 
 
-  const handleSubmit = async () => {
+  const handleSubmit = useCallback(async () => {
+    // Prevent multiple submissions
+    if (isSubmittingRef.current) {
+      return
+    }
+    
+    // Reset validation flag at the start of validation
+    validationShownRef.current = false
+    
     // Validate required fields
-    if (!formData.product_name) {
+    if (!formData.product_name || formData.product_name.trim() === '') {
       toast.error('กรุณากรอกชื่อสินค้า')
+      validationShownRef.current = true
       return
     }
     
-    if (!formData.sale_price) {
+    if (!formData.sale_price || formData.sale_price.trim() === '' || isNaN(parseFloat(formData.sale_price)) || parseFloat(formData.sale_price) <= 0) {
       toast.error('กรุณากรอกราคาขาย')
+      validationShownRef.current = true
       return
     }
     
-    if (!formData.unit) {
+    if (!formData.unit || formData.unit.trim() === '') {
       toast.error('กรุณาเลือกหน่วยนับ')
+      validationShownRef.current = true
       return
     }
     
@@ -206,9 +228,15 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
     if (formData.add_initial_stock) {
       if (!formData.initial_stock_quantity || parseInt(formData.initial_stock_quantity) <= 0) {
         toast.error('กรุณากรอกจำนวนสต๊อกที่ถูกต้อง')
+        validationShownRef.current = true
         return
       }
     }
+    
+    // Set submitting flag to prevent multiple submissions
+    isSubmittingRef.current = true
+    // Reset validation flag before successful submission
+    validationShownRef.current = false
     
     try {
       // Don't upload image yet - wait until product creation succeeds
@@ -239,11 +267,70 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
       }
       
       await onSubmit(updatedFormData)
+      
+      // Reset form after successful submission
+      setFormData({
+        product_name: "",
+        product_type: "medicine",
+        generic_name: "",
+        short_name: "",
+        category: "",
+        status: "active",
+        pack_size: "",
+        vat_percent: "0",
+        reorder_point: "",
+        sku: "",
+        barcode: "",
+        shelf_code: "",
+        shelf_row: "",
+        unit: "",
+        sale_price: "",
+        expiration_warning_days: "90",
+        symptom_category: [],
+        license_number: "",
+        dosage_unit: "",
+        dosage: "",
+        times_per_day: "",
+        interval_hours: "",
+        before_meal: false,
+        after_meal: false,
+        after_meal_immediate: false,
+        morning: "",
+        noon: "",
+        evening: "",
+        before_bed: "",
+        properties: "",
+        usage_instruction: "",
+        sale_note: "",
+        purchase_note: "",
+        show_dosage_table: false,
+        image: null,
+        image_url: "",
+        add_initial_stock: false,
+        initial_stock_quantity: "",
+        initial_stock_cost: "",
+        initial_stock_production_date: "",
+        initial_stock_expiration_date: "",
+        initial_stock_production_lot: "",
+        initial_stock_note: ""
+      })
+      
+      // Reset select values
+      setSelectValues({
+        category: "",
+        product_type: "medicine",
+        status: "active",
+        unit: ""
+      })
+      
     } catch (error) {
       console.error('Error submitting form:', error)
       toast.error('เกิดข้อผิดพลาดในการบันทึกข้อมูล กรุณาลองใหม่')
+    } finally {
+      // Reset submitting flag
+      isSubmittingRef.current = false
     }
-  }
+  }, [formData, onSubmit])
 
 
 
@@ -254,7 +341,7 @@ export default function AddProductForm({ onBack, onSubmit, submitTrigger }: AddP
     if (submitTrigger && submitTrigger > 0) {
       handleSubmit()
     }
-  }, [submitTrigger])
+  }, [submitTrigger, handleSubmit])
 
   return (
     <div className="p-6" data-testid="add-product-form">

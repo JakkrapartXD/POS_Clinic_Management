@@ -184,6 +184,31 @@ export const mutations = {
     
     await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
     
+    // Validate required fields
+    const requiredFields = [
+      { field: 'first_name', label: 'ชื่อ' },
+      { field: 'last_name', label: 'นามสกุล' },
+      { field: 'national_id', label: 'เลขบัตรประชาชน' },
+      { field: 'prefix', label: 'คำนำหน้า' },
+      { field: 'nickname', label: 'ชื่อเล่น' },
+      { field: 'date_of_birth', label: 'วันเกิด' },
+      { field: 'age', label: 'อายุ' },
+      { field: 'gender', label: 'เพศ' },
+      { field: 'phone', label: 'เบอร์โทรศัพท์' },
+      { field: 'email', label: 'อีเมล' },
+      { field: 'address', label: 'ที่อยู่' }
+    ];
+    
+    const missingFields = requiredFields.filter(({ field }) => {
+      const value = input[field];
+      return !value || (typeof value === 'string' && value.trim() === '');
+    });
+    
+    if (missingFields.length > 0) {
+      const missingFieldLabels = missingFields.map(({ label }) => label).join(', ');
+      throw new GraphQLError(`กรอกข้อมูลให้ครบถ้วน: ${missingFieldLabels}`);
+    }
+    
     // Validate and sanitize input
     const sanitizedInput = {
       first_name: context.security.sanitizeString(input.first_name),

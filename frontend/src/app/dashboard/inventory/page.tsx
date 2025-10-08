@@ -794,12 +794,15 @@ function InventoryPage() {
       // Show success message
       toast.success('สร้างสินค้าสำเร็จ')
       
-      // Use the enhanced refresh function
+      // Immediately close the add product form and return to list view
+      setViewMode('list')
+      setSubmitTrigger(0) // Reset submit trigger to prevent multiple submissions
+      clearURL()
+      
+      // Refresh data in background
       setTimeout(() => {
         refreshData(false) // Don't preserve view after adding new product
-        setViewMode('list')
-        clearURL()
-      }, 500)
+      }, 100)
     } catch (error) {
       logger.error('Error creating product', { error, productData }, 'INVENTORY')
       const errorMessage = error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการสร้างสินค้า'

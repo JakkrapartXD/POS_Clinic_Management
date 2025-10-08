@@ -1,0 +1,22 @@
+=== Redis Monitor Log ===
+Start Time: Wed Oct  8 01:04:36 +07 2025
+Container: final_project-redis-1
+Redis IP: 172.18.0.2
+Redis Port: 0.0.0.0:6379
+Duration: 30 seconds
+
+=== Commands ===
+OK
+1759860291.205621 [0 172.18.0.4:43568] "INCR" "rate_limit:query:cmg6z8hbh0000nx8abtefoiim"
+1759860291.205907 [0 172.18.0.4:43568] "EXPIRE" "rate_limit:query:cmg6z8hbh0000nx8abtefoiim" "60"
+1759860291.607244 [0 172.18.0.4:43568] "INCR" "rate_limit:query:cmg6z8hbh0000nx8abtefoiim"
+1759860297.826010 [0 172.18.0.4:43568] "INCR" "rate_limit:query:cmg6z8hbh0000nx8abtefoiim"
+1759860297.826960 [0 172.18.0.4:43568] "INCR" "rate_limit:mutation:cmg6z8hbh0000nx8abtefoiim"
+1759860297.827122 [0 172.18.0.4:43568] "EXPIRE" "rate_limit:mutation:cmg6z8hbh0000nx8abtefoiim" "60"
+1759860297.858124 [0 172.18.0.4:43568] "SETEX" "audit:cmg6z8hbh0000nx8abtefoiim:1759860297857" "86400" "{\"operation\":\"CREATE_ORDER\",\"entityType\":\"Order\",\"entityId\":\"cmggvdsh90003sd08647813lj\",\"details\":{\"total\":318,\"items\":2},\"timestamp\":\"2025-10-07T18:04:57.857Z\"}"
+1759860297.870432 [0 172.18.0.4:43568] "INCR" "rate_limit:query:cmg6z8hbh0000nx8abtefoiim"
+1759860297.871258 [0 172.18.0.4:43568] "INCR" "rate_limit:mutation:cmg6z8hbh0000nx8abtefoiim"
+1759860297.886951 [0 172.18.0.4:43568] "SETEX" "audit:cmg6z8hbh0000nx8abtefoiim:1759860297886" "86400" "{\"operation\":\"PROCESS_PAYMENT\",\"entityType\":\"Payment\",\"entityId\":\"cmggvdsia0009sd08mf9rwkgi\",\"details\":{\"orderId\":\"cmggvdsh90003sd08647813lj\",\"amount\":318,\"type\":\"cash\"},\"timestamp\":\"2025-10-07T18:04:57.886Z\"}"
+1759860297.935048 [0 172.18.0.4:43568] "INCR" "rate_limit:query:cmg6z8hbh0000nx8abtefoiim"
+1759860297.935489 [0 172.18.0.4:43568] "INCR" "rate_limit:query:cmg6z8hbh0000nx8abtefoiim"
+context canceled

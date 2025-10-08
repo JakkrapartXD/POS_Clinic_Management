@@ -8,7 +8,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { useQueueCache } from '@/hooks/useQueueCache';
 import { 
   Users, 
   Clock, 
@@ -59,7 +58,10 @@ interface TriageTicket {
     id: string;
     status: string;
     chief_complaint?: string;
+    diagnosis?: string;
+    notes?: string;
     vitals?: {
+      id: string;
       visitId: string;
       heightCm?: number;
       weightKg?: number;
@@ -70,6 +72,7 @@ interface TriageTicket {
       rr?: number;
       spo2?: number;
       bmi?: number;
+      created_at: string;
     };
   };
   events: Array<{
@@ -104,13 +107,6 @@ export default function TriageQueuePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
   
-  // Queue cache management hook
-  const { executeQueueOperation, updateStateAndCache } = useQueueCache({
-    invalidateCache: true,
-    forceRefresh: true,
-    onCacheInvalidated: () => fetchTriageQueue(true), // Force refresh after cache invalidation
-    enableLogging: true
-  });
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [patientSearchQuery, setPatientSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Patient[]>([]);
@@ -152,21 +148,26 @@ export default function TriageQueuePage() {
     try {
       setIsLoading(true);
       
-      const variables: any = {
-        skip: 0,
-        take: 100
-      };
+      const result = await GraphQLAPI.getQueueTickets({
+        station: QUEUE_TICKET_STATION.TRIAGE,
+        status: selectedStatus === 'all' ? undefined : selectedStatus.toUpperCase(),
+        pagination: { take: 100 }
+      }, skipCache);
       
-      if (selectedStatus !== 'all') {
-        variables.status = selectedStatus.toUpperCase();
-      }
+      let tickets = result.queueTickets || [];
       
+      // Apply search filter on frontend since getQueueTickets doesn't support search
       if (searchQuery.trim()) {
-        variables.search = searchQuery.trim();
+        const query = searchQuery.trim().toLowerCase();
+        tickets = tickets.filter(ticket => 
+          ticket.patient.first_name.toLowerCase().includes(query) ||
+          ticket.patient.last_name.toLowerCase().includes(query) ||
+          ticket.patient.phone?.includes(query) ||
+          ticket.number.toString().includes(query)
+        );
       }
       
-      const result = await GraphQLAPI.getTriageQueue(variables, skipCache);
-      setTriageTickets(result.triageQueue.tickets || []);
+      setTriageTickets(tickets);
 
     } catch (error: any) {
       console.error('Error fetching triage queue:', error);
@@ -240,28 +241,19 @@ export default function TriageQueuePage() {
     try {
       setIsUpdating(ticketId);
       
-      // Execute queue operation with proper cache invalidation
-      const result = await executeQueueOperation(
-        () => GraphQLAPI.queueCall(ticketId),
-        'queueCall',
-        'triage'
-      );
+      await GraphQLAPI.queueCall(ticketId);
       
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to call ticket');
-      }
+      // Force refresh with fresh data (skip cache)
+      setTimeout(() => {
+        fetchTriageQueue(true); // Pass skipCache = true
+      }, 100);
       
-      // Update state immediately with proper cache invalidation
-      await updateStateAndCache(
-        (prev) => prev.map(ticket => 
-          ticket.id === ticketId 
-            ? { ...ticket, status: 'called', called_at: new Date().toISOString() }
-            : ticket
-        ),
-        setTriageTickets,
-        'queueCall',
-        'triage'
-      );
+      // Update state immediately
+      setTriageTickets(prev => prev.map(ticket => 
+        ticket.id === ticketId 
+          ? { ...ticket, status: 'called', called_at: new Date().toISOString() }
+          : ticket
+      ));
       
       toast.success('เรียกผู้ป่วยแล้ว');
 
@@ -277,28 +269,19 @@ export default function TriageQueuePage() {
     try {
       setIsUpdating(ticketId);
       
-      // Execute queue operation with proper cache invalidation
-      const result = await executeQueueOperation(
-        () => GraphQLAPI.queueStart(ticketId),
-        'queueStart',
-        'triage'
-      );
+      await GraphQLAPI.queueStart(ticketId);
       
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to start ticket');
-      }
+      // Force refresh with fresh data (skip cache)
+      setTimeout(() => {
+        fetchTriageQueue(true); // Pass skipCache = true
+      }, 100);
       
-      // Update state immediately with proper cache invalidation
-      await updateStateAndCache(
-        (prev) => prev.map(ticket => 
-          ticket.id === ticketId 
-            ? { ...ticket, status: 'in_service', started_at: new Date().toISOString() }
-            : ticket
-        ),
-        setTriageTickets,
-        'queueStart',
-        'triage'
-      );
+      // Update state immediately
+      setTriageTickets(prev => prev.map(ticket => 
+        ticket.id === ticketId 
+          ? { ...ticket, status: 'in_service', started_at: new Date().toISOString() }
+          : ticket
+      ));
       
       toast.success('เริ่มบริการคัดกรองแล้ว');
 
@@ -314,28 +297,19 @@ export default function TriageQueuePage() {
     try {
       setIsUpdating(ticketId);
       
-      // Execute queue operation with proper cache invalidation
-      const result = await executeQueueOperation(
-        () => GraphQLAPI.queueComplete(ticketId),
-        'queueComplete',
-        'triage'
-      );
+      await GraphQLAPI.queueComplete(ticketId);
       
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to complete ticket');
-      }
+      // Force refresh with fresh data (skip cache)
+      setTimeout(() => {
+        fetchTriageQueue(true); // Pass skipCache = true
+      }, 100);
       
-      // Update state immediately with proper cache invalidation
-      await updateStateAndCache(
-        (prev) => prev.map(ticket => 
-          ticket.id === ticketId 
-            ? { ...ticket, status: 'done', done_at: new Date().toISOString() }
-            : ticket
-        ),
-        setTriageTickets,
-        'queueComplete',
-        'triage'
-      );
+      // Update state immediately
+      setTriageTickets(prev => prev.map(ticket => 
+        ticket.id === ticketId 
+          ? { ...ticket, status: 'done', done_at: new Date().toISOString() }
+          : ticket
+      ));
       
       toast.success('บริการคัดกรองเสร็จสิ้น');
 
@@ -461,26 +435,26 @@ export default function TriageQueuePage() {
       
       // Update the selected ticket with vitals data
       if (selectedTicket) {
-        // Update local state immediately with proper cache invalidation
-        await updateStateAndCache(
-          (prev) => prev.map(ticket => 
-            ticket.id === selectedTicket.id 
-              ? { 
-                  ...ticket, 
-                  visit: ticket.visit ? {
-                    ...ticket.visit,
-                    vitals: {
-                      ...(ticket.visit.vitals || {}),
-                      ...vitalsData
-                    }
-                  } : undefined
-                }
-              : ticket
-          ),
-          setTriageTickets,
-          'upsertVitals',
-          'triage'
-        );
+        // Update local state immediately
+        setTriageTickets(prev => prev.map(ticket => 
+          ticket.id === selectedTicket.id 
+            ? { 
+                ...ticket, 
+                visit: ticket.visit ? {
+                  ...ticket.visit,
+                  vitals: {
+                    ...(ticket.visit.vitals || {}),
+                    ...vitalsData
+                  }
+                } : undefined
+              }
+            : ticket
+        ));
+        
+        // Force refresh with fresh data (skip cache)
+        setTimeout(() => {
+          fetchTriageQueue(true); // Pass skipCache = true
+        }, 100);
       }
       
       // Close modal

@@ -176,11 +176,7 @@ export default function ProductImageUpload({
   const displayUrl = getDisplayUrl()
   const displayFileName = getDisplayFileName()
   
-  // Debug logs for troubleshooting
-  console.log('ProductImageUpload - Display URL:', displayUrl)
-  console.log('ProductImageUpload - value:', value)
-  console.log('ProductImageUpload - currentImageUrl:', currentImageUrl)
-  console.log('ProductImageUpload - previewUrl:', previewUrl)
+  // Debug logs removed for production
 
   return (
     <div className="space-y-2">
