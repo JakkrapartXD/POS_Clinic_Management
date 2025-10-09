@@ -5,6 +5,7 @@ import { BackupScheduler } from '../services/backupScheduler';
 import { logger } from '../lib/logger';
 import { jwt } from '@elysiajs/jwt';
 import { bearer } from '@elysiajs/bearer';
+import { SecurityService } from '../graphql/security';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
@@ -144,7 +145,7 @@ export const oauthRoutes = new Elysia()
     }
   });
 
-export const backupRoutes = new Elysia({ prefix: '/backup' })
+export const backupRoutes = (redisClient?: any) => new Elysia({ prefix: '/backup' })
   .use(jwt({ name: 'jwt', secret: process.env.JWT_SECRET! }))
   .use(bearer())
   
@@ -178,6 +179,19 @@ export const backupRoutes = new Elysia({ prefix: '/backup' })
       const authUrl = googleDriveService.generateAuthUrl();
 
       logger.info(`[BACKUP_API] Google Drive configured by admin: ${payload.email}`);
+
+      // Log security tracking for Google Drive configuration
+      await SecurityService.logSensitiveOperation(
+        payload.sub,
+        'CONFIGURE_GOOGLE_DRIVE',
+        'Backup',
+        'google-drive-config',
+        { 
+          clientId: config.web.client_id,
+          configuredBy: payload.email 
+        },
+        redisClient
+      );
 
       return {
         success: true,
@@ -238,6 +252,19 @@ export const backupRoutes = new Elysia({ prefix: '/backup' })
       const userInfo = await googleDriveService.getUserInfo();
 
       logger.info(`[BACKUP_API] Google Drive authorized by admin: ${payload.email}`, { userInfo });
+
+      // Log security tracking for Google Drive authorization
+      await SecurityService.logSensitiveOperation(
+        payload.sub,
+        'AUTHORIZE_GOOGLE_DRIVE',
+        'Backup',
+        'google-drive-auth',
+        { 
+          userInfo,
+          authorizedBy: payload.email 
+        },
+        redisClient
+      );
 
       return {
         success: true,
@@ -307,6 +334,22 @@ export const backupRoutes = new Elysia({ prefix: '/backup' })
         status: result.status,
         size: result.size,
       });
+
+      // Log security tracking for backup creation
+      await SecurityService.logSensitiveOperation(
+        payload.sub,
+        'CREATE_BACKUP',
+        'Backup',
+        result.id,
+        { 
+          backupId: result.id,
+          status: result.status,
+          size: result.size,
+          uploadToGoogleDrive: options.uploadToGoogleDrive,
+          createdBy: payload.email 
+        },
+        redisClient
+      );
 
       return {
         success: result.status === 'completed',
@@ -404,6 +447,20 @@ export const backupRoutes = new Elysia({ prefix: '/backup' })
 
       logger.info(`[BACKUP_API] Backup deleted: ${type}/${id} by ${payload.email}`);
 
+      // Log security tracking for backup deletion
+      await SecurityService.logSensitiveOperation(
+        payload.sub,
+        'DELETE_BACKUP',
+        'Backup',
+        id,
+        { 
+          backupType: type,
+          backupId: id,
+          deletedBy: payload.email 
+        },
+        redisClient
+      );
+
       return { success: true };
     } catch (error) {
       logger.error(`[BACKUP_API] Delete backup failed:`, error, 'BACKUP_API');
@@ -436,6 +493,20 @@ export const backupRoutes = new Elysia({ prefix: '/backup' })
       }
 
       logger.info(`[BACKUP_API] Database restored from: ${type}/${id} by ${payload.email}`);
+
+      // Log security tracking for backup restoration
+      await SecurityService.logSensitiveOperation(
+        payload.sub,
+        'RESTORE_BACKUP',
+        'Backup',
+        id,
+        { 
+          backupType: type,
+          backupId: id,
+          restoredBy: payload.email 
+        },
+        redisClient
+      );
 
       return { 
         success: true,

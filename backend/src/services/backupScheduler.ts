@@ -288,19 +288,6 @@ export class BackupScheduler {
     return { ...this.config };
   }
 
-  /**
-   * Get current scheduler status
-   */
-  getStatus(): SchedulerStatus {
-    const nextRun = this.calculateNextRun();
-    return {
-      enabled: this.config.enabled,
-      frequency: this.config.frequency,
-      time: this.config.time,
-      nextRun: this.config.enabled ? nextRun.toISOString() : undefined,
-      isRunning: this.scheduledIntervals.length > 0
-    };
-  }
 
   /**
    * Manually trigger a backup (outside of schedule)

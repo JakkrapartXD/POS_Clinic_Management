@@ -17,6 +17,7 @@ import { API_CONFIG } from "@/config/api"
 import JsBarcode from 'jsbarcode'
 import { parseDrugAllergies } from '@/utils/patient-utils'
 import { calculateItemVAT, calculateTotalVAT, calculateSubtotal, calculateGrandTotal, createOrderItemWithVAT } from '@/utils/vat-utils'
+import { toast } from 'sonner'
 
 
 
@@ -36,6 +37,8 @@ interface Product {
   }
   status: string
   vat_percent?: number
+  reorder_point?: number
+  expiration_warning_date?: number
 }
 
 interface CartItem {
@@ -134,6 +137,69 @@ export default function POSPage() {
     }
   }, [showPaymentDialog, paymentAmount, promptPayAmount, paymentMethod, isProcessingPayment])
 
+  // ตรวจสอบสต๊อกและแจ้งเตือน
+  const checkStockWarnings = async (product: Product) => {
+    try {
+      // ตรวจสอบสต๊อกต่ำ
+      if (product.stock_quantity <= (product.reorder_point || 0)) {
+        toast.warning(`⚠️ สต๊อกต่ำ: ${product.product_name} เหลือ ${product.stock_quantity} ${product.unit || 'หน่วย'}`, {
+          duration: 5000,
+          id: 'stock-warning-toast'
+        })
+      }
+
+      // ตรวจสอบสต๊อกใกล้หมดอายุ
+      const stocksResponse = await GraphQLAPI.getStocks({ productId: product.id })
+      
+      if (stocksResponse.stocks && stocksResponse.stocks.length > 0) {
+        const today = new Date()
+        const warningDays = product.expiration_warning_date || 90
+        
+        // ตรวจสอบสต๊อกที่ใกล้หมดอายุ
+        const nearExpiryStocks = stocksResponse.stocks.filter((stock: any) => {
+          if (!stock.expiration_date) return false
+          
+          const expDate = new Date(stock.expiration_date)
+          const daysUntilExpiry = Math.ceil((expDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+          
+          return daysUntilExpiry <= warningDays && daysUntilExpiry > 0
+        })
+
+        if (nearExpiryStocks.length > 0) {
+          const totalNearExpiry = nearExpiryStocks.reduce((sum: number, stock: any) => sum + stock.quantity, 0)
+          const earliestExpiry = Math.min(...nearExpiryStocks.map((stock: any) => {
+            const expDate = new Date(stock.expiration_date)
+            return Math.ceil((expDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+          }))
+          
+          toast.warning(`⏰ สินค้าใกล้หมดอายุ: ${product.product_name} เหลือ ${earliestExpiry} วัน (${totalNearExpiry} ${product.unit || 'หน่วย'})`, {
+            duration: 6000,
+            id: 'expiry-warning-toast'
+          })
+        }
+
+        // ตรวจสอบสต๊อกที่หมดอายุแล้ว
+        const expiredStocks = stocksResponse.stocks.filter((stock: any) => {
+          if (!stock.expiration_date) return false
+          
+          const expDate = new Date(stock.expiration_date)
+          return expDate < today
+        })
+
+        if (expiredStocks.length > 0) {
+          const totalExpired = expiredStocks.reduce((sum: number, stock: any) => sum + stock.quantity, 0)
+          toast.error(`🚫 สินค้าหมดอายุ: ${product.product_name} (${totalExpired} ${product.unit || 'หน่วย'})`, {
+            duration: 8000,
+            id: 'expired-warning-toast'
+          })
+        }
+      }
+    } catch (error) {
+      logger.error('Failed to check stock warnings', error, 'POS')
+      // ไม่แสดง error ให้ผู้ใช้ เพราะไม่ใช่การทำงานหลัก
+    }
+  }
+
   // ดึงข้อมูลสินค้าจาก API
   const fetchProducts = async () => {
     try {
@@ -201,30 +267,27 @@ export default function POSPage() {
           })
         }
         
-        // Load prescription cart from localStorage if visitId exists
-        if (visitData.visitId) {
-          const prescriptionCart = localStorage.getItem(`prescription_cart_${visitData.visitId}`)
-          if (prescriptionCart) {
-            try {
-              const cartItems = JSON.parse(prescriptionCart)
-              // Convert prescription cart items to POS cart items
-              const posCartItems = cartItems.map((item: any) => ({
-                id: item.id,
-                product_name: item.product_name,
-                sale_price: item.sale_price,
-                unit: item.unit,
-                pack_size: item.pack_size,
-                quantity: item.quantity,
-                sku: item.sku,
-                barcode: item.barcode,
-                stock_quantity: item.stock_quantity,
-                vat_percent: item.vat_percent || 0
-              }))
-              setCartItems(posCartItems)
-              console.log('Loaded prescription cart:', posCartItems)
-            } catch (error) {
-              console.error('Error parsing prescription cart:', error)
-            }
+        // Load prescription cart from QueueEvent data instead of localStorage
+        if (visitData.prescriptionData && visitData.prescriptionData.items) {
+          try {
+            const cartItems = visitData.prescriptionData.items
+            // Convert prescription cart items to POS cart items
+            const posCartItems = cartItems.map((item: any) => ({
+              id: item.id,
+              product_name: item.product_name,
+              sale_price: item.sale_price,
+              unit: item.unit,
+              pack_size: item.pack_size,
+              quantity: item.quantity,
+              sku: item.sku,
+              barcode: item.barcode,
+              stock_quantity: item.stock_quantity,
+              vat_percent: item.vat_percent || 0
+            }))
+            setCartItems(posCartItems)
+            console.log('Loaded prescription cart from QueueEvent:', posCartItems)
+          } catch (error) {
+            console.error('Error parsing prescription cart from QueueEvent:', error)
           }
         }
         
@@ -258,19 +321,87 @@ export default function POSPage() {
     }
   }
 
-  // กรองสินค้าตามการค้นหาและหมวดหมู่
-  const filteredProducts = products.filter(product => {
-    const matchesSearch = product.product_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         product.sku?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         product.barcode?.includes(searchQuery)
-    const matchesCategory = selectedCategory === "all" || product.category?.name === selectedCategory
-    return matchesSearch && matchesCategory
-  })
+  // Search products using GraphQL searchProducts query
+  const [searchResults, setSearchResults] = useState<Product[]>([])
+  const [isSearching, setIsSearching] = useState(false)
+  const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null)
 
-  const addToCart = (product: Product) => {
+  // Debounced search function
+  const performSearch = async (query: string) => {
+    if (query.length < 2) {
+      setSearchResults([])
+      return
+    }
+
+    try {
+      setIsSearching(true)
+      const response = await GraphQLAPI.searchProducts(query)
+      setSearchResults(response.searchProducts || [])
+    } catch (error) {
+      logger.error('Error searching products:', error, 'POS')
+      setSearchResults([])
+    } finally {
+      setIsSearching(false)
+    }
+  }
+
+  // Handle search query changes with debouncing
+  useEffect(() => {
+    if (searchTimeout) {
+      clearTimeout(searchTimeout)
+    }
+
+    if (searchQuery.trim()) {
+      const timeout = setTimeout(() => {
+        performSearch(searchQuery.trim())
+      }, 300) // 300ms debounce
+      setSearchTimeout(timeout)
+    } else {
+      setSearchResults([])
+    }
+
+    return () => {
+      if (searchTimeout) {
+        clearTimeout(searchTimeout)
+      }
+    }
+  }, [searchQuery])
+
+  // กรองสินค้าตามการค้นหาและหมวดหมู่
+  const filteredProducts = (() => {
+    // If there's a search query, use search results
+    if (searchQuery.trim()) {
+      return searchResults.filter(product => {
+        const matchesCategory = selectedCategory === "all" || product.category?.name === selectedCategory
+        return matchesCategory
+      })
+    }
+    
+    // Otherwise, use all products with category filter
+    return products.filter(product => {
+      const matchesCategory = selectedCategory === "all" || product.category?.name === selectedCategory
+      return matchesCategory
+    })
+  })()
+
+  const addToCart = async (product: Product) => {
+    // ตรวจสอบว่าสินค้าหมดสต๊อกหรือไม่
+    if (product.stock_quantity <= 0) {
+      toast.error('สินค้าหมดสต๊อก', {
+        id: 'out-of-stock-toast'
+      })
+      return
+    }
+
     const existingItem = cartItems.find((item) => item.id === product.id)
 
     if (existingItem) {
+      // ตรวจสอบว่าจำนวนในตระกร้า + 1 จะเกินสต๊อกหรือไม่
+      if (existingItem.quantity >= product.stock_quantity) {
+        toast.error('ไม่สามารถเพิ่มสินค้าได้ เนื่องจากสต๊อกไม่เพียงพอ')
+        return
+      }
+      
       setCartItems(cartItems.map((item) => 
         item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
       ))
@@ -291,6 +422,9 @@ export default function POSPage() {
     }
     
     logger.debug('Product added to cart', { productId: product.id, productName: product.product_name }, 'POS')
+    
+    // ตรวจสอบสต๊อกหลังจากเพิ่มสินค้าเข้าตระกร้า
+    await checkStockWarnings(product)
   }
 
   const removeFromCart = (productId: string) => {
@@ -301,6 +435,18 @@ export default function POSPage() {
     if (quantity <= 0) {
       removeFromCart(productId)
       return
+    }
+
+    // หาสินค้าในตระกร้าและสินค้าจาก products
+    const cartItem = cartItems.find((item) => item.id === productId)
+    const product = products.find((p) => p.id === productId)
+    
+    if (cartItem && product) {
+      // ตรวจสอบว่าจำนวนใหม่จะเกินสต๊อกหรือไม่
+      if (quantity > product.stock_quantity) {
+        toast.error('ไม่สามารถเพิ่มสินค้าได้ เนื่องจากสต๊อกไม่เพียงพอ')
+        return
+      }
     }
 
     setCartItems(cartItems.map((item) => 
@@ -570,11 +716,8 @@ export default function POSPage() {
       
       // ลบข้อมูลการสั่งยาจากหมอหลังจากชำระเงินเสร็จ
       if (prescriptionVisitData) {
-        // Clear prescription cart from localStorage
-        if (prescriptionVisitData.visitId) {
-          localStorage.removeItem(`prescription_cart_${prescriptionVisitData.visitId}`)
-          console.log(`🧹 [${paymentSessionId}] Prescription cart cleared from localStorage`)
-        }
+        // Note: ไม่ต้องลบข้อมูลจาก QueueEvent เพราะเป็นข้อมูลประวัติศาสตร์
+        // ข้อมูลการสั่งยาจะยังคงอยู่ใน QueueEvent note เพื่อการติดตาม
         
         setPrescriptionVisitData(null)
         setPrescriptionItems([])
@@ -617,6 +760,9 @@ export default function POSPage() {
     // ลบข้อมูลการสั่งยาจากหมอ
     setPrescriptionVisitData(null)
     setPrescriptionItems([])
+    
+    // Refresh หน้าจอ 1 รอบ
+    window.location.reload()
   }
 
   // สร้าง barcode เมื่อมี completedOrder
@@ -737,6 +883,7 @@ export default function POSPage() {
         {/* Search Bar */}
         <div className="relative mb-4">
           <Input
+            data-testid="search-input"
             placeholder="ค้นหาสินค้าจากชื่อ หรือบาร์โค้ด..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -757,12 +904,17 @@ export default function POSPage() {
         </Tabs>
 
         {/* Product Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+        <div data-testid="product-grid" className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
           {filteredProducts.map((product) => (
             <Card
               key={product.id}
-              className="bg-white shadow-sm cursor-pointer hover:shadow-md transition-shadow"
-              onClick={() => addToCart(product)}
+              data-testid="product-card"
+              className={`bg-white shadow-sm transition-shadow ${
+                product.stock_quantity > 0 
+                  ? 'cursor-pointer hover:shadow-md' 
+                  : 'cursor-not-allowed opacity-60'
+              }`}
+              onClick={() => product.stock_quantity > 0 && addToCart(product)}
             >
               <CardContent className="p-4">
                 <div className="bg-gray-100 h-24 mb-2 flex items-center justify-center rounded-md overflow-hidden">
@@ -779,16 +931,16 @@ export default function POSPage() {
                   ) : null}
                   <span className={`text-gray-400 text-3xl ${product.image_url ? 'hidden' : ''}`}>Rx</span>
                 </div>
-                <h3 className="font-medium text-sm mb-1 line-clamp-2 text-gray-700">{product.product_name}</h3>
+                <h3 data-testid="product-name" className="font-medium text-sm mb-1 line-clamp-2 text-gray-700">{product.product_name}</h3>
                 <div className="text-sm text-gray-500 mb-1">
                   {product.pack_size} {product.unit}
                 </div>
-                <div className="text-xs text-gray-400 mb-2">
-                  {product.stock_quantity > 0 ? `สต๊อก: ${product.stock_quantity}` : 'หมดสต๊อก'}
+                <div data-testid="stock-quantity" className="text-xs text-gray-400 mb-2">
+                  {product.stock_quantity > 0 ? `สต๊อก: ${product.stock_quantity}` : 'สินค้าหมด'}
                 </div>
-                <div className="text-teal-600 font-medium">฿{product.sale_price.toFixed(2)}</div>
+                <div data-testid="product-price" className="text-teal-600 font-medium">฿{product.sale_price.toFixed(2)}</div>
                 {product.stock_quantity <= 0 && (
-                  <Badge variant="destructive" className="mt-1 text-xs">หมดสต๊อก</Badge>
+                  <Badge data-testid="out-of-stock-badge" variant="destructive" className="mt-1 text-xs">สินค้าหมด</Badge>
                 )}
               </CardContent>
             </Card>
@@ -815,12 +967,12 @@ export default function POSPage() {
             <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
               <div className="flex items-center mb-2">
                 <div className="w-2 h-2 bg-blue-500 rounded-full mr-2"></div>
-                <h3 className="font-medium text-blue-900">ข้อมูลการสั่งยาจากหมอ</h3>
+                <h3 className="font-medium text-blue-900" data-testid="prescription-title">ข้อมูลการสั่งยาจากหมอ</h3>
               </div>
               <div className="text-sm text-blue-800 space-y-1">
-                <p><strong>ผู้ป่วย:</strong> {prescriptionVisitData.patientName}</p>
-                <p><strong>อาการ:</strong> {prescriptionVisitData.visitData?.chief_complaint || '-'}</p>
-                <p><strong>การวินิจฉัย:</strong> {prescriptionVisitData.visitData?.diagnosis || '-'}</p>
+                <p data-testid="prescription-patient-name" ><strong>ผู้ป่วย:</strong> {prescriptionVisitData.patientName}</p>
+                <p data-testid="prescription-chief-complaint"><strong>อาการ:</strong> {prescriptionVisitData.visitData?.chief_complaint || '-'}</p>
+                <p data-testid="prescription-diagnosis"><strong>การวินิจฉัย:</strong> {prescriptionVisitData.visitData?.diagnosis || '-'}</p>
                 
                 {/* Medical Information from Patient Data */}
                 {prescriptionVisitData.patientData && (
@@ -881,7 +1033,7 @@ export default function POSPage() {
                 {prescriptionVisitData.visitData?.notes && (
                   <div className="mt-2">
                     <p><strong>แผนการรักษา:</strong></p>
-                    <div className="bg-white p-2 rounded border text-xs text-gray-700 whitespace-pre-wrap">
+                    <div data-testid="prescription-treatment-plan" className="bg-white p-2 rounded border text-xs text-gray-700 whitespace-pre-wrap">
                       {prescriptionVisitData.visitData.notes}
                     </div>
                   </div>
@@ -900,9 +1052,9 @@ export default function POSPage() {
           ) : (
             <div className="space-y-4">
               {cartItems.map((item) => (
-                <div key={item.id} className="flex items-center justify-between bg-white p-3 rounded-lg shadow-sm">
+                <div key={item.id} data-testid="cart-item" className="flex items-center justify-between bg-white p-3 rounded-lg shadow-sm">
                   <div className="flex-1">
-                    <h3 className="font-medium text-sm text-gray-700">{item.product_name}</h3>
+                    <h3 data-testid="product-name" className="font-medium text-sm text-gray-700">{item.product_name}</h3>
                     <div className="text-sm text-gray-500">{item.pack_size} {item.unit}</div>
                     <div className="text-teal-600">฿{item.sale_price.toFixed(2)}</div>
                     {(item.vat_percent ?? 0) > 0 && (
@@ -911,6 +1063,7 @@ export default function POSPage() {
                   </div>
                   <div className="flex items-center text-gray-500">
                     <Button
+                      data-testid="decrease-quantity-button"
                       variant="outline"
                       size="icon"
                       className="h-8 w-8"
@@ -918,11 +1071,13 @@ export default function POSPage() {
                     >
                       -
                     </Button>
-                    <span className="w-8 text-center">{item.quantity}</span>
+                    <span data-testid="quantity-display" className="w-8 text-center">{item.quantity}</span>
                     <Button
+                      data-testid="increase-quantity-button"
                       variant="outline"
                       size="icon"
                       className="h-8 w-8"
+                      disabled={item.quantity >= item.stock_quantity}
                       onClick={() => updateQuantity(item.id, item.quantity + 1)}
                     >
                       +
@@ -1080,19 +1235,20 @@ export default function POSPage() {
           <div className="space-y-2 mb-4">
             <div className="flex justify-between text-sm">
               <span className="text-gray-500">ยอดย่อย (ไม่รวม VAT)</span>
-              <span className="text-gray-700">฿{calculateCartSubtotal().toFixed(2)}</span>
+              <span data-testid="total-amount" className="text-gray-700">฿{calculateCartSubtotal().toFixed(2)}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-500">VAT</span>
-              <span className="text-gray-700">฿{calculateCartTotalVAT().toFixed(2)}</span>
+              <span data-testid="vat-amount" className="text-gray-700">฿{calculateCartTotalVAT().toFixed(2)}</span>
             </div>
             <div className="flex justify-between font-medium text-gray-700">
               <span>ยอดรวมสุทธิ</span>
-              <span>฿{calculateTotal().toFixed(2)}</span>
+              <span data-testid="grand-total" className="text-gray-700">฿{calculateTotal().toFixed(2)}</span>
             </div>
           </div>
 
           <Button 
+            data-testid="checkout-button"
             className="w-full bg-teal-500 hover:bg-teal-600" 
             onClick={handleCheckout}
             disabled={cartItems.length === 0}
@@ -1104,7 +1260,7 @@ export default function POSPage() {
 
       {/* Payment Dialog */}
       <Dialog open={showPaymentDialog} onOpenChange={setShowPaymentDialog}>
-        <DialogContent className="max-w-4xl bg-white">
+        <DialogContent data-testid="payment-dialog" className="max-w-4xl bg-white">
           <DialogHeader>
             <div className="flex items-center justify-between">
               <Button 
@@ -1131,7 +1287,7 @@ export default function POSPage() {
                 <div className="text-sm text-gray-600 mb-2">
                   ชำระด้วย {getPaymentMethodThai(paymentMethod)}
                 </div>
-                <div className={`text-2xl font-bold ${
+                <div data-testid="amount-to-pay" className={`text-2xl font-bold ${
                   paymentMethod === 'cash' ? 'text-blue-600' : 'text-green-600'
                 }`}>
                   ฿{getTotalPaymentAmount().toFixed(2)}
@@ -1141,7 +1297,7 @@ export default function POSPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-blue-100 p-4 rounded-lg">
                   <div className="text-sm text-gray-600">ยอดที่ต้องชำระ</div>
-                  <div className="text-xl font-bold text-blue-700">฿{calculateTotal().toFixed(2)}</div>
+                  <div data-testid="payment-total" className="text-xl font-bold text-blue-700">฿{calculateTotal().toFixed(2)}</div>
                 </div>
                 <div className={`p-4 rounded-lg ${
                   paymentMethod === 'promptpay' ? 'bg-gray-100' : 'bg-orange-100'
@@ -1161,8 +1317,9 @@ export default function POSPage() {
               <div className="space-y-3">
                 <h3 className="font-medium text-gray-900">เลือกช่องทางการชำระเงิน</h3>
                 
-                <div className="space-y-2">
+                <div data-testid="payment-methods" className="space-y-2">
                   <div 
+                    data-testid="payment-method-cash"
                     className={`flex items-center justify-between p-3 rounded-lg border-2 cursor-pointer transition-all ${
                       paymentMethod === 'cash' 
                         ? 'border-teal-500 bg-teal-50' 
@@ -1242,6 +1399,7 @@ export default function POSPage() {
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
                   <Button
                     key={num}
+                    data-testid={`numpad-${num}`}
                     variant="outline"
                     className="h-12 text-lg font-medium"
                     onClick={() => handleNumberInput(num.toString())}
@@ -1250,6 +1408,7 @@ export default function POSPage() {
                   </Button>
                 ))}
                 <Button
+                  data-testid="numpad-dot"
                   variant="outline"
                   className="h-12 text-lg font-medium"
                   onClick={() => handleNumberInput('.')}
@@ -1257,6 +1416,7 @@ export default function POSPage() {
                   .
                 </Button>
                 <Button
+                  data-testid="numpad-0"
                   variant="outline"
                   className="h-12 text-lg font-medium"
                   onClick={() => handleNumberInput('0')}
@@ -1264,6 +1424,7 @@ export default function POSPage() {
                   0
                 </Button>
                 <Button
+                  data-testid="numpad-clear"
                   variant="outline"
                   className="h-12 text-lg font-medium"
                   onClick={() => handleNumberInput('X')}
@@ -1273,6 +1434,7 @@ export default function POSPage() {
               </div>
 
               <Button 
+                data-testid="confirm-payment-button"
                 onClick={handlePaymentConfirm}
                 className={`w-full h-12 text-lg font-medium ${
                   paymentMethod === 'cash' 
@@ -1294,7 +1456,7 @@ export default function POSPage() {
 
       {/* Payment Success Modal */}
       <Dialog open={showPaymentSuccess} onOpenChange={setShowPaymentSuccess}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-white">
+        <DialogContent data-testid="payment-success-dialog" className="max-w-2xl max-h-[90vh] overflow-y-auto bg-white">
           <DialogHeader>
             <DialogTitle className="flex justify-between items-center">
               {/* <span className="text-teal-600 font-medium">B พิมพ์ฉลากยา</span>
@@ -1316,7 +1478,7 @@ export default function POSPage() {
               
               {/* Payment Confirmation */}
               <div className="bg-white border border-gray-200 rounded-lg p-6 text-center">
-                <h2 className="text-xl font-bold text-gray-900 mb-2">
+                <h2 data-testid="success-message" className="text-xl font-bold text-gray-900 mb-2">
                   รับชำระ ฿{completedOrder.payment_amount.toFixed(2)}
                 </h2>
                 <p className="text-gray-600">
@@ -1374,12 +1536,12 @@ export default function POSPage() {
                         height="80"
                         viewBox="0 0 200 80"
                       ></svg>
-                      <p className="text-xs text-black mt-3 font-mono tracking-wider">{completedOrder.receiptNumber}</p>
+                      <p data-testid="receipt-number" className="text-xs text-black mt-3 font-mono tracking-wider">{completedOrder.receiptNumber}</p>
                     </div>
                   </div>
 
                   {/* Items */}
-                  <div className="space-y-2">
+                  <div data-testid="receipt-items" className="space-y-2">
                     {completedOrder.orderItems.map((item: any) => (
                       <div key={item.id} className="flex justify-between items-start">
                         <div className="flex-1">
@@ -1405,7 +1567,7 @@ export default function POSPage() {
                     </div>
                     <div className="flex justify-between font-bold">
                       <span className="text-black">ยอดสุทธิ</span>
-                      <span className="text-black">฿{completedOrder.total_amount.toFixed(2)}</span>
+                      <span data-testid="receipt-total" className="text-black">฿{completedOrder.total_amount.toFixed(2)}</span>
                     </div>
                   </div>
 
@@ -1413,7 +1575,7 @@ export default function POSPage() {
                   <div className="border-t pt-3 space-y-2">
                     <div className="flex justify-between text-sm">
                       <span className="text-black">ช่องทางการชำระ</span>
-                      <span className="text-black">{getPaymentMethodThai(completedOrder.payment_method)}</span>
+                      <span data-testid="receipt-payment-method" className="text-black">{getPaymentMethodThai(completedOrder.payment_method)}</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-black">รับเงิน</span>
@@ -1430,6 +1592,7 @@ export default function POSPage() {
               {/* Action Button */}
               <div className="flex justify-center">
                 <Button
+                  data-testid="close-success-dialog"
                   onClick={handleClosePaymentSuccess}
                   className="bg-teal-600 hover:bg-teal-700 text-white px-8 py-3"
                 >

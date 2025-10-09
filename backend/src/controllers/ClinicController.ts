@@ -4,6 +4,7 @@ import { cookie } from "@elysiajs/cookie";
 import { PrismaClient } from "@prisma/client";
 import { ClinicService } from "../services/ClinicService";
 import { RolePermissionsMiddleware } from "../middleware/RolePermissionsMiddleware";
+import { SecurityService } from "../graphql/security";
 
 const prisma = new PrismaClient();
 const rolePermissions = new RolePermissionsMiddleware();
@@ -97,7 +98,7 @@ const requireRole = (user: any, allowedRoles: string[]) => {
   }
 };
 
-export const clinicController = new Elysia()
+export const clinicController = (redisClient?: any) => new Elysia()
   .use(cookie())
   .use(jwt({
     name: 'jwt',
@@ -122,6 +123,20 @@ export const clinicController = new Elysia()
         patientId,
         ...body
       });
+
+      // Log security tracking for visit creation
+      await SecurityService.logSensitiveOperation(
+        user.sub,
+        'CREATE_VISIT_REST',
+        'Visit',
+        visit.id,
+        { 
+          patientId,
+          appointmentId: body.appointmentId,
+          chiefComplaint: body.chief_complaint 
+        },
+        redisClient
+      );
 
       return { success: true, data: visit };
     } catch (error: any) {
@@ -152,6 +167,22 @@ export const clinicController = new Elysia()
       requireRole(user, ['doctor', 'admin', 'staff']);
 
       const visit = await clinicService.updateVisit(visitId, body);
+      
+      // Log security tracking for visit update
+      await SecurityService.logSensitiveOperation(
+        user.sub,
+        'UPDATE_VISIT_REST',
+        'Visit',
+        visitId,
+        { 
+          visitId,
+          status: body.status,
+          chiefComplaint: body.chief_complaint,
+          diagnosis: body.diagnosis 
+        },
+        redisClient
+      );
+      
       return { success: true, data: visit };
     } catch (error: any) {
       set.status = error.message.includes('Access denied') ? 403 : 
@@ -179,6 +210,27 @@ export const clinicController = new Elysia()
         visitId,
         ...body
       });
+
+      // Log security tracking for vitals update
+      await SecurityService.logSensitiveOperation(
+        user.sub,
+        'UPDATE_VITALS_REST',
+        'Vitals',
+        vitals.id,
+        { 
+          visitId,
+          heightCm: body.heightCm,
+          weightKg: body.weightKg,
+          tempC: body.tempC,
+          sbp: body.sbp,
+          dbp: body.dbp,
+          hr: body.hr,
+          rr: body.rr,
+          spo2: body.spo2,
+          bmi: body.bmi
+        },
+        redisClient
+      );
 
       return { success: true, data: vitals };
     } catch (error: any) {
@@ -217,6 +269,21 @@ export const clinicController = new Elysia()
         visitId,
         ...body
       });
+
+      // Log security tracking for queue ticket creation
+      await SecurityService.logSensitiveOperation(
+        user.sub,
+        'CREATE_QUEUE_TICKET_REST',
+        'QueueTicket',
+        queueTicket.id,
+        { 
+          visitId,
+          station: body.station,
+          priority: body.priority,
+          number: queueTicket.number
+        },
+        redisClient
+      );
 
       return { success: true, data: queueTicket };
     } catch (error: any) {
@@ -380,6 +447,22 @@ export const clinicController = new Elysia()
         body.status, 
         permissionCheck.userId,
         body.note
+      );
+
+      // Log security tracking for queue status update
+      await SecurityService.logSensitiveOperation(
+        permissionCheck.userId!,
+        'UPDATE_QUEUE_STATUS_REST',
+        'QueueTicket',
+        ticketId,
+        { 
+          ticketId,
+          station: ticket.station,
+          oldStatus: ticket.status,
+          newStatus: body.status,
+          note: body.note
+        },
+        redisClient
       );
 
       return { success: true, data: queueTicket };

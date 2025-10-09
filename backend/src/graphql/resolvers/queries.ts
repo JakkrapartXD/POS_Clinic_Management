@@ -241,7 +241,7 @@ export const queries = {
   },
 
   async searchProducts(parent: any, args: any, context: any) {
-    const { query } = args;
+    const { query, includeInactive = false } = args;
     context.security.requireStaff(context);
     
     if (!query || query.length < 2) {
@@ -250,21 +250,42 @@ export const queries = {
     
     const sanitizedQuery = context.security.sanitizeString(query);
     
+    // Build where condition based on includeInactive parameter
+    const whereCondition: any = {
+      OR: [
+        { product_name: { contains: sanitizedQuery, mode: 'insensitive' } },
+        { generic_name: { contains: sanitizedQuery, mode: 'insensitive' } },
+        { sku: { contains: sanitizedQuery } },
+        { barcode: { contains: sanitizedQuery } }
+      ],
+      isDelete: false // Always exclude deleted products
+    };
+    
+    // Only filter by status if not including inactive products
+    if (!includeInactive) {
+      whereCondition.status = 'active';
+    }
+    
+    // Find all matching products
     const products = await context.prisma.product.findMany({
-      where: {
-        OR: [
-          { product_name: { contains: sanitizedQuery, mode: 'insensitive' } },
-          { generic_name: { contains: sanitizedQuery, mode: 'insensitive' } },
-          { sku: { contains: sanitizedQuery } },
-          { barcode: { contains: sanitizedQuery } }
-        ],
-        status: 'active'
-      },
+      where: whereCondition,
       take: 20,
       orderBy: { product_name: 'asc' }
     });
     
-    return products;
+    // Sort results to prioritize exact matches first
+    const sortedProducts = products.sort((a: any, b: any) => {
+      const aExactMatch = a.product_name.toLowerCase() === sanitizedQuery.toLowerCase();
+      const bExactMatch = b.product_name.toLowerCase() === sanitizedQuery.toLowerCase();
+      
+      if (aExactMatch && !bExactMatch) return -1;
+      if (!aExactMatch && bExactMatch) return 1;
+      
+      // If both are exact matches or both are not, sort by product_name
+      return a.product_name.localeCompare(b.product_name);
+    });
+    
+    return sortedProducts;
   },
 
   async lowStockProducts(parent: any, args: any, context: any) {

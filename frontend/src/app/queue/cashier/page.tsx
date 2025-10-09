@@ -78,6 +78,7 @@ const statusConfig = {
 export default function CashierQueuePage() {
   const router = useRouter();
   const [cashierTickets, setCashierTickets] = useState<CashierTicket[]>([]);
+  const [doctorTickets, setDoctorTickets] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -102,6 +103,7 @@ export default function CashierQueuePage() {
     try {
       setIsLoading(true);
       
+      // ดึงข้อมูล cashier queue
       const result = await GraphQLAPI.getQueueTickets({
         station: 'cashier',
         status: selectedStatus === 'all' ? undefined : selectedStatus.toUpperCase(),
@@ -109,6 +111,36 @@ export default function CashierQueuePage() {
       }, skipCache);
       
       setCashierTickets(result.queueTickets || []);
+
+      // ดึงข้อมูล doctor queue tickets ที่มี status "in_service" และ "done" เพื่อตรวจสอบ prescription data
+      try {
+        const [inServiceResult, doneResult] = await Promise.all([
+          GraphQLAPI.getQueueTickets({
+            station: 'doctor',
+            status: 'in_service',
+            pagination: { take: 100 }
+          }, skipCache),
+          GraphQLAPI.getQueueTickets({
+            station: 'doctor',
+            status: 'done',
+            pagination: { take: 100 }
+          }, skipCache)
+        ]);
+        
+        // รวม tickets จากทั้งสอง status
+        const allDoctorTickets = [
+          ...(inServiceResult.queueTickets || []),
+          ...(doneResult.queueTickets || [])
+        ];
+        
+        setDoctorTickets(allDoctorTickets);
+        console.log('🔍 Loaded doctor tickets for prescription check:', allDoctorTickets.length);
+        console.log('- in_service tickets:', inServiceResult.queueTickets?.length || 0);
+        console.log('- done tickets:', doneResult.queueTickets?.length || 0);
+      } catch (doctorError) {
+        console.error('Error fetching doctor queue for prescription check:', doctorError);
+        // ไม่ต้องแสดง error toast เพราะไม่ใช่ฟีเจอร์หลัก
+      }
 
     } catch (error: any) {
       console.error('Error fetching cashier queue:', error);
@@ -208,11 +240,91 @@ export default function CashierQueuePage() {
       const patientResult = await GraphQLAPI.getPatient(ticket.patientId);
       const patientData = patientResult.patient;
       
-      // Check if there's a prescription cart for this visit
+      // Check if there's a prescription in QueueEvent notes
+      let prescriptionData = null;
       let hasPrescriptionCart = false;
-      if (ticket.visit?.id) {
-        const prescriptionCart = localStorage.getItem(`prescription_cart_${ticket.visit.id}`);
-        hasPrescriptionCart = prescriptionCart !== null;
+      
+      console.log('🔍 Checking for prescription data in cashier ticket events...');
+      console.log('- Cashier ticket events:', ticket.events);
+      
+      if (ticket.events && ticket.events.length > 0) {
+        // หา prescription note จาก events
+        for (const event of ticket.events) {
+          if (event.note) {
+            try {
+              const noteData = JSON.parse(event.note);
+              if (noteData.type === 'prescription' && noteData.items) {
+                prescriptionData = noteData;
+                hasPrescriptionCart = true;
+                console.log('✅ Found prescription data in cashier ticket events:', prescriptionData);
+                break;
+              }
+            } catch (error) {
+              // ถ้า parse ไม่ได้ ให้ข้าม
+              continue;
+            }
+          }
+        }
+      }
+      
+      // ถ้าไม่เจอใน cashier ticket ให้ลองดึงจาก doctor queue ticket
+      if (!hasPrescriptionCart) {
+        console.log('🔍 No prescription data in cashier ticket, checking doctor queue...');
+        try {
+          // ดึงข้อมูล doctor queue tickets ที่มี status "in_service" และ "done"
+          const [inServiceResult, doneResult] = await Promise.all([
+            GraphQLAPI.getQueueTickets({ 
+              station: 'doctor',
+              status: 'in_service'
+            }, true), // skipCache = true เพื่อให้ได้ข้อมูลล่าสุด
+            GraphQLAPI.getQueueTickets({ 
+              station: 'doctor',
+              status: 'done'
+            }, true)
+          ]);
+          
+          // รวม tickets จากทั้งสอง status
+          const allDoctorTickets = [
+            ...(inServiceResult.queueTickets || []),
+            ...(doneResult.queueTickets || [])
+          ];
+          
+          console.log('🔍 Doctor queue tickets:', allDoctorTickets);
+          console.log('- in_service tickets:', inServiceResult.queueTickets?.length || 0);
+          console.log('- done tickets:', doneResult.queueTickets?.length || 0);
+          
+          // หา doctor ticket ที่มี visitId เดียวกัน
+          const doctorTicket = allDoctorTickets.find(dt => 
+            dt.visit?.id === ticket.visit?.id
+          );
+          
+          if (doctorTicket && doctorTicket.events) {
+            console.log('🔍 Found matching doctor ticket:', doctorTicket);
+            console.log('🔍 Doctor ticket events:', doctorTicket.events);
+            
+            // หา prescription note จาก doctor ticket events
+            for (const event of doctorTicket.events) {
+              if (event.note) {
+                try {
+                  const noteData = JSON.parse(event.note);
+                  if (noteData.type === 'prescription' && noteData.items) {
+                    prescriptionData = noteData;
+                    hasPrescriptionCart = true;
+                    console.log('✅ Found prescription data in doctor ticket events:', prescriptionData);
+                    break;
+                  }
+                } catch (error) {
+                  console.error('❌ Error parsing prescription note from doctor ticket:', error);
+                  continue;
+                }
+              }
+            }
+          } else {
+            console.log('⚠️ No matching doctor ticket found for visit:', ticket.visit?.id);
+          }
+        } catch (error) {
+          console.error('❌ Error fetching doctor queue tickets:', error);
+        }
       }
       
       // Navigate to POS page with visit data
@@ -224,7 +336,8 @@ export default function CashierQueuePage() {
         patientEmail: ticket.patient?.email,
         visitData: ticket.visit,
         patientData: patientData, // Add patient data with medical information
-        hasPrescriptionCart: hasPrescriptionCart // Add flag to indicate if prescription cart exists
+        hasPrescriptionCart: hasPrescriptionCart, // Add flag to indicate if prescription cart exists
+        prescriptionData: prescriptionData // Add prescription data from QueueEvent
       };
       
       // Store visit data in sessionStorage for POS page to use
@@ -285,12 +398,54 @@ export default function CashierQueuePage() {
     return filtered;
   };
 
+  // ฟังก์ชันตรวจสอบว่ามีการสั่งยาหรือไม่
+  const hasPrescriptionData = (ticket: CashierTicket) => {
+    // ตรวจสอบใน cashier ticket events ก่อน
+    if (ticket.events && ticket.events.some((event: any) => {
+      if (event.note) {
+        try {
+          const noteData = JSON.parse(event.note);
+          return noteData.type === 'prescription' && noteData.items;
+        } catch (error) {
+          return false;
+        }
+      }
+      return false;
+    })) {
+      return true;
+    }
+    
+    // ถ้าไม่เจอใน cashier ticket ให้ตรวจสอบใน doctor queue ticket
+    // ใช้ state เพื่อเก็บข้อมูล doctor tickets
+    if (doctorTickets.length > 0) {
+      const doctorTicket = doctorTickets.find(dt => 
+        dt.visit?.id === ticket.visit?.id
+      );
+      
+      if (doctorTicket && doctorTicket.events) {
+        return doctorTicket.events.some((event: any) => {
+          if (event.note) {
+            try {
+              const noteData = JSON.parse(event.note);
+              return noteData.type === 'prescription' && noteData.items;
+            } catch (error) {
+              return false;
+            }
+          }
+          return false;
+        });
+      }
+    }
+    
+    return false;
+  };
+
   const renderTicketCard = (ticket: CashierTicket) => {
     const config = statusConfig[ticket.status as keyof typeof statusConfig] || statusConfig.waiting;
     const Icon = config.icon;
 
     return (
-      <Card key={ticket.id} className="hover:shadow-md transition-shadow">
+      <Card key={ticket.id} className="hover:shadow-md transition-shadow" data-testid={`ticket-card-${ticket.patient?.phone || ticket.patientId}`}>
         <CardContent className="p-4">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
@@ -320,7 +475,7 @@ export default function CashierQueuePage() {
                 <strong>การวินิจฉัย:</strong> {ticket.visit.diagnosis}
               </p>
             )}
-            {ticket.visit?.id && localStorage.getItem(`prescription_cart_${ticket.visit.id}`) && (
+            {hasPrescriptionData(ticket) && (
               <div className="mt-2">
                 <Badge variant="outline" className="text-orange-600 border-orange-600">
                   <ShoppingCart className="w-3 h-3 mr-1" />
@@ -337,6 +492,7 @@ export default function CashierQueuePage() {
                 onClick={() => callTicket(ticket.id)}
                 disabled={isUpdating === ticket.id}
                 className="bg-yellow-600 hover:bg-yellow-700"
+                data-testid={`call-button-${ticket.patient?.phone || ticket.patientId}`}
               >
                 <Phone className="w-3 h-3 mr-1" />
 เรียก
@@ -349,6 +505,7 @@ export default function CashierQueuePage() {
                 onClick={() => startTicket(ticket.id)}
                 disabled={isUpdating === ticket.id}
                 className="bg-teal-600 hover:bg-teal-700"
+                data-testid={`start-button-${ticket.patient?.phone || ticket.patientId}`}
               >
                 <Play className="w-3 h-3 mr-1" />
 เริ่มบริการ
@@ -363,6 +520,7 @@ export default function CashierQueuePage() {
                     variant="outline"
                     onClick={() => openPOS(ticket)}
                     className="border-green-600 text-green-600 hover:bg-green-50"
+                    data-testid={`open-pos-button-${ticket.patient?.phone || ticket.patientId}`}
                   >
                     <ShoppingCart className="w-3 h-3 mr-1" />
 เปิด POS
@@ -373,6 +531,7 @@ export default function CashierQueuePage() {
                   onClick={() => completeTicket(ticket.id)}
                   disabled={isUpdating === ticket.id}
                   className="bg-green-600 hover:bg-green-700"
+                  data-testid={`complete-button-${ticket.patient?.phone || ticket.patientId}`}
                 >
                   <CheckCircle className="w-3 h-3 mr-1" />
 เสร็จสิ้น

@@ -6,9 +6,9 @@ const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
 
 // Rate limiting configuration
 const RATE_LIMITS = {
-  query: { max: 300, window: 60 * 1000 }, // 300 queries per minute (เพิ่มขึ้น)
-  mutation: { max: 100, window: 60 * 1000 }, // 100 mutations per minute (เพิ่มขึ้น)
-  sensitive: { max: 30, window: 60 * 1000 }, // 30 sensitive operations per minute (เพิ่มขึ้น)
+  query: { max: 500, window: 60 * 1000 }, // 500 queries per minute (เพิ่มขึ้นสำหรับ queue operations)
+  mutation: { max: 100, window: 60 * 1000 }, // 100 mutations per minute
+  sensitive: { max: 30, window: 60 * 1000 }, // 30 sensitive operations per minute
 };
 
 export interface AuthContext {
@@ -24,10 +24,10 @@ export class SecurityService {
     let token: string | undefined;
 
     // Debug: Log request details
-    console.log('=== Backend Authentication Debug ===');
-    console.log('Request headers:', context.request?.headers);
-    console.log('Request cookies:', context.request?.cookies);
-    console.log('Authorization header:', context.request?.headers?.authorization);
+    // console.log('=== Backend Authentication Debug ===');
+    // console.log('Request headers:', context.request?.headers);
+    // console.log('Request cookies:', context.request?.cookies);
+    // console.log('Authorization header:', context.request?.headers?.authorization);
     
     // Try to extract token from multiple sources
     if (context.request) {
@@ -35,17 +35,17 @@ export class SecurityService {
       const authHeader = context.request.headers?.authorization;
       if (authHeader && authHeader.startsWith('Bearer ')) {
         token = authHeader.replace('Bearer ', '');
-        console.log('Found token in Authorization header');
+        // console.log('Found token in Authorization header');
       } 
       // From cookies
       else if (context.request.cookies?.['next-auth.jwt-token']) {
         token = context.request.cookies['next-auth.jwt-token'];
-        console.log('Found token in cookies');
+        // console.log('Found token in cookies');
       }
     }
 
-    console.log('Final token:', token ? 'Found' : 'Not found');
-    console.log('================================');
+    // console.log('Final token:', token ? 'Found' : 'Not found');
+    // console.log('================================');
 
     if (!token) {
       return { isAuthenticated: false };
@@ -57,7 +57,7 @@ export class SecurityService {
       const userId = payload.sub || payload.userId || payload.id;
 
       if (!userId) {
-        console.log('JWT payload missing user ID:', payload);
+        // console.log('JWT payload missing user ID:', payload);
         return { isAuthenticated: false };
       }
 
@@ -74,7 +74,7 @@ export class SecurityService {
       });
 
       if (!user || user.status !== 'active') {
-        console.log('User not found or inactive:', { userId, user });
+        // console.log('User not found or inactive:', { userId, user });
         return { isAuthenticated: false };
       }
 
@@ -118,7 +118,19 @@ export class SecurityService {
   }
 
   static requireStaff(context: any) {
-    this.requireRole(context, ['admin', 'doctor', 'cashier', 'staff', 'nurse']);
+    this.requireRole(context, ['admin', 'doctor', 'cashier', 'staff', 'nurse', 'pharmacist']);
+  }
+
+  static requirePharmacist(context: any) {
+    this.requireRole(context, ['admin', 'pharmacist']);
+  }
+
+  static requireCashier(context: any) {
+    this.requireRole(context, ['admin', 'cashier']);
+  }
+
+  static requireNurse(context: any) {
+    this.requireRole(context, ['admin', 'nurse']);
   }
 
   // Rate limiting - now accepts redisClient as parameter
@@ -246,29 +258,46 @@ export class SecurityService {
     entityType: string,
     entityId: string,
     details?: any,
-    redisClient?: any
+    redisClient?: any,
+    actorInfo?: { username?: string; role?: string; email?: string },
+    ipAddress?: string
   ) {
     try {
       // Log to audit table (you may want to create this table)
-      console.log('AUDIT LOG:', {
-        userId,
-        operation,
-        entityType,
-        entityId,
-        details,
-        timestamp: new Date().toISOString()
-      });
+      // console.log('AUDIT LOG:', {
+      //   userId,
+      //   operation,
+      //   entityType,
+      //   entityId,
+      //   details,
+      //   timestamp: new Date().toISOString()
+      // });
       
       // Store in Redis for recent activity tracking if Redis client is available
       if (redisClient && redisClient.isReady) {
         const auditKey = `audit:${userId}:${Date.now()}`;
         // Use setEx instead of setex for Redis v5 compatibility
         await redisClient.setEx(auditKey, 24 * 60 * 60, JSON.stringify({
-          operation,
-          entityType,
-          entityId,
-          details,
-          timestamp: new Date().toISOString()
+          // Actor information
+          actor: {
+            userId,
+            username: actorInfo?.username || 'unknown',
+            role: actorInfo?.role || 'unknown',
+            email: actorInfo?.email || 'unknown'
+          },
+          // Action information
+          action: operation,
+          // Resource information
+          resource: {
+            type: entityType,
+            id: entityId
+          },
+          // Additional details
+          details: details || {},
+          // Time information
+          timestamp: new Date().toISOString(),
+          // IP address
+          ipAddress: ipAddress || 'unknown'
         }));
       }
     } catch (error) {
@@ -304,20 +333,11 @@ export class SecurityService {
     // Admins can access all patient data
     if (role === 'admin') return;
     
-    // Doctors can access patients they have appointments with
-    if (role === 'doctor') {
-      const hasAppointment = await prisma.appointment.findFirst({
-        where: {
-          patientId: patientId,
-          doctorId: userId
-        }
-      });
-      
-      if (hasAppointment) return;
-    }
+    // Doctors can access all patients for medical purposes (viewing history, creating appointments, etc.)
+    if (role === 'doctor') return;
     
-    // Staff, cashier, and nurse can access all patients for basic operations
-    if (['staff', 'cashier', 'nurse'].includes(role)) return;
+    // Staff, cashier, nurse, and pharmacist can access all patients for basic operations
+    if (['staff', 'cashier', 'nurse', 'pharmacist'].includes(role)) return;
     
     throw new GraphQLError('Access denied: Insufficient permissions to access patient data');
   }

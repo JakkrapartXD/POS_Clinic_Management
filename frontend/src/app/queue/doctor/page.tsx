@@ -126,19 +126,22 @@ export default function DoctorQueuePage() {
   const [prescriptionCart, setPrescriptionCart] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [productSearchQuery, setProductSearchQuery] = useState('');
+  const [productSearchResults, setProductSearchResults] = useState<any[]>([]);
+  const [isSearchingProducts, setIsSearchingProducts] = useState(false);
+  const [productSearchTimeout, setProductSearchTimeout] = useState<NodeJS.Timeout | null>(null);
   const [isLoadingProducts, setIsLoadingProducts] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [categories, setCategories] = useState<any[]>([]);
 
   useEffect(() => {
     fetchDoctorQueue();
-    // Set up polling for real-time updates
+    // Set up polling for real-time updates with longer interval to avoid rate limiting
     const interval = setInterval(() => {
       // Skip polling if any ticket is being updated
       if (!isUpdating) {
         fetchDoctorQueue();
       }
-    }, 30000); // Refresh every 30 seconds
+    }, 60000); // Refresh every 60 seconds (increased from 30 seconds)
     return () => clearInterval(interval);
   }, [selectedStatus, isUpdating]); // Added isUpdating to dependencies
 
@@ -156,7 +159,17 @@ export default function DoctorQueuePage() {
 
     } catch (error: any) {
       console.error('Error fetching doctor queue:', error);
-      toast.error(error.message || 'ไม่สามารถโหลดคิวหมอได้');
+      
+      // Handle rate limiting specifically
+      if (error.message?.includes('Rate limit exceeded') || error.message?.includes('Request too frequent')) {
+        toast.error('การเรียกข้อมูลบ่อยเกินไป กรุณารอสักครู่แล้วลองใหม่');
+        // Extend polling interval temporarily
+        setTimeout(() => {
+          fetchDoctorQueue(true);
+        }, 30000); // Wait 30 seconds before retry
+      } else {
+        toast.error(error.message || 'ไม่สามารถโหลดคิวหมอได้');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -222,7 +235,45 @@ export default function DoctorQueuePage() {
     try {
       setIsUpdating(ticketId);
       
-      await GraphQLAPI.updateQueueStatus(ticketId, QUEUE_TICKET_STATUS.DONE);
+      // หา ticket ที่จะเสร็จสิ้น
+      const ticket = doctorTickets.find(t => t.id === ticketId);
+      
+      // ดึงข้อมูลการสั่งยาจาก prescriptionCart หรือ ticket events
+      let prescriptionItems = prescriptionCart;
+      
+      // ถ้า prescriptionCart ว่าง ให้ลองดึงจาก ticket events
+      if (prescriptionItems.length === 0 && ticket?.events) {
+        console.log('🔍 Searching for prescription data in ticket events...');
+        for (const event of ticket.events) {
+          if (event.note) {
+            try {
+              const noteData = JSON.parse(event.note);
+              if (noteData.type === 'prescription' && noteData.items) {
+                prescriptionItems = noteData.items;
+                console.log('✅ Found prescription data in ticket events:', prescriptionItems);
+                break;
+              }
+            } catch (error) {
+              console.error('❌ Error parsing prescription note:', error);
+            }
+          }
+        }
+      }
+      
+      // สร้าง prescription note ถ้ามีข้อมูลการสั่งยา
+      let prescriptionNote = null;
+      if (prescriptionItems.length > 0) {
+        prescriptionNote = JSON.stringify({
+          type: 'prescription',
+          items: prescriptionItems,
+          timestamp: new Date().toISOString(),
+          fromDoctor: true
+        });
+        console.log('📤 Saving prescription data to done status:', prescriptionNote);
+      }
+      
+      // อัปเดต ticket status เป็น done พร้อมกับ prescription data
+      await GraphQLAPI.updateQueueStatus(ticketId, QUEUE_TICKET_STATUS.DONE, prescriptionNote || undefined);
       
       // Force refresh with fresh data (skip cache)
       setTimeout(() => {
@@ -310,15 +361,59 @@ export default function DoctorQueuePage() {
     setSelectedTicket(ticket);
     setIsPrescriptionModalOpen(true);
     
-    // Load existing prescription cart from localStorage
-    const visitId = ticket.visit?.id;
-    if (visitId) {
-      const savedCart = localStorage.getItem(`prescription_cart_${visitId}`);
-      if (savedCart) {
-        setPrescriptionCart(JSON.parse(savedCart));
+    // ดึงข้อมูล ticket ใหม่จาก API เพื่อให้ได้ข้อมูล events ล่าสุด
+    try {
+      const freshTickets = await GraphQLAPI.getQueueTickets({ 
+        station: 'doctor',
+        status: 'in_service'
+      }, true); // skipCache = true เพื่อให้ได้ข้อมูลล่าสุด
+      
+      const freshTicket = freshTickets.queueTickets.find(t => t.id === ticket.id);
+      
+      if (freshTicket) {
+        // Load existing prescription cart from QueueEvent notes
+        let existingCartItems = [];
+        
+        if (freshTicket.events && freshTicket.events.length > 0) {
+          // หา prescription note จาก events
+          for (const event of freshTicket.events) {
+            if (event.note) {
+              try {
+                const noteData = JSON.parse(event.note);
+                if (noteData.type === 'prescription' && noteData.items) {
+                  existingCartItems = noteData.items;
+                  break;
+                }
+              } catch (error) {
+                // ถ้า parse ไม่ได้ ให้ข้าม
+                continue;
+              }
+            }
+          }
+        }
+        
+        // Fallback: Load from localStorage if no QueueEvent data found
+        if (existingCartItems.length === 0 && ticket.visit?.id) {
+          const savedCart = localStorage.getItem(`prescription_cart_${ticket.visit.id}`);
+          if (savedCart) {
+            try {
+              existingCartItems = JSON.parse(savedCart);
+            } catch (error) {
+              console.error('Error loading existing prescription cart from localStorage:', error);
+            }
+          }
+        }
+        
+        setPrescriptionCart(existingCartItems);
       } else {
+        // ถ้าไม่เจอ ticket ใหม่ ให้ใช้ข้อมูลเดิม
         setPrescriptionCart([]);
       }
+      
+    } catch (error) {
+      console.error('Error fetching fresh ticket data:', error);
+      // ถ้าไม่สามารถดึงข้อมูลใหม่ได้ ให้ใช้ข้อมูลเดิม
+      setPrescriptionCart([]);
     }
     
     // Load products if not already loaded
@@ -364,10 +459,128 @@ export default function DoctorQueuePage() {
     }
   };
 
-  const addToPrescriptionCart = (product: any) => {
+  // ตรวจสอบสต๊อกและแจ้งเตือน
+  const checkStockWarnings = async (product: any) => {
+    try {
+      // ตรวจสอบสต๊อกต่ำ
+      if (product.stock_quantity <= (product.reorder_point || 0)) {
+        toast.warning(`⚠️ สต๊อกต่ำ: ${product.product_name} เหลือ ${product.stock_quantity} ${product.unit || 'หน่วย'}`, {
+          duration: 5000,
+          id: 'stock-warning-toast'
+        });
+      }
+
+      // ตรวจสอบสต๊อกใกล้หมดอายุ
+      const stocksResponse = await GraphQLAPI.getStocks({ productId: product.id });
+      
+      if (stocksResponse.stocks && stocksResponse.stocks.length > 0) {
+        const today = new Date();
+        const warningDays = product.expiration_warning_date || 90;
+        
+        // ตรวจสอบสต๊อกที่ใกล้หมดอายุ
+        const nearExpiryStocks = stocksResponse.stocks.filter((stock: any) => {
+          if (!stock.expiration_date) return false;
+          
+          const expDate = new Date(stock.expiration_date);
+          const daysUntilExpiry = Math.ceil((expDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+          
+          return daysUntilExpiry <= warningDays && daysUntilExpiry > 0;
+        });
+
+        if (nearExpiryStocks.length > 0) {
+          const totalNearExpiry = nearExpiryStocks.reduce((sum: number, stock: any) => sum + stock.quantity, 0);
+          const earliestExpiry = Math.min(...nearExpiryStocks.map((stock: any) => {
+            const expDate = new Date(stock.expiration_date);
+            return Math.ceil((expDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+          }));
+          
+          toast.warning(`⏰ สินค้าใกล้หมดอายุ: ${product.product_name} เหลือ ${earliestExpiry} วัน (${totalNearExpiry} ${product.unit || 'หน่วย'})`, {
+            duration: 6000,
+            id: 'expiry-warning-toast'
+          });
+        }
+
+        // ตรวจสอบสต๊อกที่หมดอายุแล้ว
+        const expiredStocks = stocksResponse.stocks.filter((stock: any) => {
+          if (!stock.expiration_date) return false;
+          
+          const expDate = new Date(stock.expiration_date);
+          return expDate < today;
+        });
+
+        if (expiredStocks.length > 0) {
+          const totalExpired = expiredStocks.reduce((sum: number, stock: any) => sum + stock.quantity, 0);
+          toast.error(`🚫 สินค้าหมดอายุ: ${product.product_name} (${totalExpired} ${product.unit || 'หน่วย'})`, {
+            duration: 8000,
+            id: 'expired-warning-toast'
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Failed to check stock warnings', error);
+      // ไม่แสดง error ให้ผู้ใช้ เพราะไม่ใช่การทำงานหลัก
+    }
+  };
+
+  // Debounced search function for products
+  const performProductSearch = async (query: string) => {
+    if (query.length < 2) {
+      setProductSearchResults([]);
+      return;
+    }
+
+    try {
+      setIsSearchingProducts(true);
+      const response = await GraphQLAPI.searchProducts(query);
+      setProductSearchResults(response.searchProducts || []);
+    } catch (error) {
+      console.error('Error searching products:', error);
+      setProductSearchResults([]);
+    } finally {
+      setIsSearchingProducts(false);
+    }
+  };
+
+  // Handle product search query changes with debouncing
+  useEffect(() => {
+    if (productSearchTimeout) {
+      clearTimeout(productSearchTimeout);
+    }
+
+    if (productSearchQuery.trim()) {
+      const timeout = setTimeout(() => {
+        performProductSearch(productSearchQuery.trim());
+      }, 300); // 300ms debounce
+      setProductSearchTimeout(timeout);
+    } else {
+      setProductSearchResults([]);
+    }
+
+    return () => {
+      if (productSearchTimeout) {
+        clearTimeout(productSearchTimeout);
+      }
+    };
+  }, [productSearchQuery]);
+
+  const addToPrescriptionCart = async (product: any) => {
+    // ตรวจสอบว่าสินค้าหมดสต๊อกหรือไม่
+    if (product.stock_quantity <= 0) {
+      toast.error('สินค้าหมดสต๊อก', {
+        id: 'out-of-stock-toast'
+      });
+      return;
+    }
+
     const existingItem = prescriptionCart.find((item) => item.id === product.id);
 
     if (existingItem) {
+      // ตรวจสอบว่าจำนวนในตระกร้า + 1 จะเกินสต๊อกหรือไม่
+      if (existingItem.quantity >= product.stock_quantity) {
+        toast.error('ไม่สามารถเพิ่มสินค้าได้ เนื่องจากสต๊อกไม่เพียงพอ');
+        return;
+      }
+      
       setPrescriptionCart(prescriptionCart.map((item) => 
         item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
       ));
@@ -386,6 +599,9 @@ export default function DoctorQueuePage() {
       };
       setPrescriptionCart([...prescriptionCart, cartItem]);
     }
+    
+    // ตรวจสอบสต๊อกหลังจากเพิ่มสินค้าเข้าตระกร้า
+    await checkStockWarnings(product);
   };
 
   const removeFromPrescriptionCart = (productId: string) => {
@@ -398,28 +614,49 @@ export default function DoctorQueuePage() {
       return;
     }
 
+    // หาสินค้าในตระกร้าและสินค้าจาก products
+    const cartItem = prescriptionCart.find((item) => item.id === productId);
+    const product = products.find((p) => p.id === productId);
+    
+    if (cartItem && product) {
+      // ตรวจสอบว่าจำนวนใหม่จะเกินสต๊อกหรือไม่
+      if (quantity > product.stock_quantity) {
+        toast.error('ไม่สามารถเพิ่มสินค้าได้ เนื่องจากสต๊อกไม่เพียงพอ');
+        return;
+      }
+    }
+
     setPrescriptionCart(prescriptionCart.map((item) => 
       item.id === productId ? { ...item, quantity } : item
     ));
   };
 
-  const savePrescriptionCart = () => {
+  const savePrescriptionCart = async () => {
     if (!selectedTicket?.visit?.id) {
       toast.error('ไม่พบข้อมูลการมาเยี่ยม');
       return;
     }
 
-    const visitId = selectedTicket.visit.id;
-    localStorage.setItem(`prescription_cart_${visitId}`, JSON.stringify(prescriptionCart));
-    toast.success('บันทึกการสั่งยาสำเร็จ');
-    setIsPrescriptionModalOpen(false);
+    try {
+      // สร้าง note ที่มีข้อมูลการสั่งยา
+      const prescriptionNote = JSON.stringify({
+        type: 'prescription',
+        items: prescriptionCart,
+        timestamp: new Date().toISOString()
+      });
+
+      // อัปเดต QueueEvent ด้วย note
+      await GraphQLAPI.updateQueueStatus(selectedTicket.id, 'in_service', prescriptionNote);
+      
+      toast.success('บันทึกการสั่งยาสำเร็จ');
+      setIsPrescriptionModalOpen(false);
+    } catch (error: any) {
+      console.error('Error saving prescription:', error);
+      toast.error('ไม่สามารถบันทึกการสั่งยาได้');
+    }
   };
 
   const clearPrescriptionCart = () => {
-    if (!selectedTicket?.visit?.id) return;
-    
-    const visitId = selectedTicket.visit.id;
-    localStorage.removeItem(`prescription_cart_${visitId}`);
     setPrescriptionCart([]);
     toast.success('ล้างตะกร้าสั่งยาสำเร็จ');
   };
@@ -513,19 +750,129 @@ export default function DoctorQueuePage() {
           'ไม่มีการเปลี่ยนแปลงข้อมูล');
       }
       
-      // Create cashier queue ticket
+      // Create cashier queue ticket with prescription data
+      console.log('🚀 Starting to create cashier queue ticket...');
+      console.log('- selectedTicket.visit.id:', selectedTicket.visit?.id);
+      
       try {
-        await GraphQLAPI.createQueueTicket({
+        // สร้าง cashier queue ticket
+        console.log('📝 Creating cashier queue ticket...');
+        const cashierTicket = await GraphQLAPI.createQueueTicket({
           visitId: selectedTicket.visit.id,
           station: 'cashier'
         });
-        toast.success('ส่งผู้ป่วยไปคิวแคชเชียร์แล้ว');
+        console.log('✅ Cashier queue ticket created:', cashierTicket);
+        
+        // ดึงข้อมูลการสั่งยาจาก doctor ticket events
+        let prescriptionItems = prescriptionCart;
+        
+        console.log('🔍 Debug prescription data:');
+        console.log('- prescriptionCart length:', prescriptionCart.length);
+        console.log('- prescriptionCart:', prescriptionCart);
+        console.log('- selectedTicket.events:', selectedTicket.events);
+        
+        // ถ้า prescriptionCart ว่าง ให้ลองดึงจาก doctor ticket events
+        if (prescriptionItems.length === 0 && selectedTicket.events) {
+          console.log('🔍 Searching for prescription data in doctor ticket events...');
+          for (const event of selectedTicket.events) {
+            console.log('- Event:', event);
+            if (event.note) {
+              try {
+                const noteData = JSON.parse(event.note);
+                console.log('- Parsed note data:', noteData);
+                if (noteData.type === 'prescription' && noteData.items) {
+                  prescriptionItems = noteData.items;
+                  console.log('✅ Found prescription data in doctor ticket events:', prescriptionItems);
+                  break;
+                }
+              } catch (error) {
+                console.error('❌ Error parsing prescription note from doctor ticket:', error);
+              }
+            }
+          }
+        }
+        
+        // ถ้ายังไม่เจอ ให้ลองดึงข้อมูล doctor ticket ใหม่จาก API
+        if (prescriptionItems.length === 0) {
+          console.log('🔍 Fetching fresh doctor ticket data from API...');
+          try {
+            const freshTickets = await GraphQLAPI.getQueueTickets({ 
+              station: 'doctor',
+              status: 'in_service'
+            }, true); // skipCache = true เพื่อให้ได้ข้อมูลล่าสุด
+            
+            const freshTicket = freshTickets.queueTickets.find(t => t.id === selectedTicket.id);
+            
+            if (freshTicket && freshTicket.events) {
+              console.log('🔍 Fresh ticket events:', freshTicket.events);
+              for (const event of freshTicket.events) {
+                if (event.note) {
+                  try {
+                    const noteData = JSON.parse(event.note);
+                    if (noteData.type === 'prescription' && noteData.items) {
+                      prescriptionItems = noteData.items;
+                      console.log('✅ Found prescription data in fresh doctor ticket events:', prescriptionItems);
+                      break;
+                    }
+                  } catch (error) {
+                    console.error('❌ Error parsing prescription note from fresh doctor ticket:', error);
+                  }
+                }
+              }
+            }
+          } catch (error) {
+            console.error('❌ Error fetching fresh doctor ticket data:', error);
+          }
+        }
+        
+        console.log('🔍 Final prescriptionItems:', prescriptionItems);
+        
+        // ส่งข้อมูลการสั่งยาไปยัง cashier queue ticket
+        if (prescriptionItems.length > 0) {
+          const prescriptionNote = JSON.stringify({
+            type: 'prescription',
+            items: prescriptionItems,
+            timestamp: new Date().toISOString(),
+            fromDoctor: true
+          });
+          
+          console.log('📤 Sending prescription data to cashier:');
+          console.log('- Cashier ticket ID:', cashierTicket.createQueueTicket.id);
+          console.log('- Prescription note:', prescriptionNote);
+          
+          try {
+            // อัปเดต cashier queue ticket ด้วย prescription note
+            const updateResult = await GraphQLAPI.updateQueueStatus(cashierTicket.createQueueTicket.id, 'waiting', prescriptionNote);
+            console.log('✅ Update cashier queue status result:', updateResult);
+            
+            // เก็บ prescription data ไว้ใน doctor ticket events (ยังไม่เปลี่ยน status เป็น done)
+            console.log('📤 Saving prescription data to doctor ticket events...');
+            const doctorUpdateResult = await GraphQLAPI.updateQueueStatus(selectedTicket.id, 'in_service', prescriptionNote);
+            console.log('✅ Update doctor queue status result:', doctorUpdateResult);
+            
+            // รอสักครู่เพื่อให้ข้อมูลอัปเดต
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            toast.success('ส่งผู้ป่วยและข้อมูลการสั่งยาไปคิวแคชเชียร์แล้ว');
+          } catch (error) {
+            console.error('❌ Error updating queue status:', error);
+            toast.error('ไม่สามารถส่งข้อมูลการสั่งยาได้');
+          }
+        } else {
+          console.log('⚠️ No prescription items found, sending patient without prescription data');
+          // ไม่เปลี่ยน status เป็น done ในขั้นตอนนี้ ให้รอจนกว่าจะกดปุ่ม "เสร็จสิ้น"
+          console.log('ℹ️ Doctor ticket remains in in_service status until completion');
+          toast.success('ส่งผู้ป่วยไปคิวแคชเชียร์แล้ว');
+        }
       } catch (error: any) {
+        console.error('❌ Error in cashier queue ticket creation:', error);
         // If ticket already exists, that's fine
         if (error.message?.includes('Active queue ticket already exists')) {
+          console.log('ℹ️ Cashier queue ticket already exists, continuing...');
           toast.success('ผู้ป่วยอยู่ในคิวแคชเชียร์แล้ว');
         } else {
-          console.error('Error creating cashier queue ticket:', error);
+          console.error('❌ Unexpected error creating cashier queue ticket:', error);
+          toast.error('ไม่สามารถส่งผู้ป่วยไปคิวแคชเชียร์ได้');
         }
       }
       
@@ -617,7 +964,7 @@ export default function DoctorQueuePage() {
     const Icon = config.icon;
 
     return (
-      <Card key={ticket.id} className="hover:shadow-md transition-shadow">
+      <Card key={ticket.id} className="hover:shadow-md transition-shadow" data-testid={`ticket-card-${ticket.patient?.phone || ticket.patientId}`}>
         <CardContent className="p-4">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
@@ -656,6 +1003,7 @@ export default function DoctorQueuePage() {
                 onClick={() => callTicket(ticket.id)}
                 disabled={isUpdating === ticket.id}
                 className="bg-yellow-600 hover:bg-yellow-700"
+                data-testid={`call-button-${ticket.patient?.phone || ticket.patientId}`}
               >
                 <Phone className="w-3 h-3 mr-1" />
 เรียก
@@ -668,6 +1016,7 @@ export default function DoctorQueuePage() {
                 onClick={() => startTicket(ticket.id)}
                 disabled={isUpdating === ticket.id}
                 className="bg-teal-600 hover:bg-teal-700"
+                data-testid={`start-button-${ticket.patient?.phone || ticket.patientId}`}
               >
                 <Play className="w-3 h-3 mr-1" />
 เริ่มตรวจ
@@ -683,6 +1032,7 @@ export default function DoctorQueuePage() {
                       variant="outline"
                       onClick={() => openVitalsModal(ticket)}
                       className="border-blue-600 text-blue-600 hover:bg-blue-50"
+                      data-testid={`vitals-button-${ticket.patient?.phone || ticket.patientId}`}
                     >
                       <Stethoscope className="w-3 h-3 mr-1" />
 ดูสัญญาณชีพ
@@ -692,6 +1042,7 @@ export default function DoctorQueuePage() {
                       variant="outline"
                       onClick={() => openConsultationModal(ticket)}
                       className="border-purple-600 text-purple-600 hover:bg-purple-50"
+                      data-testid={`consultation-button-${ticket.patient?.phone || ticket.patientId}`}
                     >
                       <FileText className="w-3 h-3 mr-1" />
                       บันทึกการตรวจ
@@ -701,6 +1052,7 @@ export default function DoctorQueuePage() {
                       variant="outline"
                       onClick={() => openPrescriptionModal(ticket)}
                       className="border-orange-600 text-orange-600 hover:bg-orange-50"
+                      data-testid={`prescription-button-${ticket.patient?.phone || ticket.patientId}`}
                     >
                       <ShoppingCart className="w-3 h-3 mr-1" />
                       สั่งยา
@@ -712,6 +1064,7 @@ export default function DoctorQueuePage() {
                   onClick={() => completeTicket(ticket.id)}
                   disabled={isUpdating === ticket.id}
                   className="bg-green-600 hover:bg-green-700"
+                  data-testid={`complete-button-${ticket.patient?.phone || ticket.patientId}`}
                 >
                   <CheckCircle className="w-3 h-3 mr-1" />
 เสร็จสิ้น
@@ -1101,6 +1454,7 @@ export default function DoctorQueuePage() {
                 <Button
                   onClick={handleSaveConsultation}
                   disabled={isSavingConsultation || isLoadingConsultation}
+                  data-testid="save-consultation-button"
                   className="flex-1 bg-purple-600 hover:bg-purple-700"
                 >
                   <Save className="w-4 h-4 mr-2" />
@@ -1158,19 +1512,27 @@ export default function DoctorQueuePage() {
 
                   {/* Product Grid */}
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                    {products
-                      .filter(product => {
-                        const matchesSearch = product.product_name.toLowerCase().includes(productSearchQuery.toLowerCase()) ||
-                                             product.sku?.toLowerCase().includes(productSearchQuery.toLowerCase()) ||
-                                             product.barcode?.includes(productSearchQuery);
-                        const matchesCategory = selectedCategory === "all" || product.category?.name === selectedCategory;
-                        return matchesSearch && matchesCategory;
-                      })
-                      .map((product) => (
+                    {(() => {
+                      // Use search results if there's a search query, otherwise use all products
+                      const productsToShow = productSearchQuery.trim() 
+                        ? (productSearchResults || [])
+                        : products;
+                      
+                      return productsToShow
+                        .filter(product => {
+                          const matchesCategory = selectedCategory === "all" || product.category?.name === selectedCategory;
+                          return matchesCategory;
+                        })
+                        .map((product) => (
                         <Card
                           key={product.id}
-                          className="cursor-pointer hover:shadow-md transition-shadow"
-                          onClick={() => addToPrescriptionCart(product)}
+                          className={`transition-shadow ${
+                            product.stock_quantity > 0 
+                              ? 'cursor-pointer hover:shadow-md' 
+                              : 'cursor-not-allowed opacity-60'
+                          }`}
+                          onClick={() => product.stock_quantity > 0 && addToPrescriptionCart(product)}
+                          data-testid={`product-card-${product.id}`}
                         >
                           <CardContent className="p-3">
                             <div className="bg-gray-100 h-16 mb-2 flex items-center justify-center rounded-md overflow-hidden">
@@ -1181,12 +1543,16 @@ export default function DoctorQueuePage() {
                               {product.pack_size} {product.unit}
                             </div>
                             <div className="text-xs text-gray-400 mb-1">
-                              สต๊อก: {product.stock_quantity}
+                              {product.stock_quantity > 0 ? `สต๊อก: ${product.stock_quantity}` : 'สินค้าหมด'}
                             </div>
                             <div className="text-orange-600 font-medium text-sm">฿{product.sale_price.toFixed(2)}</div>
+                            {product.stock_quantity <= 0 && (
+                              <div className="mt-1 text-xs text-red-600 font-medium">สินค้าหมด</div>
+                            )}
                           </CardContent>
                         </Card>
-                      ))}
+                      ));
+                    })()}
                   </div>
                 </div>
               </div>
@@ -1205,34 +1571,43 @@ export default function DoctorQueuePage() {
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {prescriptionCart.map((item) => (
-                        <div key={item.id} className="flex items-center justify-between bg-white p-3 rounded-lg shadow-sm">
-                          <div className="flex-1">
-                            <h4 className="font-medium text-sm">{item.product_name}</h4>
-                            <div className="text-xs text-gray-500">{item.pack_size} {item.unit}</div>
-                            <div className="text-orange-600 text-sm">฿{item.sale_price.toFixed(2)}</div>
+                      {prescriptionCart.map((item) => {
+                        const product = products.find(p => p.id === item.id);
+                        const maxQuantity = product?.stock_quantity || item.stock_quantity;
+                        
+                        return (
+                          <div key={item.id} className="flex items-center justify-between bg-white p-3 rounded-lg shadow-sm">
+                            <div className="flex-1">
+                              <h4 className="font-medium text-sm">{item.product_name}</h4>
+                              <div className="text-xs text-gray-500">{item.pack_size} {item.unit}</div>
+                              <div className="text-orange-600 text-sm">฿{item.sale_price.toFixed(2)}</div>
+                              <div className="text-xs text-gray-400">
+                                สต๊อก: {maxQuantity} {item.unit}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                className="h-6 w-6"
+                                onClick={() => updatePrescriptionQuantity(item.id, item.quantity - 1)}
+                              >
+                                <Minus className="h-3 w-3" />
+                              </Button>
+                              <span className="w-6 text-center text-sm">{item.quantity}</span>
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                className="h-6 w-6"
+                                disabled={item.quantity >= maxQuantity}
+                                onClick={() => updatePrescriptionQuantity(item.id, item.quantity + 1)}
+                              >
+                                <Plus className="h-3 w-3" />
+                              </Button>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              className="h-6 w-6"
-                              onClick={() => updatePrescriptionQuantity(item.id, item.quantity - 1)}
-                            >
-                              <Minus className="h-3 w-3" />
-                            </Button>
-                            <span className="w-6 text-center text-sm">{item.quantity}</span>
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              className="h-6 w-6"
-                              onClick={() => updatePrescriptionQuantity(item.id, item.quantity + 1)}
-                            >
-                              <Plus className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>

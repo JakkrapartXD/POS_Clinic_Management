@@ -472,7 +472,7 @@ const additionalMutations = {
     context.security.requireAdmin(context);
     context.security.validateId(id);
     
-    await context.security.checkRateLimit(context.userId, 'sensitive', context.redisClient);
+    await context.security.checkRateLimit(context.userId, 'sensitive', context.redisClient, context.request);
     
     // Check if product exists and is not already deleted
     const product = await context.prisma.product.findFirst({
@@ -543,7 +543,7 @@ const additionalMutations = {
     context.security.requireAdmin(context);
     context.security.validateId(id);
     
-    await context.security.checkRateLimit(context.userId, 'sensitive', context.redisClient);
+    await context.security.checkRateLimit(context.userId, 'sensitive', context.redisClient, context.request);
     
     // Check if order has payments
     const order = await context.prisma.order.findUnique({

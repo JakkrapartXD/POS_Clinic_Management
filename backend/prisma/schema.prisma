@@ -29,40 +29,40 @@ model User {
 }
 
 model Patient {
-  id                    String          @id @default(cuid())
-  first_name            String
-  last_name             String
-  national_id           String?         @unique
-  prefix                String?         // นาย, นาง, นางสาว, แพทย์, ศาสตราจารย์
-  nickname              String?         // ชื่อเล่น
-  date_of_birth         DateTime?
-  age                   Int?            // อายุ (คำนวณจาก date_of_birth)
-  gender                String?         // ชาย, หญิง, อื่นๆ
-  blood_group           String?         // A+, A-, B+, B-, AB+, AB-, O+, O-
-  phone                 String?
-  email                 String?
-  address               String?
-  subdistrict           String?         // ตำบล
-  district              String?         // อำเภอ
-  province              String?         // จังหวัด
-  zip_code              String?         // รหัสไปรษณีย์
-  latitude              Float?          // ละติจูด (GPS)
-  longitude             Float?          // ลองติจูด (GPS)
-  drug_allergies        String?         // การแพ้ยา
-  drug_allergies_other  String?         // การแพ้ยาอื่นๆ
-  medical_conditions    String?         // โรคประจำตัว
-  notes                 String?         // หมายเหตุ
-  photo_url             String?
-  photo_path            String?
-  isDelete              Boolean         @default(false)
-  created_at            DateTime        @default(now())
-  updated_at            DateTime        @updatedAt
-  appointments          Appointment[]
-  medicalRecords        MedicalRecord[]
-  orders                Order[]
-  treatmentPlans        TreatmentPlan[]
-  visits                Visit[]
-  queueTickets          QueueTicket[]
+  id                   String          @id @default(cuid())
+  first_name           String
+  last_name            String
+  national_id          String?         @unique
+  prefix               String?
+  nickname             String?
+  date_of_birth        DateTime?
+  age                  Int?
+  gender               String?
+  blood_group          String?
+  phone                String?
+  email                String?
+  address              String?
+  subdistrict          String?
+  district             String?
+  province             String?
+  zip_code             String?
+  latitude             Float?
+  longitude            Float?
+  drug_allergies       String?
+  drug_allergies_other String?
+  medical_conditions   String?
+  notes                String?
+  photo_url            String?
+  photo_path           String?
+  isDelete             Boolean         @default(false)
+  created_at           DateTime        @default(now())
+  updated_at           DateTime        @updatedAt
+  appointments         Appointment[]
+  medicalRecords       MedicalRecord[]
+  orders               Order[]
+  queueTickets         QueueTicket[]
+  treatmentPlans       TreatmentPlan[]
+  visits               Visit[]
 }
 
 model Category {
@@ -140,20 +140,20 @@ model Product {
 }
 
 model Order {
-  id           String      @id @default(cuid())
+  id           String       @id @default(cuid())
   userId       String?
   patientId    String?
-  order_date   DateTime    @default(now())
-  status       String?     @default("completed")
+  order_date   DateTime     @default(now())
+  status       String?      @default("completed")
   total_amount Float?
-  vat_amount   Float       @default(0)
-  isDelete     Boolean     @default(false)
-  created_at   DateTime    @default(now())
-  updated_at   DateTime    @updatedAt
-  is_walkin    Boolean     @default(false)
+  vat_amount   Float        @default(0)
+  isDelete     Boolean      @default(false)
+  created_at   DateTime     @default(now())
+  updated_at   DateTime     @updatedAt
+  is_walkin    Boolean      @default(false)
   invoice      Invoice?
-  patient      Patient?    @relation(fields: [patientId], references: [id])
-  user         User?       @relation(fields: [userId], references: [id])
+  patient      Patient?     @relation(fields: [patientId], references: [id])
+  user         User?        @relation(fields: [userId], references: [id])
   orderItems   OrderItem[]
   payments     Payment[]
   visitOrders  VisitOrder[]
@@ -387,7 +387,92 @@ model Account {
   @@unique([provider, providerAccountId])
 }
 
-// ========== CLINIC SYSTEM EXTENSION - NEW MODELS ONLY ==========
+model Visit {
+  id              String        @id @default(cuid())
+  patientId       String
+  appointmentId   String?
+  visit_date      DateTime      @default(now())
+  status          VisitStatus   @default(open)
+  chief_complaint String?
+  diagnosis       String?
+  notes           String?
+  created_at      DateTime      @default(now())
+  updated_at      DateTime      @updatedAt
+  queueTickets    QueueTicket[]
+  appointment     Appointment?  @relation(fields: [appointmentId], references: [id])
+  patient         Patient       @relation(fields: [patientId], references: [id])
+  visitOrders     VisitOrder[]
+  vitals          Vitals?
+
+  @@index([patientId, visit_date])
+  @@index([status])
+  @@index([visit_date])
+}
+
+model Vitals {
+  id         String   @id @default(cuid())
+  visitId    String   @unique
+  heightCm   Float?
+  weightKg   Float?
+  tempC      Float?
+  sbp        Int?
+  dbp        Int?
+  hr         Int?
+  rr         Int?
+  spo2       Int?
+  bmi        Float?
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  visit      Visit    @relation(fields: [visitId], references: [id], onDelete: Cascade)
+}
+
+model QueueTicket {
+  id         String       @id @default(cuid())
+  visitId    String?
+  patientId  String
+  number     Int
+  station    QueueStation
+  status     QueueStatus  @default(waiting)
+  priority   Int          @default(0)
+  called_at  DateTime?
+  started_at DateTime?
+  done_at    DateTime?
+  created_at DateTime     @default(now())
+  updated_at DateTime     @updatedAt
+  events     QueueEvent[]
+  patient    Patient      @relation(fields: [patientId], references: [id])
+  visit      Visit?       @relation(fields: [visitId], references: [id])
+
+  @@index([station, status, created_at])
+  @@index([patientId])
+  @@index([visitId])
+  @@index([number, station])
+}
+
+model QueueEvent {
+  id       String       @id @default(cuid())
+  ticketId String
+  station  QueueStation
+  status   QueueStatus
+  at       DateTime     @default(now())
+  byUserId String?
+  note     String?
+  ticket   QueueTicket  @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId, at])
+}
+
+model VisitOrder {
+  id         String   @id @default(cuid())
+  visitId    String
+  orderId    String
+  created_at DateTime @default(now())
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  visit      Visit    @relation(fields: [visitId], references: [id], onDelete: Cascade)
+
+  @@unique([visitId, orderId])
+  @@index([orderId])
+}
 
 enum VisitStatus {
   open
@@ -413,101 +498,4 @@ enum QueueStatus {
   done
   skipped
   cancelled
-}
-
-model Visit {
-  id               String      @id @default(cuid())
-  patientId        String
-  appointmentId    String?
-  visit_date       DateTime    @default(now())
-  status           VisitStatus @default(open)
-  chief_complaint  String?
-  diagnosis        String?
-  notes            String?
-  created_at       DateTime    @default(now())
-  updated_at       DateTime    @updatedAt
-
-  // Relations
-  patient      Patient       @relation(fields: [patientId], references: [id])
-  appointment  Appointment?  @relation(fields: [appointmentId], references: [id])
-  vitals       Vitals?
-  queueTickets QueueTicket[]
-  visitOrders  VisitOrder[]
-
-  @@index([patientId, visit_date])
-  @@index([status])
-  @@index([visit_date])
-}
-
-model Vitals {
-  id        String @id @default(cuid())
-  visitId   String @unique
-  heightCm  Float?
-  weightKg  Float?
-  tempC     Float?
-  sbp       Int?
-  dbp       Int?
-  hr        Int?
-  rr        Int?
-  spo2      Int?
-  bmi       Float?
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
-
-  // Relations
-  visit Visit @relation(fields: [visitId], references: [id], onDelete: Cascade)
-}
-
-model QueueTicket {
-  id         String      @id @default(cuid())
-  visitId    String?     // Made optional to support triage-only tickets
-  patientId  String
-  number     Int
-  station    QueueStation
-  status     QueueStatus @default(waiting)
-  priority   Int         @default(0)
-  called_at  DateTime?
-  started_at DateTime?
-  done_at    DateTime?
-  created_at DateTime    @default(now())
-  updated_at DateTime    @updatedAt
-
-  // Relations
-  visit   Visit?       @relation(fields: [visitId], references: [id], onDelete: SetNull)
-  patient Patient      @relation(fields: [patientId], references: [id])
-  events  QueueEvent[]
-
-  @@index([station, status, created_at])
-  @@index([patientId])
-  @@index([visitId])
-  @@index([number, station])
-}
-
-model QueueEvent {
-  id       String       @id @default(cuid())
-  ticketId String
-  station  QueueStation
-  status   QueueStatus
-  at       DateTime     @default(now())
-  byUserId String?
-  note     String?
-
-  // Relations
-  ticket QueueTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-
-  @@index([ticketId, at])
-}
-
-model VisitOrder {
-  id      String @id @default(cuid())
-  visitId String
-  orderId String
-  created_at DateTime @default(now())
-
-  // Relations
-  visit Visit @relation(fields: [visitId], references: [id], onDelete: Cascade)
-  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
-
-  @@unique([visitId, orderId])
-  @@index([orderId])
 }

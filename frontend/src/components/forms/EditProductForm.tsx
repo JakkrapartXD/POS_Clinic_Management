@@ -304,7 +304,7 @@ export default function EditProductForm({ onBack, onSubmit, initialData }: EditP
   }, [initialData])
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full" data-testid="edit-product-form">
       {/* Header */}
       <div className="bg-white border-b p-6 flex-shrink-0">
         <div className="flex justify-between items-center">

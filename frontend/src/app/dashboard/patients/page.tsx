@@ -70,17 +70,37 @@ function PatientsPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [refreshCooldown, setRefreshCooldown] = useState(0);
 
-  const fetchPatients = async () => {
+  const fetchPatients = async (showToast = false, skipCache = false) => {
+    console.log('📡 Fetching patients...', { showToast, skipCache });
     try {
       setLoading(true);
+      
+      // Clear cache if refreshing
+      if (skipCache) {
+        console.log('🗑️ Clearing patient cache...');
+        GraphQLAPI.clearOperationCache('patients');
+        GraphQLAPI.clearOperationCache('AllPatients');
+      }
+      
       const result = await GraphQLAPI.getAllPatients({});
+      console.log('📊 Patients data received:', result);
       setPatients(result.patients.patients || []);
+      
+      if (showToast) {
+        const patientCount = result.patients.patients?.length || 0;
+        const timestamp = new Date().toLocaleTimeString('th-TH');
+        toast.success(`รีเฟรชข้อมูลผู้ป่วยเรียบร้อยแล้ว (${patientCount} รายการ) - ${timestamp}`);
+        console.log('🎉 Toast success shown with count:', patientCount, 'at', timestamp);
+      }
     } catch (error: any) {
-      console.error('Error fetching patients:', error);
+      console.error('❌ Error fetching patients:', error);
       toast.error('ไม่สามารถโหลดข้อมูลผู้ป่วยได้');
     } finally {
       setLoading(false);
+      console.log('🏁 Loading finished');
     }
   };
 
@@ -114,7 +134,7 @@ function PatientsPage() {
       toast.success('ลบผู้ป่วยเรียบร้อยแล้ว');
       setIsDeleteDialogOpen(false);
       setSelectedPatient(null);
-      fetchPatients();
+      fetchPatients(false);
     } catch (error: any) {
       console.error('Error deleting patient:', error);
       toast.error(error.message || 'ไม่สามารถลบผู้ป่วยได้');
@@ -127,6 +147,50 @@ function PatientsPage() {
     setSelectedPatient(null);
   };
 
+  const handleRefresh = async () => {
+    // Prevent multiple refresh calls
+    if (isRefreshing) {
+      console.log('⏳ Refresh already in progress, skipping...');
+      return;
+    }
+
+    console.log('🔄 Starting refresh...');
+    setIsRefreshing(true);
+    
+    try {
+      // Clear search query
+      setSearchQuery('');
+      console.log('🧹 Search query cleared');
+      
+      // Fetch fresh data with toast notification and skip cache
+      await fetchPatients(true, true);
+      console.log('✅ Refresh completed');
+    } catch (error: any) {
+      console.error('❌ Refresh failed:', error);
+      
+      // Handle rate limiting error specifically
+      if (error.message?.includes('Request too frequent')) {
+        toast.error('กรุณารอสักครู่ก่อนรีเฟรชอีกครั้ง');
+      } else {
+        toast.error('ไม่สามารถรีเฟรชข้อมูลได้');
+      }
+    } finally {
+      setIsRefreshing(false);
+      
+      // Set cooldown timer
+      setRefreshCooldown(2); // 2 seconds cooldown
+      const cooldownInterval = setInterval(() => {
+        setRefreshCooldown(prev => {
+          if (prev <= 1) {
+            clearInterval(cooldownInterval);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+  };
+
   return (
     <PageGuard requiredPermission='patients:read'>
     <div className="container mx-auto p-6 space-y-6">
@@ -134,20 +198,35 @@ function PatientsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">จัดการผู้ป่วย</h1>
-          <p className="text-gray-600">จัดการข้อมูลผู้ป่วยในระบบ</p>
+          <p className="text-gray-600">
+            จัดการข้อมูลผู้ป่วยในระบบ 
+            {!loading && (
+              <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-800 text-sm rounded-full">
+                {filteredPatients.length} รายการ
+              </span>
+            )}
+          </p>
         </div>
         <div className="flex items-center space-x-3">
           <Button 
             variant="outline" 
-            onClick={fetchPatients}
-            disabled={loading}
+            onClick={handleRefresh}
+            disabled={loading || isRefreshing || refreshCooldown > 0}
+            data-testid="refresh-button"
+            className="hover:bg-gray-50 transition-colors"
           >
-            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-            รีเฟรช
+            <RefreshCw className={`w-4 h-4 mr-2 ${(loading || isRefreshing) ? 'animate-spin' : ''}`} />
+            {loading || isRefreshing 
+              ? 'กำลังรีเฟรช...' 
+              : refreshCooldown > 0 
+                ? `รอ ${refreshCooldown}s` 
+                : 'รีเฟรช'
+            }
           </Button>
           <Button 
             onClick={() => setIsCreateDialogOpen(true)}
             className="bg-blue-600 hover:bg-blue-700"
+            data-testid="add-patient-button"
           >
             <Plus className="w-4 h-4 mr-2" />
             เพิ่มผู้ป่วยใหม่
@@ -167,6 +246,7 @@ function PatientsPage() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10"
+                  data-testid="search-input"
                 />
               </div>
             </div>
@@ -202,9 +282,9 @@ function PatientsPage() {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" data-testid="patient-list">
           {filteredPatients.map((patient) => (
-            <Card key={patient.id} className="hover:shadow-lg transition-shadow">
+            <Card key={patient.id} className="hover:shadow-lg transition-shadow" data-testid={`patient-row-${patient.id}`}>
               <CardContent className="p-6">
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center">
@@ -226,7 +306,7 @@ function PatientsPage() {
                       </div>
                     </div>
                     <div>
-                      <h3 className="font-semibold text-gray-900">
+                      <h3 className="font-semibold text-gray-900" data-testid="patient-name">
                         {patient.first_name} {patient.last_name}
                       </h3>
                       <p className="text-sm text-gray-600">
@@ -267,7 +347,7 @@ function PatientsPage() {
                   {patient.phone && (
                     <div className="flex items-center text-sm text-gray-600">
                       <Phone className="w-4 h-4 mr-2" />
-                      {patient.phone}
+                      <span data-testid="patient-phone">{patient.phone}</span>
                     </div>
                   )}
                   {patient.email && (
@@ -279,7 +359,7 @@ function PatientsPage() {
                   {patient.national_id && (
                     <div className="flex items-center text-sm text-gray-600">
                       <CreditCard className="w-4 h-4 mr-2" />
-                      {patient.national_id}
+                      <span data-testid="patient-national-id">{patient.national_id}</span>
                     </div>
                   )}
                   {patient.date_of_birth && (
@@ -315,7 +395,7 @@ function PatientsPage() {
         isOpen={isEditDialogOpen}
         onClose={() => setIsEditDialogOpen(false)}
         onSuccess={() => {
-          fetchPatients();
+          fetchPatients(false);
           resetForm();
         }}
         patientId={selectedPatient?.id || ''}
@@ -357,8 +437,9 @@ function PatientsPage() {
         isOpen={isCreateDialogOpen}
         onClose={() => setIsCreateDialogOpen(false)}
         onSuccess={() => {
-          fetchPatients();
+          fetchPatients(false);
           resetForm();
+          toast.success('เพิ่มผู้ป่วยใหม่เรียบร้อยแล้ว');
         }}
       />
     </div>

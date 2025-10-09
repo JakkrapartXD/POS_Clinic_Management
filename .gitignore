@@ -10,6 +10,13 @@ secrets/
 node_modules/
 dist/
 build/
+logs/*.json
+logs/*.txt
+logs/*.log
+logs/*.tar.gz
+logs/*.tgz
+logs/*.log
+logs/*.tar.gz
 
 # Docker
 pgdata/
@@ -33,3 +40,5 @@ backend/public/**/*.webp
 backend/public/**/*.svg
 backend/public/**/*.bmp
 backend/public/**/*.ico
+tests/automation/test-results/
+tests/automation/playwright-report/

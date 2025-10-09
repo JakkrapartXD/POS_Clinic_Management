@@ -250,7 +250,13 @@ export default function LoginPage() {
 
       // Success - clear retry count and redirect
       setRetryCount(0)
-      router.push(APP_CONSTANTS.ROUTES.DASHBOARD)
+      
+      // Trigger user data refresh for other components
+      console.log('🚀 Dispatching userLoginSuccess event')
+      window.dispatchEvent(new CustomEvent('userLoginSuccess'))
+      
+      // Refresh หน้าเว็บหลัง login สำเร็จ
+      window.location.href = APP_CONSTANTS.ROUTES.DASHBOARD
       
     } catch (err: any) {
       const errorInfo = parseError(err)
@@ -378,6 +384,7 @@ export default function LoginPage() {
             }`}
             required
             disabled={isLoading}
+            data-testid="username-input"
           />
           {validationErrors.username && (
             <p className="mt-1 text-sm text-red-600">{validationErrors.username}</p>
@@ -400,6 +407,7 @@ export default function LoginPage() {
               }`}
               required
               disabled={isLoading}
+              data-testid="password-input"
             />
             <button 
               type="button" 
@@ -423,6 +431,7 @@ export default function LoginPage() {
           type="submit"
           className="w-full bg-teal-500 hover:bg-teal-600 text-white py-3 rounded-xl transition-all duration-200 hover:scale-[1.02] active:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center"
           disabled={isLoading || !isOnline}
+          data-testid="login-button"
         >
           {isLoading ? (
             <>

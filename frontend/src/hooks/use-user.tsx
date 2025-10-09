@@ -23,6 +23,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
   const loadUser = async () => {
     try {
+      console.log('🔄 Loading user data...')
       setLoading(true)
       setError(null)
       
@@ -47,6 +48,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
           localStorage.removeItem('user_changed')
         }
         
+        console.log('✅ User data loaded successfully:', response.me)
         setUser(response.me)
       } else {
         if (process.env.NODE_ENV === 'development') {
@@ -83,10 +85,17 @@ export function UserProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // Mark as hydrated on client side
     setIsHydrated(true)
+    
+    // Check if we're on login page - don't load user data
+    if (typeof window !== 'undefined' && window.location.pathname === '/login') {
+      setLoading(false)
+      return
+    }
+    
+    // Load user data immediately
     loadUser()
     
     // Only refresh user data when storage changes (for same-origin tabs)
-    // Remove window focus listener to prevent excessive permission checks
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === 'user_changed') {
         if (process.env.NODE_ENV === 'development') {
@@ -98,8 +107,20 @@ export function UserProvider({ children }: { children: ReactNode }) {
     
     window.addEventListener('storage', handleStorageChange)
     
+    // Listen for login success events
+    const handleLoginSuccess = () => {
+      console.log('🎉 Login success event detected, refreshing user data')
+      if (process.env.NODE_ENV === 'development') {
+        logger.debug('Login success event detected, refreshing user data', {}, 'USER')
+      }
+      loadUser()
+    }
+    
+    window.addEventListener('userLoginSuccess', handleLoginSuccess)
+    
     return () => {
       window.removeEventListener('storage', handleStorageChange)
+      window.removeEventListener('userLoginSuccess', handleLoginSuccess)
     }
   }, [])
 

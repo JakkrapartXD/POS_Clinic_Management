@@ -226,7 +226,7 @@ export default function OrdersPage() {
                     </div>
                     <div className="flex items-center justify-between text-sm text-gray-600">
                       <span>เวลา {formatTime(order.created_at)}</span>
-                      <span className="font-medium">฿{order.total_amount.toFixed(2)}</span>
+                      <span className="font-medium">฿{order.total_amount?.toFixed(2) || '0.00'}</span>
                     </div>
                   </div>
                 )
@@ -318,7 +318,7 @@ export default function OrdersPage() {
                       </div>
                       <div>
                         <label className="text-sm font-medium text-gray-600">ราคาเฉพาะสินค้า</label>
-                        <p className="text-gray-900">฿{selectedOrder.total_amount.toFixed(2)}</p>
+                        <p className="text-gray-900">฿{selectedOrder.total_amount?.toFixed(2) || '0.00'}</p>
                       </div>
                       <div>
                         <label className="text-sm font-medium text-gray-600">ส่วนลด</label>
@@ -330,7 +330,7 @@ export default function OrdersPage() {
                       </div>
                       <div>
                         <label className="text-sm font-medium text-gray-600">มูลค่าใบเสร็จรับเงิน</label>
-                        <p className="text-gray-900 font-semibold">฿{selectedOrder.total_amount.toFixed(2)}</p>
+                        <p className="text-gray-900 font-semibold">฿{selectedOrder.total_amount?.toFixed(2) || '0.00'}</p>
                       </div>
                       <div className="md:col-span-2">
                         <label className="text-sm font-medium text-gray-600">หมายเหตุท้ายเอกสาร</label>

@@ -73,12 +73,38 @@ const app = new Elysia()
   )
   .use(
     cors({
-      origin: process.env.FRONTEND_URL || "http://localhost:3000",
+      origin: [
+        "http://localhost:3000",
+        "http://localhost:3001", 
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:3001",
+        process.env.FRONTEND_URL || "http://localhost:3000"
+      ].filter(Boolean),
       credentials: true,
-      methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-      allowedHeaders: ["Content-Type", "Authorization", "Cookie"],
+      methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+      allowedHeaders: [
+        "Content-Type", 
+        "Authorization", 
+        "Cookie",
+        "X-Requested-With",
+        "Accept",
+        "Origin"
+      ],
+      exposeHeaders: ["Content-Length", "X-Request-Id"],
+      maxAge: 86400, // 24 hours
     })
   )
+  // Add explicit OPTIONS handler for GraphQL endpoint
+  .options("/graphql", ({ set }) => {
+    set.headers = {
+      "Access-Control-Allow-Origin": "http://localhost:3000",
+      "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization, Cookie, X-Requested-With, Accept, Origin",
+      "Access-Control-Allow-Credentials": "true",
+      "Access-Control-Max-Age": "86400"
+    };
+    return "";
+  })
   .use(
     yoga({
       typeDefs,
@@ -110,13 +136,13 @@ const app = new Elysia()
           const elysiaContextCookies = elysiaCtx.cookie || {};
           
           // Debug: Log cookies information
-          console.log('=== GraphQL Context Debug ===');
-          console.log('Cookie header:', cookieHeader);
-          console.log('Parsed cookies:', parsedCookies);
-          console.log('Elysia context cookie:', elysiaContextCookies);
-          console.log('JWT token from parsed:', parsedCookies['next-auth.jwt-token']);
-          console.log('JWT token from Elysia:', elysiaContextCookies['next-auth.jwt-token']?.value || elysiaContextCookies['next-auth.jwt-token']);
-          console.log('================================');
+          // console.log('=== GraphQL Context Debug ===');
+          // console.log('Cookie header:', cookieHeader);
+          // console.log('Parsed cookies:', parsedCookies);
+          // console.log('Elysia context cookie:', elysiaContextCookies);
+          // console.log('JWT token from parsed:', parsedCookies['next-auth.jwt-token']);
+          // console.log('JWT token from Elysia:', elysiaContextCookies['next-auth.jwt-token']?.value || elysiaContextCookies['next-auth.jwt-token']);
+          // console.log('================================');
           
           // Create a compatible request object for GraphQL context
           const contextRequest = {
@@ -164,6 +190,7 @@ const app = new Elysia()
   )
   .use(cookie())
   .use(bearer())
+  
   
   // Static file serving for uploads
   .use(staticPlugin({
@@ -222,7 +249,7 @@ const app = new Elysia()
   }))
 
   // Test JWT endpoint for debugging
-  .get("/test-jwt", async ({ headers, jwt, set }) => {
+  .get("/test-jwt", async ({ headers, jwt, set }: { headers: any; jwt: any; set: any }) => {
     const authHeader = headers.authorization;
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -250,12 +277,12 @@ const app = new Elysia()
   })
 
   // Register routes
-  .use(AuthRoutes)
-  .use(userRoutes)
-  .use(uploadRoutes)
+  .use(AuthRoutes(redisClient))
+  .use(userRoutes(redisClient))
+  .use(uploadRoutes(redisClient))
   .use(oauthRoutes)
-  .use(backupRoutes)
-  .use(clinicRoutes)
+  .use(backupRoutes(redisClient))
+  .use(clinicRoutes(redisClient))
 
   // Default route
   .get("/", () => ({
@@ -266,7 +293,7 @@ const app = new Elysia()
   }))
 
   // Global error handler
-  .onError(({ code, error, set }) => {
+  .onError(({ code, error, set }: { code: any; error: any; set: any }) => {
     console.error("Server Error:", error);
 
     switch (code) {

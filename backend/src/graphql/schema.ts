@@ -249,14 +249,8 @@ export const typeDefs = /* GraphQL */ `
   # Bulk import types
   input BulkImportProductsInput {
     products: [CreateProductInput!]!
-    settings: ImportSettingsInput
   }
 
-  input ImportSettingsInput {
-    skipDuplicates: Boolean = true
-    updateExisting: Boolean = false
-    createBackup: Boolean = true
-  }
 
   type ImportResult {
     success: Boolean!
@@ -753,7 +747,7 @@ export const typeDefs = /* GraphQL */ `
     # Product Queries
     products(filter: ProductFilterInput, pagination: PaginationInput): ProductsResponse!
     product(id: String!): Product
-    searchProducts(query: String!): [Product!]!
+    searchProducts(query: String!, includeInactive: Boolean): [Product!]!
     lowStockProducts: [Product!]!
     checkSkuExists(sku: String!): Boolean!
 

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo, useEffect, useCallback, memo, Suspense } from "react"
-import { useSearchParams } from "next/navigation"
+import { useSearchParams, useRouter, usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import AddProductForm from "@/components/forms/AddProductForm"
 import ProductListSidebar from "@/components/modules/inventory/product-list-sidebar"
@@ -177,12 +177,17 @@ const downloadCSV = (csvContent: string, filename: string) => {
 function InventoryPage() {
   const { handleAuthError } = useAuth()
   const searchParams = useSearchParams()
+  const router = useRouter()
+  const pathname = usePathname()
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedLetter, setSelectedLetter] = useState<string>("")
   const [alphabetMode, setAlphabetMode] = useState<AlphabetMode>('english')
   const [viewMode, setViewMode] = useState<ViewMode>('list')
   const [submitTrigger, setSubmitTrigger] = useState(0)
   const [products, setProducts] = useState<Product[]>([])
+  const [searchResults, setSearchResults] = useState<TransformedProduct[]>([])
+  const [isSearching, setIsSearching] = useState(false)
+  const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null)
@@ -206,6 +211,40 @@ function InventoryPage() {
   }
 
   const currentSections = getCurrentSections()
+
+  // URL state management functions
+  const updateURL = useCallback((params: { productId?: string; tab?: string; view?: string }) => {
+    const url = new URL(window.location.href)
+    
+    if (params.productId) {
+      url.searchParams.set('productId', params.productId)
+    } else {
+      url.searchParams.delete('productId')
+    }
+    
+    if (params.tab) {
+      url.searchParams.set('tab', params.tab)
+    } else {
+      url.searchParams.delete('tab')
+    }
+    
+    if (params.view && params.view !== 'list') {
+      url.searchParams.set('view', params.view)
+    } else {
+      url.searchParams.delete('view')
+    }
+    
+    // Update URL without triggering a page reload
+    window.history.replaceState({}, '', url.toString())
+  }, [])
+
+  const clearURL = useCallback(() => {
+    const url = new URL(window.location.href)
+    url.searchParams.delete('productId')
+    url.searchParams.delete('tab')
+    url.searchParams.delete('view')
+    window.history.replaceState({}, '', url.toString())
+  }, [])
 
   // Load all products from GraphQL (no pagination)
   const loadProducts = useCallback(async () => {
@@ -265,6 +304,123 @@ function InventoryPage() {
     }
   }, [handleAuthError, isLoadingProducts])
 
+  // Debounced search function for products (including inactive)
+  const performSearch = async (query: string) => {
+    if (query.length < 2) {
+      setSearchResults([])
+      return
+    }
+
+    try {
+      setIsSearching(true)
+      setError(null) // Clear any previous errors
+      
+      const response = await GraphQLAPI.searchProducts(query, true) // includeInactive = true
+      const rawResults = response.searchProducts || []
+      
+      // Transform search results to match the expected structure
+      const transformedSearchResults = rawResults.map((product: Product) => {
+        const firstChar = product.product_name.charAt(0).toUpperCase()
+        let letter = firstChar
+        if (/[ก-ฮ]/.test(firstChar)) {
+          letter = firstChar // Thai letter
+        } else if (/[A-Z]/.test(firstChar)) {
+          letter = firstChar // English letter
+        } else if (/[0-9]/.test(firstChar)) {
+          letter = firstChar // Number
+        } else {
+          letter = '#' // Special characters
+        }
+        
+        return {
+          id: product.id,
+          letter,
+          name: product.product_name,
+          variant: product.unit || 'หน่วย',
+          stock: product.stock_quantity || 0,
+          status: `${product.stock_quantity || 0} ${product.unit || 'หน่วย'}`,
+          price: product.sale_price,
+          allProducts: [product] // Single product in array for consistency
+        }
+      })
+      
+      setSearchResults(transformedSearchResults)
+      
+      logger.info('Product search completed', { 
+        query, 
+        resultCount: transformedSearchResults.length 
+      }, 'INVENTORY')
+    } catch (error) {
+      logger.error('Error searching products:', error, 'INVENTORY')
+      
+      // Check if it's an authentication error
+      if (error instanceof Error && (
+        error.message.includes('Authentication required') ||
+        error.message.includes('Unauthorized') ||
+        error.message.includes('Not authenticated') ||
+        error.message.includes('Invalid token') ||
+        error.message.includes('Token expired')
+      )) {
+        handleAuthError(error)
+        return
+      }
+      
+      // Set user-friendly error message
+      const errorMessage = error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการค้นหาสินค้า'
+      setError(errorMessage)
+      setSearchResults([])
+      
+      // Show toast notification
+      toast.error('ไม่สามารถค้นหาสินค้าได้ กรุณาลองใหม่อีกครั้ง')
+    } finally {
+      setIsSearching(false)
+    }
+  }
+
+  // Handle search query changes with debouncing
+  useEffect(() => {
+    if (searchTimeout) {
+      clearTimeout(searchTimeout)
+    }
+
+    if (searchQuery.trim()) {
+      const timeout = setTimeout(() => {
+        performSearch(searchQuery.trim())
+      }, 300) // 300ms debounce
+      setSearchTimeout(timeout)
+    } else {
+      setSearchResults([])
+    }
+
+    return () => {
+      if (searchTimeout) {
+        clearTimeout(searchTimeout)
+      }
+    }
+  }, [searchQuery])
+
+  // Enhanced refresh function that preserves current state
+  const refreshData = useCallback(async (preserveView: boolean = true) => {
+    try {
+      logger.info('Refreshing inventory data', { preserveView, currentView: viewMode, selectedProductId }, 'INVENTORY')
+      
+      // Invalidate cache first
+      GraphQLAPI.invalidateCachePattern('Products')
+      
+      // Reload products
+      await loadProducts()
+      
+      // If we're in product detail view and want to preserve it, reload the product
+      if (preserveView && viewMode === 'product-detail' && selectedProductId) {
+        // The ProductDetailView component will handle its own data refresh
+        logger.info('Preserving product detail view after refresh', { productId: selectedProductId }, 'INVENTORY')
+      }
+      
+      logger.info('Inventory data refreshed successfully', {}, 'INVENTORY')
+    } catch (error) {
+      logger.error('Failed to refresh inventory data', error, 'INVENTORY')
+    }
+  }, [loadProducts, viewMode, selectedProductId])
 
   useEffect(() => {
     // Load products on initial mount
@@ -273,11 +429,70 @@ function InventoryPage() {
     }
   }, []) // Empty dependency array for initial load only
 
-  // Handle URL parameters for direct navigation to product detail with stock tab
+  // Handle browser refresh and page visibility changes
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && products.length === 0) {
+        // Page became visible and we don't have products loaded
+        loadProducts()
+      }
+    }
+
+    const handleBeforeUnload = () => {
+      // Save current state to sessionStorage before page unload
+      const state = {
+        viewMode,
+        selectedProductId,
+        searchQuery,
+        selectedLetter,
+        alphabetMode
+      }
+      sessionStorage.setItem('inventoryState', JSON.stringify(state))
+    }
+
+    const handlePageShow = (event: PageTransitionEvent) => {
+      // Handle back/forward navigation
+      if (event.persisted) {
+        // Page was restored from cache
+        const savedState = sessionStorage.getItem('inventoryState')
+        if (savedState) {
+          try {
+            const state = JSON.parse(savedState)
+            setViewMode(state.viewMode || 'list')
+            setSelectedProductId(state.selectedProductId || null)
+            setSearchQuery(state.searchQuery || '')
+            setSelectedLetter(state.selectedLetter || '')
+            setAlphabetMode(state.alphabetMode || 'english')
+          } catch (error) {
+            logger.error('Failed to restore inventory state', error, 'INVENTORY')
+          }
+        }
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    window.addEventListener('pageshow', handlePageShow)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      window.removeEventListener('pageshow', handlePageShow)
+    }
+  }, [products.length, viewMode, selectedProductId, searchQuery, selectedLetter, alphabetMode, loadProducts])
+
+  // Handle URL parameters for direct navigation and state restoration
   useEffect(() => {
     const productId = searchParams.get('productId')
     const tab = searchParams.get('tab')
+    const view = searchParams.get('view')
     
+    // Set view mode from URL if present
+    if (view && ['add-product', 'import-products', 'export-products', 'delete-products'].includes(view)) {
+      setViewMode(view as ViewMode)
+    }
+    
+    // Handle product detail navigation
     if (productId && products.length > 0) {
       // Check if the product exists in our products list
       const productExists = products.some(p => p.id === productId)
@@ -285,11 +500,22 @@ function InventoryPage() {
         setSelectedProductId(productId)
         setViewMode('product-detail')
         
-        // If tab is 'stock', we'll need to pass this to ProductDetailView
-        // The ProductDetailView component will handle the tab selection
+        // Update URL to include view mode
+        updateURL({ productId, tab: tab || undefined, view: 'product-detail' })
       }
     }
-  }, [searchParams, products])
+  }, [searchParams, products, updateURL])
+
+  // Handle initial page load with URL parameters
+  useEffect(() => {
+    const productId = searchParams.get('productId')
+    const view = searchParams.get('view')
+    
+    // If we have URL parameters but no products loaded yet, we need to load products first
+    if ((productId || view) && products.length === 0 && !isLoadingProducts) {
+      loadProducts()
+    }
+  }, [searchParams, products.length, isLoadingProducts, loadProducts])
 
   // Transform products for display - group by product name and combine units
   // Memoized for better performance
@@ -393,18 +619,35 @@ function InventoryPage() {
     }
   }, [alphabetMode])
 
-  // Navigation handlers - memoized
+  // Navigation handlers - memoized with URL updates
   const handleBackToList = useCallback(() => {
     setViewMode('list')
-  }, [])
+    setSelectedProductId(null)
+    clearURL()
+  }, [clearURL])
 
-  // Action handlers - memoized
-  const handleAddProduct = useCallback(() => setViewMode('add-product'), [])
-  const handleImportProducts = useCallback(() => setViewMode('import-products'), [])
-  const handleExportProducts = useCallback(() => setViewMode('export-products'), [])
-  const handleDeleteProduct = useCallback(() => setViewMode('delete-products'), [])
+  // Action handlers - memoized with URL updates
+  const handleAddProduct = useCallback(() => {
+    setViewMode('add-product')
+    updateURL({ view: 'add-product' })
+  }, [updateURL])
+  
+  const handleImportProducts = useCallback(() => {
+    setViewMode('import-products')
+    updateURL({ view: 'import-products' })
+  }, [updateURL])
+  
+  const handleExportProducts = useCallback(() => {
+    setViewMode('export-products')
+    updateURL({ view: 'export-products' })
+  }, [updateURL])
+  
+  const handleDeleteProduct = useCallback(() => {
+    setViewMode('delete-products')
+    updateURL({ view: 'delete-products' })
+  }, [updateURL])
 
-  // Product detail handler - memoized
+  // Product detail handler - memoized with URL updates
   const handleProductClick = useCallback((productId: string) => {
     // Find the product with all its variants
     const product = transformedProducts.find(p => p.id === productId)
@@ -412,34 +655,34 @@ function InventoryPage() {
       // Store all product variants for detail view
       setSelectedProductId(productId)
       setViewMode('product-detail')
+      updateURL({ productId, view: 'product-detail' })
     } else {
       // Fallback to single product
       setSelectedProductId(productId)
       setViewMode('product-detail')
+      updateURL({ productId, view: 'product-detail' })
     }
-  }, [transformedProducts])
+  }, [transformedProducts, updateURL])
 
   // Handle product deletion callback - memoized with debounce
   const handleProductDeleted = useCallback(() => {
-    // Invalidate product cache before reloading
-    GraphQLAPI.invalidateCachePattern('Products')
-    
-    // Debounce reload to prevent multiple rapid calls
+    // Use the enhanced refresh function
     setTimeout(() => {
-      loadProducts() // Reload products after deletion
+      refreshData(false) // Don't preserve view after deletion
+      // Navigate back to list view
+      setViewMode('list')
+      setSelectedProductId(null)
+      clearURL()
     }, 500)
-  }, [loadProducts])
+  }, [refreshData, clearURL])
 
   // Handle product update callback - memoized with debounce
   const handleProductUpdated = useCallback(() => {
-    // Invalidate product cache before reloading
-    GraphQLAPI.invalidateCachePattern('Products')
-    
-    // Debounce reload to prevent multiple rapid calls
+    // Use the enhanced refresh function to preserve current view
     setTimeout(() => {
-      loadProducts() // Reload products after update
+      refreshData(true) // Preserve current view after update
     }, 500)
-  }, [loadProducts])
+  }, [refreshData])
 
   // Submit handlers - memoized with debounce
   const handleSubmitProduct = useCallback(async (productData: any) => {
@@ -551,14 +794,15 @@ function InventoryPage() {
       // Show success message
       toast.success('สร้างสินค้าสำเร็จ')
       
-      // Invalidate product cache before reloading
-      GraphQLAPI.invalidateCachePattern('Products')
-      
-      // Debounce reload to prevent multiple rapid calls
-      setTimeout(() => {
-        loadProducts() // Reload products after adding new product
-      }, 500)
+      // Immediately close the add product form and return to list view
       setViewMode('list')
+      setSubmitTrigger(0) // Reset submit trigger to prevent multiple submissions
+      clearURL()
+      
+      // Refresh data in background
+      setTimeout(() => {
+        refreshData(false) // Don't preserve view after adding new product
+      }, 100)
     } catch (error) {
       logger.error('Error creating product', { error, productData }, 'INVENTORY')
       const errorMessage = error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการสร้างสินค้า'
@@ -569,21 +813,28 @@ function InventoryPage() {
   const handleImportSubmit = useCallback(async (importData: any) => {
     // If import was successful, refresh the products list
     if (importData.result && importData.result.success && importData.result.imported > 0) {
-      // Invalidate product cache before reloading
-      GraphQLAPI.invalidateCachePattern('Products')
-      loadProducts()
+      // Use the enhanced refresh function
+      setTimeout(() => {
+        refreshData(false) // Don't preserve view after import
+        setViewMode('list')
+        clearURL()
+      }, 500)
+    } else {
+      setViewMode('list')
+      clearURL()
     }
-    
-    setViewMode('list')
-  }, [loadProducts])
+  }, [refreshData, clearURL])
 
 
   const handleDeleteSubmit = useCallback((deleteData: any) => {
-    // Invalidate product cache before reloading
-    GraphQLAPI.invalidateCachePattern('Products')
-    loadProducts() // Reload products after bulk deletion
-    setViewMode('list')
-  }, [loadProducts])
+    // Use the enhanced refresh function
+    setTimeout(() => {
+      refreshData(false) // Don't preserve view after bulk deletion
+      setViewMode('list')
+      clearURL()
+    }, 500)
+  }, [refreshData, clearURL])
+
 
   const handleExportSubmit = useCallback(async (exportData: any) => {
     try {
@@ -610,6 +861,7 @@ function InventoryPage() {
       }
       
       setViewMode('list')
+      clearURL()
     } catch (error) {
       logger.error('Error exporting products', { error, exportData }, 'INVENTORY')
       
@@ -628,7 +880,7 @@ function InventoryPage() {
       const errorMessage = error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการส่งออกข้อมูล'
       toast.error(`ไม่สามารถส่งออกข้อมูลได้: ${errorMessage}`)
     }
-  }, [handleAuthError])
+  }, [handleAuthError, clearURL])
 
   const handleSaveButtonClick = useCallback(() => {
     setSubmitTrigger(prev => prev + 1)
@@ -646,16 +898,18 @@ function InventoryPage() {
   }, [viewMode])
 
   return (
-    <div className="flex h-screen bg-gray-50 overflow-hidden">
+    <div className="flex h-screen bg-gray-50 overflow-hidden" data-testid="inventory-page">
       {/* Left Sidebar - Product List - Only show in list mode */}
       {viewMode === 'list' && (
         <ProductListSidebar
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
           selectedLetter={selectedLetter}
-          products={transformedProducts}
+          products={searchQuery.trim() ? searchResults : transformedProducts}
           onProductClick={handleProductClick}
           totalProducts={totalProducts}
+          isSearching={isSearching}
+          error={error}
         />
       )}
 
@@ -680,15 +934,13 @@ function InventoryPage() {
                 {getViewTitle()}
               </h1>
               {viewMode === 'list' ? (
-                <Button className="text-teal-500 bg-white hover:bg-purple-50 border border-teal-200">
-                  ตัวเลือก
-                </Button>
+                null // No buttons for list view
               ) : viewMode === 'add-product' ? (
                 <div className="flex space-x-3">
                   <Button variant="outline" onClick={handleBackToList}>
                     ยกเลิก
                   </Button>
-                  <Button onClick={handleSaveButtonClick} className="bg-teal-500 hover:bg-teal-600">
+                  <Button onClick={handleSaveButtonClick} className="bg-teal-500 hover:bg-teal-600" data-testid="save-product-button">
                     บันทึกสินค้า
                   </Button>
                 </div>
@@ -793,6 +1045,7 @@ function InventoryPage() {
               onDelete={handleDeleteSubmit}
             />
           )}
+
         </div>
       </div>
     </div>

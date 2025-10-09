@@ -7,7 +7,7 @@ export const productMutations = {
     const { input } = args;
     context.security.requireStaff(context);
     
-    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient, context.request);
     
     // Validate required fields
     if (!input.product_name || !input.sale_price) {
@@ -72,14 +72,13 @@ export const productMutations = {
   // Bulk import products
   async bulkImportProducts(parent: any, args: any, context: any) {
     const { input } = args;
-    const { products, settings } = input;
+    const { products } = input;
     
     context.security.requireStaff(context);
-    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient, context.request);
     
     logger.info('Starting bulk import', { 
       productsCount: products.length, 
-      settings,
       userId: context.userId 
     }, 'IMPORT');
     
@@ -89,17 +88,6 @@ export const productMutations = {
     let skipped = 0;
     const errors: string[] = [];
     
-    // Create backup if requested
-    if (settings?.createBackup) {
-      try {
-        logger.info('Creating backup before import', {}, 'IMPORT');
-        // In a real implementation, you would create a backup here
-        // await createDatabaseBackup();
-      } catch (error) {
-        logger.error('Failed to create backup', error, 'IMPORT');
-        errors.push('Failed to create backup, continuing with import...');
-      }
-    }
     
     // Process each product
     for (const productData of products) {
@@ -137,8 +125,8 @@ export const productMutations = {
           }
         }
         
-        // Check for duplicates if skipDuplicates is enabled
-        if (settings?.skipDuplicates) {
+        // Check for duplicates (always check)
+        {
           const existingProduct = await context.prisma.product.findFirst({
             where: {
               OR: [
@@ -150,47 +138,16 @@ export const productMutations = {
           });
           
           if (existingProduct) {
-            if (settings?.updateExisting) {
-              // Update existing product
-              try {
-                const updatedProduct = await context.prisma.product.update({
-                  where: { id: existingProduct.id },
-                  data: {
-                    ...productData,
-                    product_name: context.security.sanitizeString(productData.product_name),
-                    generic_name: productData.generic_name ? context.security.sanitizeString(productData.generic_name) : null,
-                    short_name: productData.short_name ? context.security.sanitizeString(productData.short_name) : null,
-                    updated_at: new Date()
-                  }
-                });
-                
-                imported++;
-                results.push({
-                  product: updatedProduct,
-                  status: 'UPDATED',
-                  product_name: updatedProduct.product_name,
-                  sku: updatedProduct.sku
-                });
-              } catch (updateError) {
-                failed++;
-                const errorMsg = `Failed to update existing product: ${productData.product_name}`;
-                errors.push(errorMsg);
-                results.push({
-                  status: 'FAILED',
-                  error: errorMsg,
-                  product_name: productData.product_name,
-                  sku: productData.sku
-                });
-              }
-            } else {
-              skipped++;
-              results.push({
-                status: 'SKIPPED',
-                error: 'Product already exists',
-                product_name: productData.product_name,
-                sku: productData.sku
-              });
-            }
+            // Fail on duplicate (default behavior)
+            failed++;
+            const errorMsg = `Product already exists: ${productData.product_name}`;
+            errors.push(errorMsg);
+            results.push({
+              status: 'FAILED',
+              error: errorMsg,
+              product_name: productData.product_name,
+              sku: productData.sku
+            });
             continue;
           }
         }
@@ -270,7 +227,6 @@ export const productMutations = {
         imported,
         failed,
         skipped,
-        settings
       },
       context.redisClient
     );
@@ -304,7 +260,7 @@ export const productMutations = {
     context.security.requireStaff(context);
     context.security.validateId(id);
     
-    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient, context.request);
     
     // Check if product exists
     const existingProduct = await context.prisma.product.findUnique({
@@ -335,7 +291,7 @@ export const productMutations = {
       }
       
               if (whereConditions.length > 0) {
-          logger.debug('UpdateProduct - Checking for duplicates', { whereConditions }, 'GRAPHQL')
+          // logger.debug('UpdateProduct - Checking for duplicates', { whereConditions }, 'GRAPHQL')
           const duplicate = await context.prisma.product.findFirst({
             where: {
               OR: whereConditions
@@ -386,7 +342,7 @@ export const productMutations = {
     context.security.requireStaff(context);
     context.security.validateId(id);
     
-    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient, context.request);
     
     // Check if product exists
     const existingProduct = await context.prisma.product.findUnique({
@@ -433,7 +389,7 @@ export const productMutations = {
       timestamp: new Date().toISOString()
     }, 'GRAPHQL');
     
-    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient, context.request);
     
     // Check if product exists
     const product = await context.prisma.product.findUnique({
@@ -523,7 +479,7 @@ export const productMutations = {
     const { input } = args;
     context.security.requireStaff(context);
     
-    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient, context.request);
     
     // Validate required fields
     if (!input.productId || !input.quantity) {
@@ -606,7 +562,7 @@ export const productMutations = {
     const { id, input } = args;
     context.security.requireStaff(context);
     
-    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient, context.request);
     
     // Validate required fields
     if (!id) {
@@ -625,17 +581,21 @@ export const productMutations = {
     
     try {
       // Calculate quantity difference before transaction
-      const quantityDifference = input.quantity ? input.quantity - existingStock.quantity : 0;
+      const quantityDifference = input.quantity !== undefined ? input.quantity - existingStock.quantity : 0;
       
       // Use transaction to ensure data consistency
       const result = await context.prisma.$transaction(async (tx: any) => {
+        // Determine final quantity and out of stock status
+        const finalQuantity = input.quantity !== undefined ? input.quantity : existingStock.quantity;
+        const shouldBeOutOfStock = finalQuantity <= 0;
+        
         // Update stock record
         const updatedStock = await tx.stock.update({
           where: { id },
           data: {
-            quantity: input.quantity || existingStock.quantity,
+            quantity: finalQuantity,
             quantity_in: input.quantity_in !== undefined ? input.quantity_in : existingStock.quantity_in,
-            is_outofstock: input.is_outofstock !== undefined ? input.is_outofstock : existingStock.is_outofstock,
+            is_outofstock: input.is_outofstock !== undefined ? input.is_outofstock : shouldBeOutOfStock,
             production_date: input.production_date !== undefined ? input.production_date : existingStock.production_date,
             expiration_date: input.expiration_date !== undefined ? input.expiration_date : existingStock.expiration_date,
             reference_table: input.reference_table !== undefined ? input.reference_table : existingStock.reference_table,
@@ -689,7 +649,7 @@ export const productMutations = {
     const { id } = args;
     context.security.requireStaff(context);
 
-    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient);
+    await context.security.checkRateLimit(context.userId, 'mutation', context.redisClient, context.request);
 
     if (!id) {
       throw new GraphQLError('Stock ID is required');

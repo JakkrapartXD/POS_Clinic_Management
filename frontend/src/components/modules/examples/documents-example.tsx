@@ -47,7 +47,6 @@ export default function DocumentsExample() {
     {
       id: "po",
       title: "PO",
-      subtitle: "ใบสั่งซื้อสินค้า / Purchase Order",
       href: "/documents/purchase-orders",
     },
     {
@@ -59,7 +58,6 @@ export default function DocumentsExample() {
     {
       id: "ro",
       title: "RO",
-      subtitle: "ใบคืนสินค้า / Purchase Return Order",
       href: "/documents/return-orders",
     },
     {
