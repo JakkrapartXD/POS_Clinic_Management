@@ -56,10 +56,13 @@ export const generateTestProduct = () => ({
 export const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export const generateJWT = (payload: any) => {
+  // ⚠️  SECURITY WARNING: This is a MOCK JWT generator for TESTING ONLY! ⚠️
+  // This function uses a hardcoded signature and should NEVER be used in production.
+  // In production, use a proper JWT library with secure secret management.
   // Simple JWT generation for testing (in real implementation, use proper JWT library)
   const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64');
   const body = Buffer.from(JSON.stringify(payload)).toString('base64');
-  const signature = 'test-signature';
+  const signature = 'test-signature'; // ⚠️ HARDCODED SIGNATURE - TESTING ONLY! ⚠️
   return `${header}.${body}.${signature}`;
 };
 
