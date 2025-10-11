@@ -158,7 +158,6 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
     pack_size: string
     cost: string
     sale_price: string
-    reorder_point: string
     volume: string
     volume_unit: string
     shelf_code: string
@@ -173,7 +172,6 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
     pack_size: '',
     cost: '',
     sale_price: '',
-    reorder_point: '',
     volume: '',
     volume_unit: '',
     shelf_code: '',
@@ -185,6 +183,8 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
     image_url: ''
   })
   const [isCreatingNewUnit, setIsCreatingNewUnit] = useState(false)
+  const [editingVariantId, setEditingVariantId] = useState<string | undefined>(undefined)
+  const [loadStocksTimeout, setLoadStocksTimeout] = useState<NodeJS.Timeout | null>(null)
   
   // Stock modal states
   const [showAddStockModal, setShowAddStockModal] = useState(false)
@@ -267,6 +267,31 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
     setProductVariants(updatedVariants)
   }
 
+  // Load all product variants with the same name
+  const loadProductVariants = async (productName: string) => {
+    try {
+      logger.info('Loading product variants', { productName }, 'INVENTORY')
+      
+      const productsResponse = await GraphQLAPI.searchProducts(productName, true)
+      
+      if (productsResponse.searchProducts) {
+        // Filter products that have the exact same name
+        const sameNameProducts = productsResponse.searchProducts.filter(
+          (prod: any) => prod.product_name === productName
+        )
+        
+        setProductVariants(sameNameProducts)
+        
+        logger.info('Product variants loaded successfully', { 
+          productName,
+          variantsCount: sameNameProducts.length 
+        }, 'INVENTORY')
+      }
+    } catch (err) {
+      logger.error('Failed to load product variants', err, 'INVENTORY')
+    }
+  }
+
   // Load product function
     const loadProduct = async () => {
       try {
@@ -287,6 +312,9 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
             // Create a single variant from the main product
             setProductVariants([response.product])
           }
+          
+          // Load all product variants with the same name to ensure consistency
+          await loadProductVariants(response.product.product_name)
           
           logger.info('Product loaded successfully', { 
             productId,
@@ -309,26 +337,44 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
     }
   }, [productId])
 
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (loadStocksTimeout) {
+        clearTimeout(loadStocksTimeout)
+      }
+    }
+  }, [loadStocksTimeout])
+
   // Load stocks data for all products with the same name
   const loadStocks = async () => {
     if (!product?.product_name) return
     
     try {
       setStocksLoading(true)
-      // Get all products with the same name (including inactive products)
-      const productsResponse = await GraphQLAPI.searchProducts(product.product_name, true)
       
-      if (productsResponse.searchProducts) {
-        // Filter products that have the exact same name
-        const sameNameProducts = productsResponse.searchProducts.filter(
-          (prod: any) => prod.product_name === product.product_name
-        )
-        
+      // Use existing productVariants if available to avoid duplicate API calls
+      let sameNameProducts = productVariants || []
+      
+      // Only call searchProducts if we don't have productVariants or they're empty
+      if (sameNameProducts.length === 0) {
+        const productsResponse = await GraphQLAPI.searchProducts(product.product_name, true)
+        if (productsResponse.searchProducts) {
+          sameNameProducts = productsResponse.searchProducts.filter(
+            (prod: any) => prod.product_name === product.product_name
+          )
+        }
+      }
+      
+      if (sameNameProducts.length > 0) {
         // Try to get stocks for all products with the same name
         const allStocks: any[] = []
         const productsWithoutStock: any[] = []
         
-        for (const prod of sameNameProducts) {
+        // Add delay between API calls to avoid rate limiting
+        for (let i = 0; i < sameNameProducts.length; i++) {
+          const prod = sameNameProducts[i]
+          
           try {
             const stocksResponse = await GraphQLAPI.getStocks({ productId: prod.id })
             if (stocksResponse.stocks && stocksResponse.stocks.length > 0) {
@@ -356,6 +402,11 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
             const syntheticStock = createSyntheticStockEntry(prod);
             productsWithoutStock.push(syntheticStock);
           }
+          
+          // Add small delay between API calls to avoid rate limiting
+          if (i < sameNameProducts.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 100))
+          }
         }
         
         // Combine stocks and products without stock
@@ -369,10 +420,27 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
     }
   }
 
-  // Load stocks when stock tab is active and product is loaded
+  // Load stocks when stock tab is active and product is loaded with debouncing
   useEffect(() => {
     if (activeTab === 'stock' && product?.product_name) {
-      loadStocks()
+      // Clear existing timeout
+      if (loadStocksTimeout) {
+        clearTimeout(loadStocksTimeout)
+      }
+      
+      // Set new timeout to debounce the API call
+      const timeout = setTimeout(() => {
+        loadStocks()
+      }, 300) // 300ms delay
+      
+      setLoadStocksTimeout(timeout)
+      
+      // Cleanup timeout on unmount
+      return () => {
+        if (timeout) {
+          clearTimeout(timeout)
+        }
+      }
     }
   }, [activeTab, product?.product_name])
 
@@ -472,7 +540,6 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
         pack_size: '',
         cost: mainProduct?.cost?.toString() || '',
         sale_price: mainProduct?.sale_price?.toString() || '',
-        reorder_point: mainProduct?.reorder_point?.toString() || '',
         volume: mainProduct?.volume?.toString() || '',
         volume_unit: mainProduct?.volume_unit || 'mg',
         shelf_code: mainProduct?.shelf_code || '',
@@ -484,6 +551,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
         image_url: mainProduct?.image_url || ''
       })
       setIsCreatingNewUnit(true)
+      setEditingVariantId(undefined)
     } else {
       // Editing existing unit - populate form with existing data
       setUnitFormData({
@@ -491,7 +559,6 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
         pack_size: unitData.pack_size || '',
         cost: unitData.cost?.toString() || '',
         sale_price: unitData.sale_price?.toString() || '',
-        reorder_point: unitData.reorder_point?.toString() || '',
         volume: unitData.volume?.toString() || '',
         volume_unit: unitData.volume_unit || 'mg',
         shelf_code: unitData.shelf_code || '',
@@ -503,8 +570,15 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
         image_url: unitData.image_url || '' // Keep existing image URL for display
       })
       setIsCreatingNewUnit(false)
+      setEditingVariantId(unitData.id) // Store the variant ID for editing
     }
     setShowUnitEditDialog(true)
+  }
+
+  const handleCloseUnitEditDialog = () => {
+    setShowUnitEditDialog(false)
+    setEditingVariantId(undefined)
+    setIsCreatingNewUnit(false)
   }
 
 
@@ -545,32 +619,22 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
     
     if (confirm('คุณต้องการลบหน่วยนับนี้หรือไม่?')) {
       try {
-        // TODO: เรียก API ลบหน่วยนับ
+        // เรียก API ลบหน่วยนับ
         logger.debug('Deleting unit', { unitId, packSize }, 'INVENTORY')
         
-        // Remove the variant from the list
-        setProductVariants(prev => prev.filter(variant => variant.id !== unitId))
+        // Call GraphQL API to delete the product variant
+        const response = await GraphQLAPI.deleteProduct(unitId)
         
-        toast.success('ลบหน่วยนับเรียบร้อยแล้ว (Mockup)')
-        // Refresh product data to ensure consistency
-        await refreshProductData()
-        
-        // Force refresh of product variants to show updated data
-        if (product?.product_name) {
-          try {
-            const updatedProductsResponse = await GraphQLAPI.searchProducts(product.product_name, true)
-            if (updatedProductsResponse.searchProducts) {
-              const sameNameProducts = updatedProductsResponse.searchProducts.filter(
-                (prod: any) => prod.product_name === product.product_name
-              )
-              setProductVariants(sameNameProducts)
-              logger.info('Product variants refreshed after unit deletion', { 
-                variantsCount: sameNameProducts.length 
-              }, 'INVENTORY')
-            }
-          } catch (error) {
-            logger.error('Failed to refresh product variants after unit deletion', error, 'INVENTORY')
-          }
+        if (response.deleteProduct) {
+          // Remove the variant from the list
+          setProductVariants(prev => prev.filter(variant => variant.id !== unitId))
+          
+          toast.success('ลบหน่วยนับเรียบร้อยแล้ว')
+          
+          // Refresh the entire page to show updated data
+          window.location.reload()
+        } else {
+          throw new Error('Failed to delete product variant')
         }
         
         // Notify parent component that a product was deleted
@@ -612,9 +676,6 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
           missingFields.push('ราคาขายต่อหน่วย')
         }
         
-        if (!unitFormData.reorder_point || unitFormData.reorder_point.trim() === '') {
-          missingFields.push('จุดสั่งซื้อ')
-        }
         
         if (!unitFormData.volume || unitFormData.volume.trim() === '') {
           missingFields.push('ปริมาณ')
@@ -624,21 +685,21 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
           missingFields.push('หน่วยปริมาณ')
         }
         
-        if (!unitFormData.shelf_code || unitFormData.shelf_code.trim() === '') {
-          missingFields.push('รหัสชั้นวาง')
-        }
+        // if (!unitFormData.shelf_code || unitFormData.shelf_code.trim() === '') {
+        //   missingFields.push('รหัสชั้นวาง')
+        // }
         
-        if (!unitFormData.shelf_row || unitFormData.shelf_row.trim() === '') {
-          missingFields.push('แถวชั้นวาง')
-        }
+        // if (!unitFormData.shelf_row || unitFormData.shelf_row.trim() === '') {
+        //   missingFields.push('แถวชั้นวาง')
+        // }
         
-        if (!unitFormData.sku || unitFormData.sku.trim() === '') {
-          missingFields.push('รหัสสินค้า SKU')
-        }
+        // if (!unitFormData.sku || unitFormData.sku.trim() === '') {
+        //   missingFields.push('รหัสสินค้า SKU')
+        // }
         
-        if (!unitFormData.barcode || unitFormData.barcode.trim() === '') {
-          missingFields.push('บาร์โค้ด')
-        }
+        // if (!unitFormData.barcode || unitFormData.barcode.trim() === '') {
+        //   missingFields.push('บาร์โค้ด')
+        // }
         
         if (missingFields.length > 0) {
           toast.error(`กรุณากรอกข้อมูลให้ครบถ้วน:\n${missingFields.join('\n')}`)
@@ -660,8 +721,9 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
       // Check if this is adding a new unit or editing existing
       // Use the state to determine if we're creating new or editing existing
       const isNewUnit = isCreatingNewUnit
-      const existingVariant = isNewUnit ? null : productVariants?.find(v => v.sku === unitFormData.sku)
-      const variantId = existingVariant?.id
+      
+      // For editing existing unit, use the stored variant ID
+      const variantId = isNewUnit ? undefined : editingVariantId
       
       // Check for duplicate unit name
       if (isUnitNameExists(unitFormData.unit_name, isNewUnit ? undefined : variantId)) {
@@ -702,7 +764,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
           sale_price: parseFloat(unitFormData.sale_price) || 0,
           unit: unitFormData.unit_name,
           pack_size: unitFormData.pack_size,
-          reorder_point: parseInt(unitFormData.reorder_point) || 0,
+          reorder_point: 1,
           cost: parseFloat(unitFormData.cost) || 0,
           sku: unitFormData.sku || '',
           barcode: unitFormData.barcode || '',
@@ -772,7 +834,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
           }
           
           toast.success('เพิ่มหน่วยนับใหม่เรียบร้อยแล้ว')
-          setShowUnitEditDialog(false)
+          handleCloseUnitEditDialog()
           
           // Refresh the entire page to show updated data
           window.location.reload()
@@ -784,7 +846,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
           sale_price: parseFloat(unitFormData.sale_price) || 0,
           unit: unitFormData.unit_name,
           pack_size: unitFormData.pack_size,
-          reorder_point: parseInt(unitFormData.reorder_point) || 0,
+          reorder_point: 1,
           cost: parseFloat(unitFormData.cost) || 0,
           volume: parseFloat(unitFormData.volume) || 0,
           volume_unit: unitFormData.volume_unit || 'mg',
@@ -792,28 +854,27 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
           shelf_row: unitFormData.shelf_row || ''
         }
 
+        // Find the variant being updated
+        const variantToUpdate = productVariants?.find(v => v.id === variantId)
+        if (!variantToUpdate?.id) {
+          toast.error('ไม่พบข้อมูลหน่วยนับที่ต้องการแก้ไข')
+          return
+        }
+
         // Only include SKU and barcode if they have changed
-        const existingVariant = productVariants?.find(v => v.sku === unitFormData.sku)
-        if (existingVariant) {
+        if (variantToUpdate) {
           // Check if SKU has changed
-          if (unitFormData.sku && unitFormData.sku !== existingVariant.sku) {
+          if (unitFormData.sku && unitFormData.sku !== variantToUpdate.sku) {
             productInput.sku = unitFormData.sku
           }
           
           // Check if barcode has changed
-          if (unitFormData.barcode && unitFormData.barcode !== existingVariant.barcode) {
+          if (unitFormData.barcode && unitFormData.barcode !== variantToUpdate.barcode) {
             productInput.barcode = unitFormData.barcode
           }
         }
 
         // Don't include image_url yet - will be handled after successful update
-
-        // Find the product variant to get its ID
-        const variantToUpdate = existingVariant
-        if (!variantToUpdate?.id) {
-          toast.error('ไม่พบข้อมูลหน่วยนับที่ต้องการแก้ไข')
-          return
-        }
 
         // Store old image URL before updating
         const oldImageUrl = variantToUpdate.image_url
@@ -872,7 +933,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
           }
           
           toast.success('แก้ไขหน่วยนับเรียบร้อยแล้ว')
-          setShowUnitEditDialog(false)
+          handleCloseUnitEditDialog()
           
           // Refresh the entire page to show updated data
           window.location.reload()
@@ -1469,7 +1530,6 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
       
       // Refresh data
       await loadProduct()
-      await loadStocks()
       
       // Force refresh of product variants to show updated data
       if (product?.product_name) {
@@ -1489,8 +1549,10 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
         }
       }
       
-      // Force refresh stocks data to show updated information
-      await loadStocks()
+      // Refresh stocks data after a short delay to avoid rate limiting
+      setTimeout(() => {
+        loadStocks()
+      }, 500)
       
       setShowManageStockModal(false)
       toast.success('แก้ไขสต๊อกสำเร็จ')
@@ -1536,7 +1598,6 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
       
       // Refresh data
       await loadProduct()
-      await loadStocks()
       
       // Force refresh of product variants to show updated data
       if (product?.product_name) {
@@ -1556,8 +1617,10 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
         }
       }
       
-      // Force refresh stocks data to show updated information
-      await loadStocks()
+      // Refresh stocks data after a short delay to avoid rate limiting
+      setTimeout(() => {
+        loadStocks()
+      }, 500)
       
       setShowDeleteStockModal(false)
       toast.success('ลบสต๊อกสำเร็จ')
@@ -2242,7 +2305,6 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
             pack_size: '',
             cost: '',
             sale_price: '',
-            reorder_point: '',
             volume: '',
             volume_unit: '',
             shelf_code: '',
@@ -2262,7 +2324,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                 <Button 
                   variant="ghost" 
                   size="sm" 
-                  onClick={() => setShowUnitEditDialog(false)}
+                  onClick={handleCloseUnitEditDialog}
                   className="p-2 text-gray-700 hover:bg-gray-100"
                 >
                   ปิด
@@ -2362,8 +2424,8 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                     </div>
                   </div>
 
-                  {/* ต้นทุนต่อหน่วย, ราคาขาย และจุดสั่งซื้อ */}
-                  <div className="grid grid-cols-3 gap-4">
+                  {/* ต้นทุนต่อหน่วย และราคาขาย */}
+                  <div className="grid grid-cols-2 gap-4">
                     <div>
                       <Label className="text-sm font-medium text-gray-900">
                         ต้นทุนต่อหน่วย
@@ -2388,19 +2450,6 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                         onChange={(e) => setUnitFormData(prev => ({ ...prev, sale_price: e.target.value }))}
                         className="mt-2 bg-white border-gray-300 text-gray-900 placeholder-gray-500"
                         placeholder="0"
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-sm font-medium text-gray-900">
-                        จุดสั่งซื้อ
-                        {isCreatingNewUnit && <span className="text-red-500 ml-1">*</span>}
-                      </Label>
-                      <Input
-                        type="number"
-                        value={unitFormData.reorder_point}
-                        onChange={(e) => setUnitFormData(prev => ({ ...prev, reorder_point: e.target.value }))}
-                        className="mt-2 bg-white border-gray-300 text-gray-900 placeholder-gray-500"
-                        placeholder="10"
                       />
                     </div>
                   </div>
@@ -2485,10 +2534,9 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
                   <Button 
                     variant="outline"
                     onClick={() => {
-                      setShowUnitEditDialog(false)
-                      const existingVariant = productVariants?.find(v => v.sku === unitFormData.sku)
-                      if (existingVariant) {
-                        handleDeleteUnit(existingVariant.id, unitFormData.pack_size)
+                      handleCloseUnitEditDialog()
+                      if (editingVariantId) {
+                        handleDeleteUnit(editingVariantId, unitFormData.pack_size)
                       }
                     }}
                     className="bg-red-500 hover:bg-red-600 text-white border-red-500"
@@ -2500,7 +2548,7 @@ export default function ProductDetailView({ productId, onBack, onEditingChange, 
               <div className="flex space-x-2">
                 <Button 
                   variant="outline" 
-                  onClick={() => setShowUnitEditDialog(false)}
+                  onClick={handleCloseUnitEditDialog}
                   className="border-gray-300 text-gray-700 hover:bg-gray-50"
                 >
                   ยกเลิก

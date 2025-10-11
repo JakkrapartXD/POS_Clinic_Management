@@ -6,9 +6,9 @@ const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
 
 // Rate limiting configuration
 const RATE_LIMITS = {
-  query: { max: 500, window: 60 * 1000 }, // 500 queries per minute (เพิ่มขึ้นสำหรับ queue operations)
-  mutation: { max: 100, window: 60 * 1000 }, // 100 mutations per minute
-  sensitive: { max: 30, window: 60 * 1000 }, // 30 sensitive operations per minute
+  query: { max: 2000, window: 60 * 1000 }, // 500 queries per minute (เพิ่มขึ้นสำหรับ queue operations)
+  mutation: { max: 2000, window: 60 * 1000 }, // 100 mutations per minute
+  sensitive: { max: 100, window: 60 * 1000 }, // 30 sensitive operations per minute
 };
 
 export interface AuthContext {

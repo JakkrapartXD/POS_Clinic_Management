@@ -108,3 +108,4 @@ case $COMMAND in
         echo "ใช้ './scripts/manage-logs.sh help' เพื่อดูวิธีใช้งาน"
         ;;
 esac
+

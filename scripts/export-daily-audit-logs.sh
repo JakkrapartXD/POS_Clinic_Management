@@ -123,20 +123,28 @@ echo "📋 สร้างไฟล์สรุป: $SUMMARY_FILE"
         cat "$OUTPUT_FILE" | jq -r '.[] | .action' | sort | uniq -c | sort -nr
         echo ""
         echo "=== Operation Details ==="
-        # แสดงรายละเอียด operations ทั้งหมดพร้อม timestamp, actor, และ IP
-        cat "$OUTPUT_FILE" | jq -r '.[] | "\(.time) | \(.actor.username // "unknown") (\(.actor.role // "unknown")) | \(.action) | \(.resource.type) | \(.ipAddress)"'
+        # แสดงรายละเอียด operations ทั้งหมดพร้อม timestamp, actor, และ IP (กรอง unknowns ออก)
+        cat "$OUTPUT_FILE" | jq -r '.[] | select(.actor.username != "unknown" and .actor.username != null and .actor.username != "") | "\(.time) | \(.actor.username) (\(.actor.role // "unknown")) | \(.action) | \(.resource.type) | \(.ipAddress)"'
         echo ""
         echo "=== Actor Summary ==="
-        # แสดงสรุปผู้ใช้งานที่ทำการ audit
-        cat "$OUTPUT_FILE" | jq -r '.[] | "\(.actor.username // "unknown") (\(.actor.role // "unknown"))"' | sort | uniq -c | sort -nr
+        # แสดงสรุปผู้ใช้งานที่ทำการ audit (กรอง unknowns ออก)
+        cat "$OUTPUT_FILE" | jq -r '.[] | select(.actor.username != "unknown" and .actor.username != null and .actor.username != "") | "\(.actor.username) (\(.actor.role // "unknown"))"' | sort | uniq -c | sort -nr
         echo ""
         echo "=== IP Address Summary ==="
-        # แสดงสรุป IP addresses
-        cat "$OUTPUT_FILE" | jq -r '.[] | .ipAddress' | sort | uniq -c | sort -nr
+        # แสดงสรุป IP addresses (กรอง unknowns ออก)
+        cat "$OUTPUT_FILE" | jq -r '.[] | select(.ipAddress != "unknown" and .ipAddress != null and .ipAddress != "") | .ipAddress' | sort | uniq -c | sort -nr
         echo ""
         echo "=== Resource Type Summary ==="
         # แสดงสรุปประเภทของ resource ที่ถูกเข้าถึง
         cat "$OUTPUT_FILE" | jq -r '.[] | .resource.type' | sort | uniq -c | sort -nr
+        echo ""
+        echo "=== Filtered Data Summary ==="
+        # แสดงสถิติของข้อมูลที่ถูกกรองออก
+        UNKNOWN_ACTORS=$(cat "$OUTPUT_FILE" | jq -r '.[] | select(.actor.username == "unknown" or .actor.username == null or .actor.username == "") | .action' | wc -l)
+        UNKNOWN_IPS=$(cat "$OUTPUT_FILE" | jq -r '.[] | select(.ipAddress == "unknown" or .ipAddress == null or .ipAddress == "") | .action' | wc -l)
+        echo "Records with unknown actors: $UNKNOWN_ACTORS"
+        echo "Records with unknown IPs: $UNKNOWN_IPS"
+        echo "Total records filtered out: $((UNKNOWN_ACTORS + UNKNOWN_IPS))"
     else
         echo "No audit operations found for $TARGET_DATE"
     fi

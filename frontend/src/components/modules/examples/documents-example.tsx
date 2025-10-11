@@ -116,7 +116,7 @@ export default function DocumentsExample() {
 
       <CardGrid columns={{ sm: 1, md: 2, lg: 4 }}>
         {documentTypes.map((doc) => (
-          <DocumentCard key={doc.id} id={doc.id} title={doc.title} subtitle={doc.subtitle} href={doc.href} />
+          <DocumentCard key={doc.id} id={doc.id} title={doc.title} subtitle={doc.subtitle || ""} href={doc.href} />
         ))}
       </CardGrid>
     </PageContainer>

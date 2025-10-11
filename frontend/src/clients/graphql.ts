@@ -780,6 +780,7 @@ export const GraphQLQueries = {
         short_name
         sale_price
         unit
+        pack_size
         stock_quantity
         sku
         barcode

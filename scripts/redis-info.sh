@@ -62,3 +62,4 @@ docker exec $CONTAINER_NAME redis-cli --scan --pattern "audit:*" | head -3 | whi
         echo "---"
     fi
 done
+

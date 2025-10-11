@@ -34,8 +34,9 @@ export const uploadRoutes = (redisClient?: any) => new Elysia({ prefix: "/upload
       }
 
       // Verify JWT token
+      let payload: any = null;
       try {
-        const payload = await jwt.verify(token);
+        payload = await jwt.verify(token);
         if (!payload) {
           set.status = 401;
           return { error: "Unauthorized - Invalid token" };
@@ -122,8 +123,9 @@ export const uploadRoutes = (redisClient?: any) => new Elysia({ prefix: "/upload
       }
 
       // Verify JWT token
+      let payload: any = null;
       try {
-        const payload = await jwt.verify(token);
+        payload = await jwt.verify(token);
         if (!payload) {
           set.status = 401;
           return { error: "Unauthorized - Invalid token" };

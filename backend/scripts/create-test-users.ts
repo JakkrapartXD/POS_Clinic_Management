@@ -52,7 +52,7 @@ async function createTestUsers() {
       // Check if user already exists in snclinc schema
       const existingUser = await prisma.$queryRaw`
         SELECT id, username, email, role, status
-        FROM clinic_dev."User"
+        FROM clinic_pro."User"
         -- FROM snclinc."User"
         WHERE username = ${userData.username}
       ` as any[];
@@ -65,17 +65,16 @@ async function createTestUsers() {
       // Hash password
       const hashedPassword = await hash(userData.password, 10);
 
-      // Create user in snclinc schema using raw SQL (let database generate ID)
+      // Create user in clinic_pro schema using raw SQL (let database generate ID)
       await prisma.$executeRaw`
-        INSERT INTO clinic_dev."User" (username, password_hash, email, role, status, created_at, updated_at)
-        -- INSERT INTO snclinc."User" (username, password_hash, email, role, status, created_at, updated_at)
-        VALUES (${userData.username}, ${hashedPassword}, ${userData.email}, ${userData.role}, ${userData.status}, NOW(), NOW())
+        INSERT INTO clinic_pro."User" (id, username, password_hash, email, role, status, created_at, updated_at)
+        VALUES (gen_random_uuid()::text, ${userData.username}, ${hashedPassword}, ${userData.email}, ${userData.role}, ${userData.status}, NOW(), NOW())
       `;
 
       // Get the created user
       const user = await prisma.$queryRaw`
         SELECT id, username, email, role, status, created_at
-        FROM clinic_dev."User"
+        FROM clinic_pro."User"
         -- FROM snclinc."User"
         WHERE username = ${userData.username}
       ` as any[];

@@ -43,7 +43,7 @@ export default function InventoryActionsGrid({
     {
       id: 'import-products',
       icon: FileImport,
-      title: 'เพิ่มชุดสินค้า/นำเข้า/แก้ไข',
+      title: 'เพิ่มชุดสินค้า/นำเข้า',
       subtitle: 'นำเข้าข้อมูล',
       onClick: onImportProducts
     },
