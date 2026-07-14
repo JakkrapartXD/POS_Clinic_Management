@@ -11,7 +11,7 @@ async function main() {
     // Set admin credentials (preferably use environment variables in production)
     const adminUsername = process.env.ADMIN_USERNAME || 'admin';
     const adminPassword = process.env.ADMIN_PASSWORD || 'admin1234';
-
+    
     try {
       // Hash the password
       const hashedPassword = await hash(adminPassword, 10);
@@ -26,7 +26,7 @@ async function main() {
           status: 'active',
         },
       });
-
+      
       console.log(`✅ Admin user created successfully: ${admin.username} (${admin.id})`);
 
     } catch (error) {
